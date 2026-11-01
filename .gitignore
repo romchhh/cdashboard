@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Test scripts (містять чутливі дані / тимчасові перевірки)
+testmono.py
+testnova.py
+long_lived_token.txt
+service_account.json
+tests/client_secret*.json
+/finance_bot.db
+cosmyparser/.venv/
+*.PNG
+
+# Environment and secrets (реальні ключі лишаються локально)
+.env
+.env.local
+**/.env
+!**/.env.example
+marketing_config.json
+settings/marketing.json
+settings/*service_account.json
+!settings/*.example.json
+
+# Database, caches, backups
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+finance_bot.db
+databases/
+backups/
+*.zip.part*
+
+# Sessions and NovaPay tokens
+sessions/
+
+# Generated parser worker (збирається pack.sh)
+ParserService/runtime/
+ParserService/work/
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/*.pid
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Telegram bot cache
+.cache/

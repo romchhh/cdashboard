@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "procurement/_icons.html" import ui_icon %}
+{% block title %}Парсер — логи — Cosmy Agent{% endblock %}
+{% block mobile_title %}Логи парсера{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/css/parser.css?v=20261013n">
+{% endblock %}
+{% block content %}
+<div class="parser-shell">
+    <div class="page-header page-header-with-actions">
+        <div>
+            <h1 class="dash-title-with-icon">{{ ui_icon('warning', 'dash-title-icon-svg') }}<span>Логи парсингу</span></h1>
+            <p class="subtitle">Помилки магазинів і зірвані прогони. Автооновлення брендів — лише вночі, по черзі.</p>
+        </div>
+        <form method="post" action="/parser/logs/clear" class="page-header-actions" onsubmit="return confirm('Очистити журнал парсингу?')">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <button type="submit" class="btn btn-secondary">Очистити журнал</button>
+        </form>
+    </div>
+
+    {% include "parser/_nav.html" %}
+    {% include "parser/_schedule.html" %}
+
+    {% if notice == 'cleared' %}
+    <div class="parser-alert parser-alert--ok">{{ ui_icon('info') }} Журнал очищено.</div>
+    {% endif %}
+
+    <div class="parser-panel">
+        <h2>Розклад на 10 ночей</h2>
+        <p class="panel-lead">
+            Сьогодні {{ rotation.today }}, слот <strong>{{ rotation.day }}</strong> з {{ rotation.cycle_days }}.
+            Увімкнено брендів: <strong>{{ rotation.enabled_total }}</strong>.
+            Автозапуск лише в будні (пн–пт), {{ rotation.night_label }} (Київ). Черга дня збирається після {{ "%02d"|format(rotation.queue_hour) }}:05, далі ланцюжок + опитування кожну хв.
+        </p>
+        <div class="parser-day-row">
+            {% for day in rotation.per_day %}
+            <span class="parser-day{% if day.active %} is-active{% endif %}">
+                Ніч {{ day.day }}
+                <strong>{{ day.count }}</strong>
+            </span>
+            {% endfor %}
+        </div>
+        {% if rotation.running %}
+        <p class="panel-lead">Зараз парситься <strong>{{ rotation.current or "прогін" }}</strong>.</p>
+        {% elif rotation.current %}
+        <p class="panel-lead">Останній автозапуск: <strong>{{ rotation.current }}</strong>.</p>
+        {% endif %}
+        {% if rotation.pending %}
+        <p class="panel-lead">У нічній черзі ще {{ rotation.pending|length }}: {{ rotation.pending|join(", ") }}.</p>
+        {% elif rotation.built_for == rotation.today %}
+        <p class="panel-lead">Черга на цю ніч уже розібрана.</p>
+        {% else %}
+        <p class="panel-lead">Черга збереться вночі після {{ "%02d"|format(rotation.queue_hour) }}:20. Удень автоматичний старт не виконується.</p>
+        {% endif %}
+        {% if rotation.today_brands %}
+        <p class="panel-lead">Бренди цього слота: {{ rotation.today_brands|join(", ") }}.</p>
+        {% endif %}
+    </div>
+
+    <div class="parser-panel">
+        <div class="parser-toolbar">
+            <a class="btn btn-secondary{% if level == 'all' %} is-active{% endif %}" href="/parser/logs">Усі</a>
+            <a class="btn btn-secondary{% if level == 'error' %} is-active{% endif %}" href="/parser/logs?level=error">Помилки</a>
+            <a class="btn btn-secondary{% if level == 'schedule' %} is-active{% endif %}" href="/parser/logs?level=schedule">Розклад</a>
+        </div>
+        {% if events %}
+        <div class="table-wrapper">
+            <table class="data-table parser-log-table">
+                <thead>
+                    <tr>
+                        <th style="width:9rem">Час</th>
+                        <th style="width:6.5rem">Рівень</th>
+                        <th>Подія</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in events %}
+                    <tr>
+                        <td class="parser-muted">{{ event.ts[:16]|replace("T", " ") }}</td>
+                        <td>
+                            {% if event.level == 'error' %}
+                            <span class="parser-status parser-status--err">помилка</span>
+                            {% elif event.level == 'warn' %}
+                            <span class="parser-status parser-status--warn">увага</span>
+                            {% else %}
+                            <span class="parser-status parser-status--ok">запис</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if event.brand %}
+                            <a href="/parser/brands/{{ brand_slug(event.brand) }}">{{ event.brand }}</a>
+                            ·
+                            {% endif %}
+                            {{ event.message }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="panel-lead">Записів цього типу ще немає. Помилка з’явиться, якщо магазин не відповість або прогін зупиниться.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

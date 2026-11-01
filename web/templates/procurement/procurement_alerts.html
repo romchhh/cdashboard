@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Алерти закупок{% endblock %}
+{% block mobile_title %}Алерти{% endblock %}
+
+{% block content %}
+{% from "procurement/_icons.html" import title_with_icon %}
+
+<div class="dashboard-container procurement_dashboard procurement-alerts-page"> <div class="dashboard-header" style="margin-bottom: 24px;"> <h1 class="dashboard-title">{{ title_with_icon('bell', 'Алерти закупок') }}</h1> <p class="dashboard-subtitle">Автоматичні сповіщення про критичні події та рекомендації</p> </div> {% include 'procurement_nav.html' %}
+
+<!-- Фільтр по типу -->
+<div class="card" style="margin-bottom: 24px;"> <h3>Фільтр за типом</h3> <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;"> <a href="/procurement/alerts" class="filter-btn {% if not selected_alert_type %}active{% endif %}">Всі</a> <a href="/procurement/alerts?alert_type=critical" class="filter-btn {% if selected_alert_type == 'critical' %}active{% endif %}">  Критичні
+        </a> <a href="/procurement/alerts?alert_type=daily" class="filter-btn {% if selected_alert_type == 'daily' %}active{% endif %}"> Щоденні
+        </a> <a href="/procurement/alerts?alert_type=weekly" class="filter-btn {% if selected_alert_type == 'weekly' %}active{% endif %}"> Щотижневі
+        </a> </div>
+</div> <!-- Список алертів -->
+<div class="card"> {% if alerts %}
+    <div class="alerts-list"> {% for alert in alerts %}
+        <div class="alert-item alert-item--{{ alert.severity or 'info' }} {% if not alert.is_read %}alert-unread{% endif %}"> <div class="alert-header"> <span class="alert-severity" style="background: {% if alert.severity == 'critical' %}#dc2626{% elif alert.severity == 'warning' %}#f59e0b{% else %}#3b82f6{% endif %};"> {% if alert.severity == 'critical' %} Критичний
+                    {% elif alert.severity == 'warning' %} Увага
+                    {% else %}ℹ Інформація
+                    {% endif %}
+                </span> <span class="alert-type" style="color: #6b7280; font-size: 14px;"> {% if alert.alert_type == 'critical' %}Критичний
+                    {% elif alert.alert_type == 'daily' %}Щоденний
+                    {% elif alert.alert_type == 'weekly' %}Щотижневий
+                    {% endif %}
+                </span> <span class="alert-date" style="color: #9ca3af; font-size: 13px;"> {{ alert.created_at.strftime('%d.%m.%Y %H:%M') }}
+                </span> </div> <div class="alert-message"> {{ alert.message }}
+            </div> {% if alert.product_id %}
+            {% set p = products_by_id.get(alert.product_id) %}
+            {% set opt = options_by_id.get(alert.product_option_id) if alert.product_option_id else none %}
+            {% if p %}
+            <div class="alert-product"> <a href="/procurement/product/{{ alert.product_id }}{% if alert.product_option_id %}?option_id={{ alert.product_option_id }}{% endif %}" style="text-decoration: none; color: #2563eb; font-weight: 600;"> {% if has_dilovod_by_product.get(alert.product_id) %}{% else %}{% endif %}
+                    {{ p.name }}
+                </a> {% if opt %}
+                <span style="font-size: 13px; color: #4b5563; margin-left: 6px;"> {{ opt.option_name }}: {{ opt.option_value_name }}
+                </span> {% elif alert.product_option_id %}
+                <span style="font-size: 13px; color: #4b5563; margin-left: 6px;"> (опція #{{ alert.product_option_id }})
+                </span> {% endif %}
+            </div> {% else %}
+            <div class="alert-product" style="color: #9ca3af; font-size: 13px;">  Товар не знайдений у поточній БД (синхронізація оновила ID). Перезапустіть аналітику.
+            </div> {% endif %}
+            {% endif %}
+            {% if not alert.is_read %}
+            <div style="margin-top: 12px;"> <button type="button" class="btn-small mark-alert-read-btn"
+                        data-alert-id="{{ alert.id }}"
+                        data-csrf-token="{{ request.state.csrf_token }}"
+                        {% if selected_alert_type %}data-alert-type="{{ selected_alert_type }}"{% endif %}> Позначити прочитаним
+                </button> </div> {% endif %}
+        </div> {% endfor %}
+    </div> {% else %}
+    <p style="text-align: center; padding: 48px; color: #6b7280;">Немає алертів</p> {% endif %}
+</div> </div> <style>
+.filter-btn {
+    padding: 8px 16px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: var(--radius-pill, 999px);
+    text-decoration: none;
+    color: #374151;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+.filter-btn:hover {
+    background: #e5e7eb;
+}
+.filter-btn.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+.alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.alert-item {
+    padding: 16px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+.alert-unread {
+    background: color-mix(in srgb, var(--card-accent, #f59e0b) 14%, #fff) !important;
+    font-weight: 500;
+}
+.alert-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.alert-severity {
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+}
+.alert-message {
+    font-size: 15px;
+    color: #1f2937;
+    line-height: 1.6;
+}
+.btn-small {
+    padding: 6px 12px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-small:hover {
+    background: #2563eb;
+}
+.btn-small:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    document.querySelectorAll('.mark-alert-read-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = btn.getAttribute('data-alert-id');
+            var csrf = btn.getAttribute('data-csrf-token');
+            var at = btn.getAttribute('data-alert-type');
+            if (!id || !csrf) return;
+            var url = '/procurement/alerts/' + id + '/mark-read';
+            if (at) url += '?alert_type=' + encodeURIComponent(at);
+            btn.disabled = true;
+            var fd = new FormData();
+            fd.append('csrf_token', csrf);
+            fetch(url, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            })
+                .then(function (res) {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(function (data) {
+                    if (!data || !data.ok) throw new Error('bad payload');
+                    var card = btn.closest('.alert-item');
+                    if (card) card.classList.remove('alert-unread');
+                    var wrap = btn.parentElement;
+                    if (wrap) wrap.remove();
+                    var navAlerts = document.querySelector('.procurement-nav a[href="/procurement/alerts"]');
+                    if (navAlerts) {
+                        var badge = navAlerts.querySelector('.nav-badge');
+                        if (badge) {
+                            var n = parseInt(badge.textContent, 10);
+                            n = isNaN(n) ? 0 : n - 1;
+                            if (n <= 0) badge.remove();
+                            else badge.textContent = String(n);
+                        }
+                    }
+                })
+                .catch(function () {
+                    btn.disabled = false;
+                    alert('Не вдалося оновити статус. Оновіть сторінку та спробуйте ще раз.');
+                });
+        });
+    });
+})();
+</script>
+{% endblock %}

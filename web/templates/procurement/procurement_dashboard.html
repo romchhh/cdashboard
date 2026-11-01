@@ -1,0 +1,1212 @@
+{% extends "base.html" %}
+
+{% block title %}Товари — Аналітика{% endblock %}
+{% block mobile_title %}Товари{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+/* Герой заголовка — як «Клієнти — дашборд» (іконка замість емодзі) */
+.procurement_dashboard .procurement-dash-hero.dash-hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 1.35rem;
+}
+.procurement_dashboard .procurement-dash-hero .dashboard-title {
+    margin: 0;
+    font-size: 1.6rem;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+.procurement_dashboard .procurement-dash-hero .dashboard-title.dash-title-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.procurement_dashboard .procurement-dash-hero .dash-title-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent, #2563eb);
+    line-height: 0;
+}
+.procurement_dashboard .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    margin-top: 5px;
+}
+.procurement_dashboard .procurement-dash-hero .dash-title-icon svg {
+    width: 1.35em;
+    height: 1.35em;
+}
+.procurement_dashboard .procurement-dash-hero .dashboard-subtitle {
+    margin: 6px 0 0;
+    font-size: 0.95rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+.procurement_dashboard .kpi-assortment-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 6px;
+}
+.procurement_dashboard .kpi-assortment-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 9px 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+.procurement_dashboard .kpi-assortment-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+.procurement_dashboard .kpi-assortment-row:first-child {
+    padding-top: 0;
+}
+.procurement_dashboard .kpi-assortment-num {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #111827;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1.2;
+    text-align: right;
+}
+.procurement_dashboard .kpi-assortment-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.35;
+    min-width: 0;
+    flex: 1;
+}
+.procurement_dashboard .kpi-assortment-meta strong {
+    font-size: 13px;
+    color: #374151;
+    font-weight: 700;
+}
+.procurement_dashboard .kpi-card.kpi-assortment {
+    min-width: 0;
+}
+.procurement_dashboard .kpi-card.kpi-assortment .kpi-content--assortment {
+    width: 100%;
+    min-width: 0;
+}
+.procurement_dashboard .kpi-card.kpi-assortment .kpi-label {
+    margin-bottom: 4px;
+}
+@media (min-width: 960px) {
+    .procurement_dashboard .kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .procurement_dashboard .kpi-card.kpi-assortment {
+        grid-column: span 2;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% from "procurement/_icons.html" import ui_icon, title_with_icon %}
+
+<div class="dashboard-container procurement_dashboard"> <!-- Header Section --> <div class="dash-hero procurement-dash-hero"> <div> <h1 class="dashboard-title dash-title-with-icon"> <span class="dash-title-icon" aria-hidden="true"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v3.75a1.125 1.125 0 01-1.125 1.125h-2.25A1.125 1.125 0 013 16.875v-3.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg> </span> <span>Товари</span> </h1> <p class="dashboard-subtitle">Аналітика асортименту, залишків та рекомендації по закупках для COSMY</p> {% if request.query_params.get('calculated') == '1' %}
+            <p class="dashboard-subtitle" style="margin-top: 0.5rem;">Синхронізацію продуктів запущено у фоні. Дашборд можна користувати як завжди — дані з’являться після завершення імпорту.</p> {% endif %}
+        </div> </div> <!-- Navigation --> {% include 'procurement_nav.html' %}
+
+    <!-- Alert if no data --> {% if warehouse_analytics.total_products == 0 %}
+    <div class="alert-box alert-warning" style="margin-bottom: 24px;"> <div style="display: flex; align-items: start; gap: 12px;"> <svg style="width: 24px; height: 24px; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/> </svg> <div> <strong>Немає даних аналітики</strong> <p style="margin: 4px 0 0; font-size: 14px;">{% if request.state.role == 'admin' %}Відкрийте <a href="/sync">Синхронізація</a> → блок «Синхронізація продуктів Cosmy» → «Оновити продукти зараз». Процес може зайняти 1–2 хвилини.{% else %}Попросіть адміністратора оновити продукти Cosmy (синхронізація з фіду).{% endif %}</p> </div> </div> </div> {% endif %}
+
+    <!-- KPI Cards --> {% set products_on_site = warehouse_analytics.total_products or 0 %}
+    {% set products_in_stock = products_on_site - (warehouse_analytics.out_of_stock_products or 0) %}
+    {% set stock_pieces_total = warehouse_analytics.total_stock_qty or 0 %}
+    <div class="kpi-grid"> <div class="kpi-card kpi-balance"> <div class="kpi-icon"> <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/> </svg> </div> <div class="kpi-content"> <div class="kpi-label">Заморожений капітал</div> <div class="kpi-value">{{ "{:,.0f}".format(warehouse_analytics.total_frozen_capital).replace(',', ' ') }} ₴</div> <div class="kpi-detail">На складі зараз</div> </div> </div> <div class="kpi-card kpi-income kpi-assortment" title="Асортимент: скільки товарів у каталозі, скільки з них мають залишок і скільки всього штук на складі"> <div class="kpi-icon"> <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/> </svg> </div> <div class="kpi-content kpi-content--assortment"> <div class="kpi-label">Асортимент</div> <div class="kpi-assortment-rows"> <div class="kpi-assortment-row" title="Унікальні товари в каталозі на сайті (один товар = одна позиція, варіації не окремо)"> <span class="kpi-assortment-meta"> <strong>На сайті</strong> <span>товарів у каталозі</span> </span> <span class="kpi-assortment-num">{{ products_on_site|fmt_ua }}</span> </div> <div class="kpi-assortment-row" title="Товари, у яких є хоча б 1 шт на складі (повністю без залишку не рахуються)"> <span class="kpi-assortment-meta"> <strong>В наявності</strong> <span>унікальних товарів</span> </span> <span class="kpi-assortment-num">{{ products_in_stock|fmt_ua }}</span> </div> <div class="kpi-assortment-row" title="Сума залишків у штуках по всіх варіаціях"> <span class="kpi-assortment-meta"> <strong>Усього шт</strong> <span>на складі</span> </span> <span class="kpi-assortment-num">{{ stock_pieces_total|fmt_ua }}</span> </div> </div> </div> </div> <div class="kpi-card kpi-profit positive"> <div class="kpi-icon"> <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/> </svg> </div> <div class="kpi-content"> <div class="kpi-label">Fast Movers <span style="font-size:11px;font-weight:400;opacity:.7;">({{ horizon_days }}д)</span></div> <div class="kpi-value">{{ horizon_stats.status_distribution.get('fast_mover', 0) }}</div> <div class="kpi-detail">Бестселери в наявності</div> </div> </div> <div class="kpi-card kpi-medium"> <div class="kpi-icon"> <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/> </svg> </div> <div class="kpi-content"> <div class="kpi-label">Medium Movers <span style="font-size:11px;font-weight:400;opacity:.7;">({{ horizon_days }}д)</span></div> <div class="kpi-value">{{ horizon_stats.status_distribution.get('medium_mover', 0) }}</div> <div class="kpi-detail">Середній клас товарів</div> </div> </div> </div> <!-- Top brands by revenue, frozen capital, speed -->
+    <div class="dashboard-grid brand-top-grid" style="margin-bottom: 24px;">
+        <!-- ТОП за продажами (кількість шт) з табами -->
+        <div class="dashboard-card brand-top-card">
+            <div class="card-header brand-top-header">
+                <h2 class="card-title">{{ ui_icon('trophy', 'ui-icon') }} <span>ТОП брендів за продажами</span></h2>
+                <div class="brand-tabs" data-card="sales" role="tablist" aria-label="Період продажів">
+                    <button type="button" class="brand-tab active" data-period="7d" onclick="switchBrandTab('sales','7d',this)">7д</button>
+                    <button type="button" class="brand-tab" data-period="30d" onclick="switchBrandTab('sales','30d',this)">30д</button>
+                    <button type="button" class="brand-tab" data-period="90d" onclick="switchBrandTab('sales','90d',this)">90д</button>
+                    <button type="button" class="brand-tab" data-period="180d" onclick="switchBrandTab('sales','180d',this)">180д</button>
+                    <button type="button" class="brand-tab" data-period="360d" onclick="switchBrandTab('sales','360d',this)">360д</button>
+                </div>
+            </div>
+            <div class="card-content brand-top-content">
+                {% if top_brands_by_speed %}
+                <ul class="simple-list brand-list" id="brand-sales-list">
+                    {% for b in top_brands_by_speed %}
+                    <li data-brand-sales data-brand-id="{{ b.brand_id or '' }}"
+                        data-s7d="{{ b.sales_qty_7d }}"
+                        data-s30d="{{ b.sales_qty_30d }}"
+                        data-s90d="{{ b.sales_qty_90d }}"
+                        data-s180d="{{ b.sales_qty_180d }}"
+                        data-s360d="{{ b.sales_qty_360d }}"
+                        data-name="{{ b.name }}">
+                        <span class="brand-rank" aria-hidden="true">{{ loop.index }}</span>
+                        <span class="simple-list-name">{% if b.brand_id %}<a href="/procurement/brand/{{ b.brand_id }}">{{ b.name }}</a>{% else %}{{ b.name }}{% endif %}</span>
+                        <span class="simple-list-value brand-val">{{ b.sales_qty_7d }} шт</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="empty-state">Немає даних по брендах.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ТОП за продажами в грошах (кількість × ціна) -->
+        <div class="dashboard-card brand-top-card">
+            <div class="card-header brand-top-header">
+                <h2 class="card-title">{{ ui_icon('money', 'ui-icon') }} <span>ТОП брендів за продажами (шт × ціна)</span></h2>
+                <div class="brand-tabs" data-card="revenue" role="tablist" aria-label="Період виручки">
+                    <button type="button" class="brand-tab active" data-period="7d" onclick="switchBrandTab('revenue','7d',this)">7д</button>
+                    <button type="button" class="brand-tab" data-period="30d" onclick="switchBrandTab('revenue','30d',this)">30д</button>
+                    <button type="button" class="brand-tab" data-period="90d" onclick="switchBrandTab('revenue','90d',this)">90д</button>
+                    <button type="button" class="brand-tab" data-period="180d" onclick="switchBrandTab('revenue','180d',this)">180д</button>
+                    <button type="button" class="brand-tab" data-period="360d" onclick="switchBrandTab('revenue','360d',this)">360д</button>
+                </div>
+            </div>
+            <div class="card-content brand-top-content">
+                {% if top_brands_by_revenue %}
+                <ul class="simple-list brand-list" id="brand-revenue-list">
+                    {% for b in top_brands_by_revenue %}
+                    <li data-brand-revenue data-brand-id="{{ b.brand_id or '' }}"
+                        data-s7d="{{ (b.revenue_7d or 0) | round(0) | int }}"
+                        data-s30d="{{ (b.revenue_30d or 0) | round(0) | int }}"
+                        data-s90d="{{ (b.revenue_90d or 0) | round(0) | int }}"
+                        data-s180d="{{ (b.revenue_180d or 0) | round(0) | int }}"
+                        data-s360d="{{ (b.revenue_360d or 0) | round(0) | int }}"
+                        data-name="{{ b.name }}">
+                        <span class="brand-rank" aria-hidden="true">{{ loop.index }}</span>
+                        <span class="simple-list-name">{% if b.brand_id %}<a href="/procurement/brand/{{ b.brand_id }}">{{ b.name }}</a>{% else %}{{ b.name }}{% endif %}</span>
+                        <span class="simple-list-value brand-val">{{ "{:,.0f}".format(b.revenue_7d or 0).replace(',', ' ') }} ₴</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="empty-state">Немає даних по брендах.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ТОП за замороженим капіталом -->
+        <div class="dashboard-card brand-top-card">
+            <div class="card-header brand-top-header brand-top-header--solo">
+                <h2 class="card-title">{{ ui_icon('box', 'ui-icon') }} <span>ТОП брендів за замороженим капіталом</span></h2>
+            </div>
+            <div class="card-content brand-top-content">
+                {% if top_brands_by_frozen_capital %}
+                <ul class="simple-list brand-list">
+                    {% for b in top_brands_by_frozen_capital %}
+                    <li>
+                        <span class="brand-rank" aria-hidden="true">{{ loop.index }}</span>
+                        <span class="simple-list-name">{% if b.brand_id %}<a href="/procurement/brand/{{ b.brand_id }}">{{ b.name }}</a>{% else %}{{ b.name }}{% endif %}</span>
+                        <span class="simple-list-value">{{ "{:,.0f}".format(b.frozen_capital).replace(',', ' ') }} ₴</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="empty-state">Немає даних по брендах.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <!-- Розбивка по статусах товарів: два окремих рядки --> {% set sr = warehouse_analytics.get('status_rules', {}) %}
+    {% set fast_thr = sr.get('fast_mover_threshold', 0.25) %}
+    {% set med_thr = sr.get('medium_mover_threshold', 0.07) %}
+    {% set slow_d = sr.get('slow_mover_days_without_sales', 14) %}
+    {% set dead_d = sr.get('dead_stock_days_without_sales', 90) %}
+    {% set basis = sr.get('avg_sales_basis_days', 30) %}
+    {% set hist_rec = sr.get('new_max_history_records', 7) %}
+
+    {% set status_config = [
+        ('fast_mover',   'Fast Movers',        '#10b981'),
+        ('medium_mover', 'Medium Movers',       '#3b82f6'),
+        ('slow_mover',   'Slow Movers',         '#f59e0b'),
+        ('dead_stock',   'Dead Stock',          '#ef4444'),
+        ('out_of_stock', 'Немає в наявності',   '#dc2626'),
+        ('new',          'Нові',                '#6b7280'),
+    ] %}
+    {% set h_dist    = horizon_stats.status_distribution %}
+    {% set h_revenue = horizon_stats.revenue_by_status %}
+    {% set h_frozen  = horizon_stats.frozen_by_status %}
+    {% set wa_frozen = warehouse_analytics.get('frozen_by_status', {}) %}
+    {% set wa_dist   = warehouse_analytics.get('status_distribution', {}) %}
+
+    <!-- Блок 1: Продажі за обраний горизонт (динамічно змінюються) --> <div class="dashboard-card" style="margin-bottom: 16px;"> <div class="card-header card-header--status-help"> <h2 class="card-title"> <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/> </svg> Продажі за статусами — за {{ horizon_days }} дн
+            </h2> <button type="button" class="status-rules-help-btn js-status-rules-help" title="За якими даними рахуються статуси" aria-label="Довідка по статусах товарів" aria-haspopup="dialog" aria-controls="statusRulesModal">?</button> </div> <!-- Горизонт аналітики --> <div style="padding: 0 20px 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;"> <span style="font-size: 12px; color: #6b7280; white-space: nowrap;">Горизонт:</span> {% for d in [1, 7, 14, 30, 60, 90, 180, 360] %}
+            <a class="horizon-btn {% if horizon_days == d %}active{% endif %}"
+               href="/procurement/dashboard?horizon_days={{ d }}&purchase_horizon_days={{ purchase_horizon_days }}"
+               style="font-size: 12px; padding: 3px 10px;">{{ d }}д</a> {% endfor %}
+        </div> <div class="card-content"> <div class="status-capital-grid"> {% for status_key, status_label, status_color in status_config %}
+                {% set count   = h_dist.get(status_key, 0) %}
+                {% set revenue = h_revenue.get(status_key, 0) %}
+                {% set frozen  = h_frozen.get(status_key, 0) %}
+                {% if count > 0 %}
+                {% set amount = revenue if revenue > 0 else frozen %}
+                {% set amount_kind = 'rev' if revenue > 0 else ('frozen' if frozen > 0 else 'none') %}
+                <div class="status-capital-card status-{{ status_key }}"
+                     {% if status_key == 'dead_stock' %}title="Dead Stock: товар не продавався ≥ {{ dead_d }} дн. підряд (є залишок на складі)" style="cursor: help;"{% endif %}> <div class="sc-label">{{ status_label }}</div> {% if status_key == 'out_of_stock' %}
+                        {% set oos_products = warehouse_analytics.out_of_stock_products or 0 %}
+                        <div class="sc-count">{{ oos_products }} <span>товарів</span></div> <div style="font-size: 11px; color: #9ca3af; margin-top: 2px;">{{ count }} варіацій без залишку</div> {% else %}
+                        <div class="sc-count">{{ count }} <span>варіацій</span></div> {% endif %}
+                    <div class="sc-metric-row{% if amount_kind == 'rev' %} sc-metric-row--rev{% endif %}"
+                         title="{% if amount_kind == 'rev' %}Продано шт × ціна каталогу за {{ horizon_days }} дн{% elif amount_kind == 'frozen' %}Залишок × закупівельна ціна{% else %}Немає продажів і залишку{% endif %}"> {% if amount_kind == 'frozen' %}
+                        <span class="sc-frozen-amount">{{ "{:,.0f}".format(amount).replace(',', ' ') }} ₴</span> {% elif amount_kind == 'rev' %}
+                        <span class="sc-rev-amount">{{ "{:,.0f}".format(amount).replace(',', ' ') }} ₴</span> {% else %}
+                        <span style="color:#d1d5db; font-size:12px;">0 ₴</span> {% endif %}
+                    </div> </div> {% endif %}
+                {% endfor %}
+            </div> <div style="font-size: 11px; color: #9ca3af; padding-top: 6px;"> Для категорій з продажами — виручка (продано шт × ціна каталогу за <strong>{{ horizon_days }} дн</strong>); якщо продажів не було — заморожений капітал (залишок × закупівельна). Склад груп змінюється разом з горизонтом.
+            </div> </div> </div> <!-- Модальне вікно: критерії та пояснення статусів (відкривається з «?») --> <div id="statusRulesModal" class="status-rules-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="statusRulesModalTitle"> <div class="status-rules-modal__backdrop" tabindex="-1" data-close-status-modal></div> <div class="status-rules-modal__panel" role="document"> <div class="status-rules-modal__head"> <h2 id="statusRulesModalTitle" class="status-rules-modal__title">Статуси товарів</h2> <button type="button" class="status-rules-modal__close" data-close-status-modal aria-label="Закрити">&times;</button> </div> <div class="status-rules-modal__body"> <section class="status-rules-modal__section"> <h3 class="status-rules-modal__subtitle">За якими даними рахуються статуси</h3> <ul class="status-rules-modal__list"> <li><strong>Fast:</strong> середній продаж/день за {{ basis }} дн <strong>≥ {{ '%.2f'|format(fast_thr) }}</strong> шт/день.</li> <li><strong>Medium:</strong> від <strong>{{ '%.2f'|format(med_thr) }}</strong> до <strong>&lt; {{ '%.2f'|format(fast_thr) }}</strong> шт/день.</li> <li><strong>Slow (за «застоєм»):</strong> менше {{ '%.2f'|format(med_thr) }} шт/день або <strong>≥ {{ slow_d }} дн.</strong> підряд без продажів.</li> <li><strong>Dead Stock:</strong> без продажів <strong>≥ {{ dead_d }} дн.</strong></li> <li><strong>Нові:</strong> менше <strong>{{ hist_rec }} записів</strong> денної історії в БД.</li> <li><strong>Немає в наявності:</strong> залишок <strong>0</strong> у фіді.</li> </ul> <p class="status-rules-modal__footnote">Пороги змінюються в <a href="/procurement/settings">налаштуваннях закупівель</a>.</p> </section> <section class="status-rules-modal__section"> <h3 class="status-rules-modal__subtitle">Як працює система статусів?</h3> <div class="status-legend status-legend--modal"> <div class="legend-item"> <span class="legend-dot" style="background:#10b981" aria-hidden="true"></span> <div class="legend-content"> <strong>Fast Movers</strong> <p>Бестселери: середній продаж за {{ basis }} дн <strong>≥ {{ '%.2f'|format(fast_thr) }}</strong> шт/день. Важливо тримати в наявності.</p> </div> </div> <div class="legend-item"> <span class="legend-dot" style="background:#3b82f6" aria-hidden="true"></span> <div class="legend-content"> <strong>Medium Movers</strong> <p>Стабільні продажі середнього темпу: від <strong>{{ '%.2f'|format(med_thr) }}</strong> до <strong>&lt; {{ '%.2f'|format(fast_thr) }}</strong> шт/день. Закуповувати планово.</p> </div> </div> <div class="legend-item"> <span class="legend-dot" style="background:#f59e0b" aria-hidden="true"></span> <div class="legend-content"> <strong>Slow Movers</strong> <p>Менше {{ '%.2f'|format(med_thr) }} шт/день або <strong>{{ slow_d }}+</strong> днів підряд без продажів. Закуповувати обережно.</p> </div> </div> <div class="legend-item"> <span class="legend-dot" style="background:#ef4444" aria-hidden="true"></span> <div class="legend-content"> <strong>Dead Stock</strong> <p>Неліквід: без продажів <strong>{{ dead_d }}+</strong> днів. Рекомендується розпродаж для вивільнення капіталу.</p> </div> </div> <div class="legend-item"> <span class="legend-dot" style="background:#6b7280" aria-hidden="true"></span> <div class="legend-content"> <strong>Нові</strong> <p>Менше <strong>{{ hist_rec }}</strong> записів денної історії продажів у БД — недостатньо даних для стійкої оцінки швидкості.</p> </div> </div> <div class="legend-item"> <span class="legend-dot" style="background:#dc2626" aria-hidden="true"></span> <div class="legend-content"> <strong>Немає в наявності</strong> <p>Товар закінчився на складі. Якщо це Fast або Medium Mover — терміново закупити.</p> </div> </div> </div> </section> </div> </div> </div> <!-- Розподіл по статусах + швидкі посилання на каталог --> <div class="dashboard-grid" style="margin-bottom: 24px;"> <div class="dashboard-card" style="grid-column: 1 / -1;"> <div class="card-header card-header--status-help"> <h2 class="card-title"> <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/> </svg> Розподіл товарів по статусах руху
+                </h2> <button type="button" class="status-rules-help-btn js-status-rules-help" title="За якими даними рахуються статуси" aria-label="Довідка по статусах товарів" aria-haspopup="dialog" aria-controls="statusRulesModal">?</button> </div> <div class="card-content"> <div style="position: relative; height: 300px;"> <canvas id="statusChart"></canvas> </div> </div> </div> </div> <!-- Sales Comparison Block --> {% if sales_comparison %}
+    <div class="dashboard-card" style="margin-bottom: 24px;"> <div class="card-header"> <h2 class="card-title"> <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/> </svg> Динаміка продажів по асортименту
+            </h2> <span style="font-size: 13px; color: #9ca3af;">Сума всіх варіацій за порівняльними блоками</span> </div> <div class="card-content"> <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;"> {# 30д vs 30д #}
+                {% set c30 = sales_comparison.cur30 or 0 %}
+                {% set p30 = sales_comparison.prev30 or 0 %}
+                {% set pct30 = sales_comparison.pct30 %}
+                {% set d30 = c30 - p30 %}
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px;"> <div style="font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 12px;"> Місяць до місяця <span style="font-weight: 400; color: #9ca3af;">(30д)</span> </div> <div style="display: flex; align-items: center; gap: 8px;"> <div style="flex: 1; text-align: center; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 6px;"> <div style="font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Останні 30д</div> <div style="font-size: 24px; font-weight: 800; color: #111827;">{{ "{:,}".format(c30).replace(',', ' ') }}</div> <div style="font-size: 11px; color: #6b7280;">шт</div> </div> {% set chip30_class = 'cmp-chip-up' if d30 > 0 else 'cmp-chip-down' if d30 < 0 else 'cmp-chip-flat' %}
+                        <div class="cmp-chip {{ chip30_class }}"> {% if d30 > 0 %}↑{% elif d30 < 0 %}↓{% else %}→{% endif %}
+                            {% if pct30 is not none %}{{ "%+.0f"|format(pct30) }}%{% else %}—{% endif %}
+                        </div> <div style="flex: 1; text-align: center; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 6px;"> <div style="font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Попередні 30д</div> <div style="font-size: 24px; font-weight: 800; color: #374151;">{{ "{:,}".format(p30).replace(',', ' ') }}</div> <div style="font-size: 11px; color: #6b7280;">шт</div> </div> </div> </div> {# 90д vs 90д #}
+                {% set c90 = sales_comparison.cur90 or 0 %}
+                {% set p90 = sales_comparison.prev90 or 0 %}
+                {% set pct90 = sales_comparison.pct90 %}
+                {% set d90 = c90 - p90 %}
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px;"> <div style="font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 12px;"> Квартал до кварталу <span style="font-weight: 400; color: #9ca3af;">(90д)</span> </div> <div style="display: flex; align-items: center; gap: 8px;"> <div style="flex: 1; text-align: center; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 6px;"> <div style="font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Останні 90д</div> <div style="font-size: 24px; font-weight: 800; color: #111827;">{{ "{:,}".format(c90).replace(',', ' ') }}</div> <div style="font-size: 11px; color: #6b7280;">шт</div> </div> {% set chip90_class = 'cmp-chip-up' if d90 > 0 else 'cmp-chip-down' if d90 < 0 else 'cmp-chip-flat' %}
+                        <div class="cmp-chip {{ chip90_class }}"> {% if d90 > 0 %}↑{% elif d90 < 0 %}↓{% else %}→{% endif %}
+                            {% if pct90 is not none %}{{ "%+.0f"|format(pct90) }}%{% else %}—{% endif %}
+                        </div> <div style="flex: 1; text-align: center; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 6px;"> <div style="font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Попередні 90д</div> <div style="font-size: 24px; font-weight: 800; color: #374151;">{{ "{:,}".format(p90).replace(',', ' ') }}</div> <div style="font-size: 11px; color: #6b7280;">шт</div> </div> </div> </div> {# 180д vs 180д #}
+                {% set c180 = sales_comparison.cur180 or 0 %}
+                {% set p180 = sales_comparison.prev180 or 0 %}
+                {% set pct180 = sales_comparison.pct180 %}
+                {% set d180 = c180 - p180 %}
+                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px;"> <div style="font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 12px;"> Півроку до півроку <span style="font-weight: 400; color: #9ca3af;">(180д)</span> </div> <div style="display: flex; align-items: center; gap: 8px;"> <div style="flex: 1; text-align: center; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 6px;"> <div style="font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Останні 180д</div> <div style="font-size: 24px; font-weight: 800; color: #111827;">{{ "{:,}".format(c180).replace(',', ' ') }}</div> <div style="font-size: 11px; color: #6b7280;">шт</div> </div> {% set chip180_class = 'cmp-chip-up' if d180 > 0 else 'cmp-chip-down' if d180 < 0 else 'cmp-chip-flat' %}
+                        <div class="cmp-chip {{ chip180_class }}"> {% if d180 > 0 %}↑{% elif d180 < 0 %}↓{% else %}→{% endif %}
+                            {% if pct180 is not none %}{{ "%+.0f"|format(pct180) }}%{% else %}—{% endif %}
+                        </div> <div style="flex: 1; text-align: center; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 6px;"> <div style="font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">Попередні 180д</div> <div style="font-size: 24px; font-weight: 800; color: #374151;">{{ "{:,}".format(p180).replace(',', ' ') }}</div> <div style="font-size: 11px; color: #6b7280;">шт</div> </div> </div> </div> </div> </div> </div> {% endif %}
+
+    <!-- Critical Items --> {% if critical_items %}
+    <div class="dashboard-card"> <div class="card-header"> <h2 class="card-title"> <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/> </svg> Критичні товари (ризик закінчення)
+            </h2> <a href="/procurement/recommendations?action=buy_urgent&horizon_days={{ purchase_horizon_days }}" class="btn-link">Переглянути всі →</a> </div> <div style="padding: 0 20px 12px;"> <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;"> <span style="font-size: 13px; font-weight: 600; color: #374151;">Горизонт:</span> <div style="display: flex; gap: 6px; flex-wrap: wrap;"> {% for d in [1, 7, 14, 30, 60, 90, 180, 360] %}
+                    <a class="horizon-btn {% if purchase_horizon_days == d %}active{% endif %}"
+                       href="/procurement/dashboard?purchase_horizon_days={{ d }}"> {{ d }} {% if d == 1 %}день{% else %}днів{% endif %}
+                    </a> {% endfor %}
+                </div> <span style="font-size: 12px; color: #9ca3af;">Впливає на продаж/день, оборотність і рекомендацію закупки</span> </div> </div> <div class="card-content"> <div class="transactions-table"> <table class="js-sortable"> <thead> <tr> <th data-sort-type="text" title="Назва товару">Товар</th> <th data-sort-type="num" title="Поточний залишок на складі (шт) з фіду">Залишок</th> <th data-sort-type="num" title="Середній продаж за {{ purchase_horizon_days }} днів, шт/день (натисніть: спочатку зростання, потім спадання)">Продаж/день ({{ purchase_horizon_days }}д)</th> <th data-sort-type="num" title="Оціночна кількість днів, на які вистачить залишку: залишок ÷ середній продаж за день за {{ purchase_horizon_days }}д">Днів до закінчення</th> <th data-sort-type="num" title="Рекомендована закупівля на {{ purchase_horizon_days }} днів">Рекомендація ({{ purchase_horizon_days }}д)</th> </tr> </thead> <tbody> {% for product, analytics, has_dilovod, hv in critical_items %}
+                        <tr> <td> <a href="/procurement/product/{{ product.id }}" style="color: inherit; text-decoration: none;"> <strong>{{ product.name[:60] }}</strong> </a> </td> <td><strong style="color: #ef4444;">{{ product.stock_qty or 0 }}</strong></td> <td>{{ "%.2f"|format(hv.avg_daily_sales or 0) }}</td> <td> {% if hv.turnover_days_display is not none %}
+                                <span style="background: #ef4444; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;"> {{ hv.turnover_days_display }} днів
+                                </span> {% else %}
+                                —
+                                {% endif %}
+                            </td> <td> {% if hv.recommended_purchase %}
+                                <strong style="color: #059669;">Закупити: {{ hv.recommended_purchase }} шт</strong> {% else %}
+                                —
+                                {% endif %}
+                            </td> </tr> {% endfor %}
+                    </tbody> </table> </div> </div> </div> {% endif %}
+
+    <!-- Bestsellers and Dead Stock --> <div class="dashboard-grid"> <div class="dashboard-card"> <div class="card-header"> <h2 class="card-title"> <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/> </svg> Бестселери (Fast Movers)
+                </h2> <a href="/procurement/top-products?sort_by=sales" class="btn-link">Переглянути всі →</a> </div> <div class="card-content"> {% if bestsellers %}
+                <div class="transactions-table"> <table class="js-sortable"> <thead> <tr> <th data-sort-type="text" title="Назва товару">Товар</th> <th data-sort-type="num" title="Залишок на складі (шт)">Залишок</th> <th data-sort-type="firststrong" title="Середній продаж за 30 днів, шт/день">Продаж/день</th> <th data-sort-type="num" title="Орієнтир виручки з аналітики: прогноз продажів × ціна каталогу (поле potential_revenue_7d; у розрахунку використовується горизонт ~30д)">Потенціал (7д)</th> </tr> </thead> <tbody> {% for product, analytics, has_dilovod in bestsellers %}
+                            <tr> <td> <a href="/procurement/product/{{ product.id }}" style="color: inherit; text-decoration: none;"> <strong>{{ product.name[:50] }}</strong> </a> </td> <td>{{ product.stock_qty or 0 }}</td> <td><strong style="color: #059669;">{{ "%.2f"|format(analytics.avg_daily_sales or 0) }}</strong></td> <td>{{ "{:,.0f}".format(analytics.potential_revenue_7d or 0).replace(',', ' ') }} ₴</td> </tr> {% endfor %}
+                        </tbody> </table> </div> {% else %}
+                <div class="empty-state"> <p>Немає даних про бестселери.{% if request.state.role == 'admin' %} Оновіть продукти на сторінці <a href="/sync">Синхронізація</a> (Cosmy).{% else %} Зверніться до адміністратора для оновлення продуктів.{% endif %}</p> </div> {% endif %}
+            </div> </div> <div class="dashboard-card"> <div class="card-header"> <h2 class="card-title"> <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/> </svg> Неліквід (Dead Stock)
+                </h2> <a href="/procurement/recommendations?action=sell_off" class="btn-link">Переглянути всі →</a> </div> <div class="card-content"> {% if dead_stock %}
+                <div class="transactions-table"> <table class="js-sortable"> <thead> <tr> <th data-sort-type="text" title="Назва товару">Товар</th> <th data-sort-type="num" title="Залишок на складі (шт)">Залишок</th> <th data-sort-type="num" title="Кількість днів підряд без продажів за історією (days_without_sales)">Днів без продажів</th> <th data-sort-type="num" title="Залишок × закупівельна ціна">Заморожений капітал</th> </tr> </thead> <tbody> {% for product, analytics, has_dilovod in dead_stock %}
+                            <tr> <td> <a href="/procurement/product/{{ product.id }}" style="color: inherit; text-decoration: none;"> {{ product.name[:50] }}
+                                    </a> </td> <td>{{ product.stock_qty or 0 }}</td> <td> <span style="background: #6b7280; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;"> {{ analytics.days_without_sales or 0 }} днів
+                                    </span> </td> <td><strong style="color: #dc2626;">{{ "{:,.0f}".format(analytics.frozen_capital or 0).replace(',', ' ') }} ₴</strong></td> </tr> {% endfor %}
+                        </tbody> </table> </div> {% else %}
+                <div class="empty-state"> <p>Немає неліквідних товарів </p> </div> {% endif %}
+            </div> </div> </div>
+</div> <style>
+.status-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: start;
+    gap: 12px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.legend-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 20px;
+    flex-shrink: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    box-shadow: none;
+}
+
+.legend-content {
+    flex: 1;
+}
+
+.legend-content strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #111827;
+}
+
+.legend-content p {
+    margin: 0;
+    font-size: 14px;
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+.abc-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.abc-period-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.abc-period-btn {
+    padding: 4px 12px;
+    border-radius: var(--radius-pill, 999px);
+    border: 2px solid #e5e7eb;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.abc-period-btn:hover {
+    border-color: #3b82f6;
+    color: #3b82f6;
+    background: #eff6ff;
+}
+
+.abc-period-btn.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+}
+
+.stat-row span {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.stat-row strong {
+    color: #111827;
+    font-size: 15px;
+}
+
+.alert-box {
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid;
+}
+
+.alert-warning {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    color: #78350f;
+}
+
+.alert-box strong {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.alert-box p {
+    margin: 0;
+}
+
+/* Заголовок картки + кнопка «?» для довідки статусів */
+.card-header--status-help {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.card-header--status-help .card-title {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
+}
+.status-rules-help-btn {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid #e5e7eb;
+    background: #f9fafb;
+    color: #6b7280;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.status-rules-help-btn:hover {
+    border-color: #3b82f6;
+    color: #3b82f6;
+    background: #eff6ff;
+}
+.status-rules-help-btn:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Модальне вікно довідки статусів */
+.status-rules-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+}
+.status-rules-modal.is-open {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+}
+.status-rules-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.55);
+    cursor: pointer;
+}
+.status-rules-modal__panel {
+    position: relative;
+    width: 100%;
+    max-width: 560px;
+    max-height: min(88vh, 720px);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+.status-rules-modal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border-bottom: 1px solid #e5e7eb;
+    flex-shrink: 0;
+}
+.status-rules-modal__title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #111827;
+}
+.status-rules-modal__close {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    background: #f3f4f6;
+    color: #374151;
+    font-size: 24px;
+    line-height: 1;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.status-rules-modal__close:hover {
+    background: #e5e7eb;
+}
+.status-rules-modal__body {
+    padding: 16px 18px 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.status-rules-modal__section + .status-rules-modal__section {
+    margin-top: 22px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+.status-rules-modal__subtitle {
+    margin: 0 0 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+}
+.status-rules-modal__list {
+    margin: 0;
+    padding-left: 1.25rem;
+    font-size: 13px;
+    color: #4b5563;
+    line-height: 1.55;
+}
+.status-rules-modal__list li {
+    margin-bottom: 8px;
+}
+.status-rules-modal__list li:last-child {
+    margin-bottom: 0;
+}
+.status-rules-modal__footnote {
+    margin: 12px 0 0;
+    font-size: 12px;
+    color: #9ca3af;
+}
+.status-rules-modal__footnote a {
+    color: #3b82f6;
+}
+.status-legend--modal {
+    gap: 10px;
+}
+.status-legend--modal .legend-item {
+    padding: 10px 12px;
+}
+.status-legend--modal .legend-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+}
+.status-legend--modal .legend-content p {
+    font-size: 13px;
+}
+
+/* Капітал по статусах */
+.status-capital-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.status-capital-card {
+    border-radius: 8px;
+    padding: 14px;
+}
+
+.sc-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.sc-count {
+    font-size: 22px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.sc-count span {
+    font-size: 12px;
+    font-weight: 400;
+    color: #6b7280;
+}
+
+.sc-frozen {
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+.sc-metric-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 8px;
+    margin-top: 6px;
+    font-size: 13px;
+}
+.sc-metric-row:first-of-type {
+    margin-top: 4px;
+}
+.sc-metric-row--rev {
+    font-size: 12px;
+    color: #6b7280;
+}
+.sc-metric-tag {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #9ca3af;
+}
+.sc-rev-amount {
+    font-weight: 600;
+    color: #4b5563;
+}
+
+/* Кольори для статусів (відтінок + сума) */
+.status-fast_mover .sc-frozen-amount {
+    color: #10b981;
+}
+
+.status-medium_mover .sc-frozen-amount {
+    color: #3b82f6;
+}
+
+.status-slow_mover .sc-frozen-amount {
+    color: #f59e0b;
+}
+
+.status-dead_stock .sc-frozen-amount {
+    color: #ef4444;
+}
+
+.status-out_of_stock .sc-frozen-amount {
+    color: #dc2626;
+}
+
+.status-new .sc-frozen-amount {
+    color: #6b7280;
+}
+
+/* Оборотність — діапазони */
+.turnover-ranges {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.turnover-range-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 80px 140px;
+    align-items: center;
+    gap: 12px;
+}
+
+.tr-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+}
+
+.tr-bar-wrap {
+    background: #f3f4f6;
+    border-radius: 6px;
+    height: 16px;
+    overflow: hidden;
+}
+
+.tr-bar {
+    height: 100%;
+    border-radius: 6px;
+    min-width: 4px;
+    transition: width 0.5s ease;
+}
+
+.tr-count {
+    font-size: 13px;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Кольори для діапазонів оборотності */
+.tr-bar-lt7 {
+    background: #dc2626;
+}
+.tr-count-lt7 {
+    color: #dc2626;
+}
+
+.tr-bar-7_30 {
+    background: #f59e0b;
+}
+.tr-count-7_30 {
+    color: #f59e0b;
+}
+
+.tr-bar-30_60 {
+    background: #10b981;
+}
+.tr-count-30_60 {
+    color: #10b981;
+}
+
+.tr-bar-gt60 {
+    background: #3b82f6;
+}
+.tr-count-gt60 {
+    color: #3b82f6;
+}
+
+.tr-hint {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+/* Чіпи зміни періоду (30/90/180) */
+.cmp-chip {
+    flex: 0 0 56px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 800;
+    padding: 6px 4px;
+    border-radius: 8px;
+}
+.cmp-chip-up {
+    color: #059669;
+    background: #d1fae5;
+}
+.cmp-chip-down {
+    color: #dc2626;
+    background: #fee2e2;
+}
+.cmp-chip-flat {
+    color: #6b7280;
+    background: #f3f4f6;
+}
+
+/* Simple brand lists — оновлений дизайн */
+.brand-top-grid {
+    align-items: stretch;
+}
+.brand-top-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.brand-top-header {
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: flex-start;
+    padding: 1rem 1.15rem;
+}
+.brand-top-header .card-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    line-height: 1.3;
+}
+.brand-top-header .card-title .ui-icon {
+    flex-shrink: 0;
+    margin-right: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+}
+.brand-top-header .card-title > span {
+    min-width: 0;
+}
+.brand-top-header--solo {
+    align-items: center;
+}
+.brand-top-content {
+    padding: 0.85rem 1rem 1rem;
+    flex: 1;
+}
+.simple-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.simple-list li {
+    display: grid;
+    grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.65rem;
+    padding: 0.55rem 0.7rem;
+    margin-bottom: 0.3rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    line-height: 1.35;
+    background: #fafafa;
+    border: 1px solid #f0f0f0;
+    transition: background 0.15s, border-color 0.15s;
+}
+.simple-list li:hover {
+    background: #f5f5f5;
+    border-color: #e5e7eb;
+}
+.simple-list li:last-child {
+    margin-bottom: 0;
+}
+.brand-rank {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: var(--accent-soft, #dbeafe);
+    color: var(--accent-ink, #1e40af);
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+.simple-list-name {
+    color: #374151;
+    font-weight: 500;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.simple-list-name a {
+    color: inherit;
+    text-decoration: none;
+}
+.simple-list-name a:hover {
+    color: #2563eb;
+    text-decoration: underline;
+}
+.simple-list-value {
+    font-weight: 700;
+    color: #111827;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    text-align: right;
+    justify-self: end;
+}
+.brand-list .simple-list-value {
+    min-width: 4.5rem;
+}
+
+/* Brand period tabs */
+.brand-tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    padding: 0;
+    border-bottom: none;
+    margin: 0;
+    flex: 0 0 auto;
+}
+.brand-tab {
+    padding: 0.3rem 0.55rem;
+    border: 1px solid #e5e7eb;
+    border-radius: var(--radius-pill, 999px);
+    background: #f9fafb;
+    color: #6b7280;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.brand-tab:hover {
+    background: #e5e7eb;
+    color: #374151;
+}
+.brand-tab.active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #2563eb;
+}
+@media (max-width: 640px) {
+    .brand-top-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .brand-tabs {
+        width: 100%;
+    }
+}
+
+.horizon-btn {
+    text-decoration: none;
+    display: inline-block;
+    padding: 4px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: var(--radius-pill, 999px);
+    background: #f9fafb;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+.horizon-btn:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+}
+.horizon-btn.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+/* Таблиці на дашборді закупок — покращений вигляд */
+.procurement_dashboard .transactions-table {
+    border-radius: var(--radius-sm, 14px);
+    overflow: hidden;
+    border: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+    box-shadow: var(--shadow, 0 1px 2px rgba(24, 24, 27, 0.04));
+}
+.procurement_dashboard .transactions-table table {
+    border-collapse: collapse;
+}
+.procurement_dashboard .transactions-table thead {
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    border-bottom: 2px solid #e2e8f0;
+}
+.procurement_dashboard .transactions-table th {
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: 13px;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.procurement_dashboard .transactions-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 14px;
+}
+.procurement_dashboard .transactions-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.procurement_dashboard .transactions-table tbody tr:nth-child(even):not(:hover) {
+    background: #fcfcfd;
+}
+.procurement_dashboard .transactions-table tbody tr:hover {
+    background: #f8fafc;
+}
+.procurement_dashboard .dashboard-card {
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid #e5e7eb;
+}
+
+.dashboard-quick-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+}
+.dq-status-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: #111827;
+    transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+.dq-status-card--help { cursor: help; }
+.dq-status-card:hover {
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    transform: translateY(-1px);
+}
+.dq-status-label { font-weight: 700; font-size: 14px; line-height: 1.3; }
+.dq-status-count { font-size: 13px; color: #6b7280; }
+.dq-status-count strong { color: #111827; }
+.dq-status-meta { font-size: 11px; color: #9ca3af; margin-top: -2px; }
+.dq-status-frozen { font-size: 12px; font-weight: 600; color: #059669; }
+.dq-status-frozen--muted { color: #9ca3af; font-weight: 500; }
+
+@media (max-width: 768px) {
+    .turnover-range-row {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto;
+    }
+    .tr-bar-wrap {
+        grid-column: 1 / -1;
+    }
+    .tr-hint {
+        display: none;
+    }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Графік розподілу статусів за обраним горизонтом ({{ horizon_days }}д)
+const statusData = {
+    fast_mover:   parseInt('{{ horizon_stats.status_distribution.get("fast_mover", 0) }}', 10),
+    medium_mover: parseInt('{{ horizon_stats.status_distribution.get("medium_mover", 0) }}', 10),
+    slow_mover:   parseInt('{{ horizon_stats.status_distribution.get("slow_mover", 0) }}', 10),
+    dead_stock:   parseInt('{{ horizon_stats.status_distribution.get("dead_stock", 0) }}', 10),
+    'new':        parseInt('{{ horizon_stats.status_distribution.get("new", 0) }}', 10),
+};
+
+// Ініціалізація ширини барів оборотності після завантаження DOM
+document.querySelectorAll('.tr-bar[data-width]').forEach((el) => {
+    const pct = parseFloat(el.dataset.width);
+    if (!isNaN(pct)) {
+        el.style.width = `${pct}%`;
+    }
+});
+
+(function () {
+    const modal = document.getElementById('statusRulesModal');
+    if (!modal) return;
+    const openBtns = document.querySelectorAll('.js-status-rules-help');
+    const closeEls = modal.querySelectorAll('[data-close-status-modal]');
+    let lastFocus = null;
+    function openModal() {
+        lastFocus = document.activeElement;
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        const closeBtn = modal.querySelector('.status-rules-modal__close');
+        if (closeBtn) closeBtn.focus();
+    }
+    function closeModal() {
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+    }
+    openBtns.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            openModal();
+        });
+    });
+    closeEls.forEach((el) => el.addEventListener('click', closeModal));
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+    });
+})();
+
+new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Fast Movers', 'Medium Movers', 'Slow Movers', 'Dead Stock', 'Нові'],
+        datasets: [{
+            data: [
+                statusData.fast_mover,
+                statusData.medium_mover,
+                statusData.slow_mover,
+                statusData.dead_stock,
+                statusData.new,
+            ],
+            backgroundColor: [
+                '#10b981',
+                '#3b82f6',
+                '#f59e0b',
+                '#ef4444',
+                '#6b7280',
+            ],
+            borderWidth: 2,
+            borderColor: '#fff'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    padding: 15,
+                    font: {
+                        size: 13
+                    }
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const label = context.label || '';
+                        const value = context.parsed || 0;
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                        return `${label}: ${value} (${percentage}%)`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+// ---- Brand tabs logic ----
+// Маппінг period → data-атрибут (data-s7d, data-s30d, ...)
+const periodKey = { '7d': 's7d', '30d': 's30d', '90d': 's90d', '180d': 's180d', '360d': 's360d' };
+
+function switchBrandTab(card, period, btn) {
+    btn.closest('.brand-tabs').querySelectorAll('.brand-tab').forEach(function(t) {
+        t.classList.remove('active');
+    });
+    btn.classList.add('active');
+
+    const key = periodKey[period];
+    const attr = 'data-brand-' + card;
+    const items = Array.from(document.querySelectorAll('[' + attr + ']'));
+
+    const parseVal = card === 'revenue' ? parseFloat : function(v) { return parseInt(v || '0', 10); };
+    const data = items.map(function(li) {
+        return { el: li, name: li.dataset.name, val: parseVal(li.dataset[key] || '0') };
+    });
+    data.sort(function(a, b) { return b.val - a.val; });
+
+    const list = items[0] && items[0].parentElement;
+    data.forEach(function(item, idx) {
+        var rankEl = item.el.querySelector('.brand-rank');
+        var nameEl = item.el.querySelector('.simple-list-name');
+        var brandId = item.el.dataset.brandId;
+        var safeName = (item.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        if (rankEl) rankEl.textContent = String(idx + 1);
+        if (brandId) {
+            nameEl.innerHTML = '<a href="/procurement/brand/' + brandId + '">' + safeName + '</a>';
+        } else {
+            nameEl.textContent = item.name || '';
+        }
+        if (card === 'revenue') {
+            item.el.querySelector('.brand-val').textContent = Math.round(item.val).toLocaleString('uk-UA') + ' ₴';
+        } else {
+            item.el.querySelector('.brand-val').textContent = item.val.toLocaleString('uk-UA') + ' шт';
+        }
+        item.el.style.display = idx < 10 ? '' : 'none';
+        if (list) list.appendChild(item.el);
+    });
+}
+
+// Ініціалізація: показуємо тільки топ-10 при завантаженні
+document.querySelectorAll('.brand-list').forEach(function(list) {
+    Array.from(list.querySelectorAll('li')).forEach(function(li, idx) {
+        li.style.display = idx < 10 ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

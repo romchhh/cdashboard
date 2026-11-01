@@ -1,0 +1,47 @@
+<style>
+.clients-subnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 1rem;
+}
+.clients-subnav-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 18px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    color: #64748b;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    transition: color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+.clients-subnav-link:hover {
+    color: #1d4ed8;
+    border-color: #93c5fd;
+}
+.clients-subnav-link.active {
+    color: #fff;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-color: #2563eb;
+    box-shadow: 0 2px 10px rgba(37, 99, 235, 0.28);
+}
+</style>
+<nav class="clients-subnav" aria-label="Клієнти Cosmy">
+    {% if request.state.access_marketing %}
+    <a href="/clients" class="clients-subnav-link {% if clients_nav == 'list' %}active{% endif %}">Список</a>
+    {% endif %}
+    {% if request.state.access_advertising %}
+    <a href="/clients/marketing-report" class="clients-subnav-link {% if clients_nav == 'advertising' %}active{% endif %}">Аналіз реклами</a>
+    {% endif %}
+    {% if request.state.access_marketing %}
+    <a href="/clients/mailings" class="clients-subnav-link {% if clients_nav == 'mailings' %}active{% endif %}">Розсилки</a>
+    <a href="/clients/mailings/log" class="clients-subnav-link {% if clients_nav == 'mailings_log' %}active{% endif %}">Журнал відправок</a>
+    <a href="/clients/mailings/unsubscribes" class="clients-subnav-link {% if clients_nav == 'mailings_unsubscribes' %}active{% endif %}">Відписані</a>
+    {% endif %}
+    {% if request.state.role == 'admin' %}
+    <a href="/clients/exports-log" class="clients-subnav-link {% if clients_nav == 'exports_log' %}active{% endif %}">Журнал експортів</a>
+    {% endif %}
+</nav>

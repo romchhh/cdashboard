@@ -1,0 +1,8 @@
+{% set _buy = sku_purchase_price(product, option) %}
+{% if _buy is not none and _buy > 1 %}
+<strong>{{ "{:,.2f}".format(_buy).replace(',', ' ') }} ₴</strong>
+{% elif _buy is not none %}
+<span title="У фіді {{ '%.2f'|format(_buy) }} ₴ — placeholder, не реальна закупівельна">—</span>
+{% else %}
+<span title="Закупівельна ціна не вказана у фіді">—</span>
+{% endif %}

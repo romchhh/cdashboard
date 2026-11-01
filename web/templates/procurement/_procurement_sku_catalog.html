@@ -1,0 +1,37 @@
+{# Блок «Каталог варіацій та заморожений капітал» — знімок з БД після останнього розрахунку аналітики #}
+{% set sr = warehouse_analytics.get('status_rules', {}) %}
+{% set dead_d = sr.get('dead_stock_days_without_sales', 90) %}
+{% set fast_thr = sr.get('fast_mover_threshold', 0.25) %}
+{% set med_thr = sr.get('medium_mover_threshold', 0.07) %}
+{% set slow_d = sr.get('slow_mover_days_without_sales', 14) %}
+{% set basis = sr.get('avg_sales_basis_days', 30) %}
+{% set status_config = [
+    ('fast_mover',   'Fast Movers',        '#10b981'),
+    ('medium_mover', 'Medium Movers',       '#3b82f6'),
+    ('slow_mover',   'Slow Movers',         '#f59e0b'),
+    ('dead_stock',   'Dead Stock',          '#ef4444'),
+    ('out_of_stock', 'Немає в наявності',   '#dc2626'),
+    ('new',          'Нові',                '#6b7280'),
+] %}
+{% set wa_frozen = warehouse_analytics.get('frozen_by_status', {}) %}
+{% set wa_dist   = warehouse_analytics.get('status_distribution', {}) %}
+
+<div class="dashboard-card procurement-sku-catalog" style="margin-bottom: 24px;"> <div class="card-header" style="flex-wrap: wrap; gap: 12px; align-items: flex-start;"> <div style="flex: 1; min-width: 220px;"> <h2 class="card-title" style="margin: 0 0 4px 0;"> Каталог варіацій та заморожений капітал
+            </h2> <p style="margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.45;"> Знімок з останнього розрахунку в БД: кількість <strong>варіацій</strong> і сума <strong>заморожено</strong> (залишок × закупівельна ціна).
+                Статуси нижче <strong>не залежать</strong> від горизонту на дашборді — див. пояснення.
+            </p> </div> <a href="/procurement/by-status" class="btn-link" style="white-space: nowrap;">Відкрити з фільтрами та пошуком →</a> </div> <div class="card-content"> <div class="dashboard-quick-status-grid"> {% for sk, la, co in status_config %}
+            {% set nsku = wa_dist.get(sk, 0) %}
+            {% set fz = wa_frozen.get(sk, 0) %}
+            {% if nsku > 0 or fz > 0 %}
+            <a href="/procurement/by-status?movement_status={{ sk }}" class="dq-status-card dq-status-card--{{ sk }}{% if sk == 'dead_stock' %} dq-status-card--help{% endif %}"
+               {% if sk == 'dead_stock' %}title="Dead Stock: товар не продавався ≥ {{ dead_d }} дн. підряд (є залишок на складі)"{% endif %}> <span class="dq-status-label">{{ la }}</span> {% if sk == 'out_of_stock' %}
+                    {% set oos_products = warehouse_analytics.out_of_stock_products or 0 %}
+                    <span class="dq-status-count"><strong>{{ oos_products }}</strong> товарів</span> <span class="dq-status-meta">повністю без залишку на складі · {{ nsku }} варіацій</span> {% else %}
+                    <span class="dq-status-count"><strong>{{ nsku }}</strong> варіацій</span> {% endif %}
+                {% if fz and fz > 0 %}
+                <span class="dq-status-frozen">{{ "{:,.0f}".format(fz).replace(',', ' ') }} ₴ заморожено</span> {% else %}
+                <span class="dq-status-frozen dq-status-frozen--muted">0 ₴ заморожено</span> {% endif %}
+            </a> {% endif %}
+            {% endfor %}
+        </div> <details style="margin-top: 14px; font-size: 12px; color: #6b7280; line-height: 1.55;"> <summary style="cursor: pointer; font-weight: 600; color: #374151;">Як рахуються статуси Fast / Medium / Slow / Dead?</summary> <ul style="margin: 10px 0 0; padding-left: 1.2rem;"> <li><strong>База:</strong> середній продаж/день за останні <strong>{{ basis }} дн</strong> (з історії продажів у БД).</li> <li><strong>Fast:</strong> ≥ <strong>{{ '%.2f'|format(fast_thr) }}</strong> шт/день.</li> <li><strong>Medium:</strong> від <strong>{{ '%.2f'|format(med_thr) }}</strong> до &lt; <strong>{{ '%.2f'|format(fast_thr) }}</strong> шт/день.</li> <li><strong>Slow:</strong> є продажі, але нижче medium; або ≥ <strong>{{ slow_d }} дн.</strong> підряд без продажів.</li> <li><strong>Dead Stock:</strong> без продажів <strong>≥ {{ dead_d }} дн.</strong> (є залишок).</li> <li><strong>Нові:</strong> менше 7 записів денної історії в БД.</li> <li><strong>Немає в наявності:</strong> залишок 0 у фіді.</li> </ul> <p style="margin: 8px 0 0;">Пороги змінюються в <a href="/procurement/settings">налаштуваннях</a>. На сторінці «За статусами руху» ті самі правила, але перерахунок за <em>обраним горизонтом</em> — цифри можуть відрізнятися.</p> </details> </div>
+</div>

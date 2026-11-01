@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+{% from 'procurement/_procurement_sku_search_haystack.html' import sku_search_haystack_attr %}
+
+{% block title %}Розпродаж — термін придатності{% endblock %}
+{% block mobile_title %}Розпродаж{% endblock %}
+
+{% block head %}
+<style>
+.urgency-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.urgency-critical  { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+.urgency-high      { background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; }
+.urgency-medium    { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; }
+.urgency-low       { background: #f0fdf4; color: #16a34a; border: 1px solid #86efac; }
+
+.days-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 52px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    text-align: center;
+}
+.stat-card .stat-value {
+    font-size: 28px;
+    font-weight: 800;
+    margin-bottom: 4px;
+}
+.stat-card .stat-label {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.period-btn {
+    padding: 8px 16px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #374151;
+    font-weight: 600;
+    transition: all 0.2s;
+    font-size: 13px;
+}
+.period-btn:hover { background: #e5e7eb; }
+.period-btn.active { background: #ef4444; color: white; border-color: #ef4444; }
+
+.data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.data-table th,
+.data-table td {
+    padding: 0.7rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+.data-table th:last-child,
+.data-table td:last-child {
+    border-right: none;
+}
+.data-table th {
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+.data-table tbody tr {
+    transition: background 0.15s ease;
+}
+.data-table tbody tr:nth-child(even):not(:hover) {
+    background: #fcfcfd;
+}
+.data-table tbody tr:hover {
+    background: #f8fafc;
+}
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.data-table tbody tr.hidden {
+    display: none;
+}
+
+.data-table tbody tr.row-critical { background: #fff5f5; }
+.data-table tbody tr.row-high     { background: #fff8f0; }
+
+.card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 24px; }
+.card h3 { font-size: 16px; font-weight: 600; color: #111827; margin: 0 0 16px; }
+
+.search-box {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+.search-box:focus { outline: none; border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.1); }
+
+.btn-export {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    text-decoration: none;
+    border: 2px solid #10b981;
+    color: #10b981;
+    background: white;
+    transition: all 0.2s;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-export:hover { background: #10b981; color: white; }
+
+.product-image { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; margin-right: 10px; }
+
+.clearance-expiry-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 168px;
+}
+.clearance-expiry-edit__fields {
+    display: grid;
+    grid-template-columns: 1fr 72px;
+    gap: 6px;
+    align-items: end;
+}
+.clearance-expiry-edit label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.clearance-expiry-edit input[type="date"],
+.clearance-expiry-edit input[type="number"] {
+    padding: 5px 7px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+.clearance-expiry-edit .btn-save-expiry {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 6px;
+    background: #4f46e5;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+}
+.clearance-expiry-edit .btn-save-expiry:hover { background: #4338ca; }
+.clearance-expiry-edit .btn-save-expiry:disabled { opacity: 0.6; cursor: wait; }
+.clearance-expiry-edit__status {
+    font-size: 11px;
+    min-height: 1.2em;
+}
+.clearance-expiry-edit__status.ok { color: #059669; }
+.clearance-expiry-edit__status.err { color: #dc2626; }
+.clearance-expiry-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 99px;
+    font-size: 10px;
+    font-weight: 600;
+    background: #e0e7ff;
+    color: #3730a3;
+}
+.clearance-expiry-display { margin-top: 2px; }
+.clearance-worst-qty {
+    font-size: 12px;
+    color: #475569;
+    margin-top: 4px;
+}
+.clearance-stock-cell {
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.clearance-stock-bad {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    line-height: 1;
+}
+.clearance-stock-bad__num {
+    font-size: 28px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: #dc2626;
+}
+.clearance-stock-bad__unit {
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+}
+.clearance-stock-total {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+.clearance-stock-status {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #6b7280;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% from "procurement/_icons.html" import title_with_icon, ui_icon %}
+
+<div class="dashboard-container procurement_dashboard" data-procurement-search-root> <div class="dashboard-header"> <div> <h1 class="dashboard-title">{{ title_with_icon('sale', 'Розпродаж — термін придатності') }}</h1> <p class="dashboard-subtitle">Товари, у яких термін придатності закінчується протягом обраного періоду</p> </div> </div> {% include 'procurement_nav.html' %}
+
+    <!-- Підсумкова статистика --> {% if products %}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px;"> <div class="stat-card"> <div class="stat-value" style="color: #374151;">{{ total_count }}</div> <div class="stat-label">Всього товарів</div> </div> <div class="stat-card"> <div class="stat-value" style="color: #dc2626;">{{ critical_count }}</div> <div class="stat-label">Критичні (до 30 днів)</div> </div> <div class="stat-card"> <div class="stat-value" style="color: #c2410c;">{{ high_count }}</div> <div class="stat-label">Небезпечні (30–60 днів)</div> </div> </div> {% endif %}
+
+    <!-- Фільтри --> <div class="card"> <h3>Фільтри</h3> <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;"> <div> <div style="margin-bottom: 6px; font-weight: 600; font-size: 13px;">Термін придатності:</div> <div style="display: flex; gap: 6px; flex-wrap: wrap;"> {% for d in valid_days %}
+                    <a href="/procurement/clearance?days={{ d }}{% if selected_brand_id %}&brand_id={{ selected_brand_id }}{% endif %}"
+                       class="period-btn {% if not expired and selected_days == d %}active{% endif %}"> {% if d == 30 %}1 місяць
+                        {% elif d == 60 %}2 місяці
+                        {% elif d == 90 %}3 місяці
+                        {% elif d == 180 %}6 місяців
+                        {% elif d == 365 %}1 рік
+                        {% else %}{{ d }} дн.
+                        {% endif %}
+                    </a> {% endfor %}
+                    <a href="/procurement/clearance?expired=1{% if selected_brand_id %}&brand_id={{ selected_brand_id }}{% endif %}"
+                       class="period-btn {% if expired %}active{% endif %}"> Сплив
+                    </a> </div> </div> <div> <div style="margin-bottom: 6px; font-weight: 600; font-size: 13px; display:inline-flex;align-items:center;gap:0.35rem;">{{ ui_icon('tag') }} Бренд:</div> <select onchange="window.location.href='/procurement/clearance?days={{ selected_days }}{% if expired %}&expired=1{% endif %}&brand_id=' + this.value"
+                        style="padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 6px;"> <option value="">Всі бренди</option> {% for brand in brands %}
+                    <option value="{{ brand.id }}" {% if selected_brand_id == brand.id %}selected{% endif %}> {{ brand.name }}{% if brand.products_count %} ({{ brand.products_count }}){% endif %}
+                    </option> {% endfor %}
+                </select> </div> </div> </div> <!-- Пошук та експорт --> <div class="card"> <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;"> <input type="search" id="searchBox" class="search-box procurement-product-search-input"
+                   data-procurement-client-search data-target-table="#clearanceTable"
+                   placeholder="Назва, модель, артикул, опція…" autocomplete="off"
+                   style="max-width: 420px;"> <div style="display: flex; gap: 8px;"> <a href="/procurement/export/clearance?days={{ selected_days }}&format=xlsx" class="btn-export">Excel</a> <a href="/procurement/export/clearance?days={{ selected_days }}&format=csv"  class="btn-export">CSV</a> </div> </div> </div> <!-- Таблиця товарів --> <div class="card"> {% if products %}
+        <div class="table-wrapper"> <table class="data-table js-sortable" id="clearanceTable" data-procurement-sku-table> <thead> <tr> <th data-sort-type="text" title="Назва товару; для варіанту вказано опцію">Товар</th> <th data-sort-type="num" title="Дата найгіршого строку придатності та кількість одиниць із критичним строком">Термін / поганий строк</th> <th data-sort-type="num" title="Кількість з поганим строком (великим); загальний залишок на складі — дрібно">Залишок</th> <th data-sort-type="num" title="Орієнтовно скільки шт встигнемо продати до закінчення строку: середній продаж/день × днів до закінчення (якщо немає дати або темпу — порожньо)">Прогноз продажів до закінч.</th> <th data-sort-type="firststrong" title="Середній продаж за 7 днів (шт/день) + розбивка продажів по періодах з фіду">Продаж/день</th> <th data-sort-type="num" title="Поточна ціна на сайті з каталогу (selling_price_catalog) для рядка">Ціна на сайті</th> <th data-sort-type="num" title="Маржа, % = (ціна продажу − закупівельна) ÷ ціна продажу × 100">Маржа, %</th> <th data-sort-type="num" title="Заморожений капітал = залишок × закупівельна ціна">Заморожений капітал</th> </tr> </thead> <tbody> {% for product, option, analytics, expiry_ui in products %}
+                    {% set days_left = expiry_ui.display_days_until if expiry_ui.display_days_until is not none else (analytics.days_until_expiry if analytics else None) %}
+                    {% set item = option if option else product %}
+                    {% set stock = (option.stock_qty if option and option.stock_qty is not none else product.stock_qty) or 0 %}
+                    {% set edit_qty = expiry_ui.worst_qty if expiry_ui else 0 %}
+                    {% set bad_qty = edit_qty if edit_qty > 0 else stock %}
+
+                    {% if days_left is not none and days_left <= 7 %}
+                        {% set row_class = 'row-critical' %}
+                        {% set urgency_class = 'urgency-critical' %}
+                        {% set urgency_label = 'Критично' %}
+                        {% set pill_bg = '#fef2f2' %}
+                        {% set pill_color = '#dc2626' %}
+                    {% elif days_left is not none and days_left <= 30 %}
+                        {% set row_class = 'row-critical' %}
+                        {% set urgency_class = 'urgency-critical' %}
+                        {% set urgency_label = 'Критично' %}
+                        {% set pill_bg = '#fef2f2' %}
+                        {% set pill_color = '#dc2626' %}
+                    {% elif days_left is not none and days_left <= 60 %}
+                        {% set row_class = 'row-high' %}
+                        {% set urgency_class = 'urgency-high' %}
+                        {% set urgency_label = 'Небезпечно' %}
+                        {% set pill_bg = '#fff7ed' %}
+                        {% set pill_color = '#c2410c' %}
+                    {% elif days_left is not none and days_left <= 90 %}
+                        {% set row_class = '' %}
+                        {% set urgency_class = 'urgency-medium' %}
+                        {% set urgency_label = 'Увага' %}
+                        {% set pill_bg = '#fffbeb' %}
+                        {% set pill_color = '#b45309' %}
+                    {% else %}
+                        {% set row_class = '' %}
+                        {% set urgency_class = 'urgency-low' %}
+                        {% set urgency_label = 'Є час' %}
+                        {% set pill_bg = '#f0fdf4' %}
+                        {% set pill_color = '#16a34a' %}
+                    {% endif %}
+
+                    <tr class="{{ row_class }}" {{ sku_search_haystack_attr(product, option) }}> <td data-label="Товар"> <a href="/procurement/product/{{ product.id }}{% if option %}?option_id={{ option.id }}{% endif %}" style="color: inherit; text-decoration: none;"> <div style="display: flex; align-items: center;"> {% if product.image_url %}
+                                    <img src="{{ product.image_url }}" alt="" class="product-image"> {% endif %}
+                                    <div> <strong>{{ product.name }}</strong> {% if option %}<br><small style="color: #4b5563;">{{ option.option_name }}: {{ option.option_value_name }}</small>{% endif %}
+                                        <br><small style="color: #9ca3af;">{% if product.brand_id %}<a href="/procurement/brand/{{ product.brand_id }}" style="color: inherit;">{{ product.brand_name or '—' }}</a>{% else %}{{ product.brand_name or '—' }}{% endif %}</small> </div> </div> </a> </td> <td data-label="Термін / поганий строк" style="white-space: nowrap; vertical-align: top;"> {% set date_exp = expiry_ui.earliest_expiry if expiry_ui and expiry_ui.earliest_expiry else (item.date_expired if item.date_expired is defined else None) %}
+                            {% set edit_date = expiry_ui.worst_date if expiry_ui and expiry_ui.worst_date else date_exp %}
+
+                            {% if is_admin and stock > 0 %}
+                            <form class="clearance-expiry-edit js-clearance-expiry-form"
+                                  data-product-id="{{ product.id }}"
+                                  {% if option %}data-option-id="{{ option.id }}"{% endif %}
+                                  data-stock-max="{{ stock }}"> <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}"> <div class="clearance-expiry-edit__fields"> <label> Дата
+                                        <input type="date" name="worst_expiry_date" class="js-worst-date"
+                                               value="{% if edit_date %}{{ edit_date.isoformat() }}{% endif %}"> </label> <label> Погані, шт
+                                        <input type="number" name="worst_expiry_qty" class="js-worst-qty"
+                                               min="0" max="{{ stock }}" step="1"
+                                               value="{{ edit_qty if edit_qty else '' }}" placeholder="0"> </label> </div> <button type="submit" class="btn-save-expiry">Зберегти</button> <div class="clearance-expiry-edit__status js-expiry-status" role="status"></div> </form> {% if expiry_ui and expiry_ui.use_manual_lots %}
+                            <div style="margin-top:6px;"><span class="clearance-expiry-badge">Ручний режим</span></div> {% endif %}
+                            {% endif %}
+
+                            <div class="clearance-expiry-display js-expiry-display"> {% if date_exp %}
+                                <div style="font-weight: 700;" class="js-expiry-date-text">{{ date_exp.strftime('%d.%m.%Y') }}</div> {% endif %}
+                                {% if days_left is not none %}
+                                <div style="margin-top: 4px;"> <span class="days-pill js-days-pill" style="background: {{ pill_bg }}; color: {{ pill_color }}; border: 1px solid {{ pill_color }}40;"> {{ days_left }} дн.
+                                    </span> </div> <div style="margin-top: 4px;"> <span class="{{ urgency_class }} urgency-badge js-urgency-badge">{{ urgency_label }}</span> </div> {% endif %}
+                            </div> </td> <td data-label="Залишок" class="clearance-stock-cell js-stock-cell" data-sort-value="{{ bad_qty }}"> <div class="clearance-stock-bad"> <span class="clearance-stock-bad__num js-stock-bad-num">{{ bad_qty }}</span> <span class="clearance-stock-bad__unit">шт</span> </div> {% if edit_qty > 0 %}
+                            <div class="clearance-stock-total js-stock-total">з {{ stock }} разом</div> {% else %}
+                            <div class="clearance-stock-total js-stock-total" style="display:none;"></div> {% endif %}
+                            {% if item.stock_status %}
+                            <div class="clearance-stock-status">{{ item.stock_status }}</div> {% endif %}
+                        </td> <td data-label="Прогноз продажів до закінчення"> {% if analytics and days_left is not none and analytics.avg_daily_sales %}
+                            {% set forecast = (analytics.avg_daily_sales * days_left) | round(1) %}
+                            <strong>~{{ forecast | int }} шт</strong> {% if forecast < stock %}
+                            <br><small style="color: #dc2626;">Не встигнемо продати {{ (stock - forecast) | int }} шт</small> {% else %}
+                            <br><small style="color: #16a34a;">Встигнемо реалізувати</small> {% endif %}
+                            {% else %}—{% endif %}
+                        </td> <td data-label="Продаж/день"> <div> <strong>{{ "%.2f"|format(item.sales_avg_per_day_7d or 0) }}</strong> /день
+                            </div> <div style="margin-top: 4px; font-size: 11px; color: #6b7280; line-height: 1.8;"> <span title="{{ (item.sales_qty_1d or 0) }} шт за 1д · {{ '%.2f'|format(item.sales_avg_per_day_1d or 0) }} шт/день"
+                                      style="white-space:nowrap;"> 1д: <strong>{{ item.sales_qty_1d or 0 }}</strong> </span> ·
+                                <span title="{{ (item.sales_qty_7d or 0) }} шт за 7д · {{ '%.2f'|format(item.sales_avg_per_day_7d or 0) }} шт/день"
+                                      style="white-space:nowrap;"> 7д: <strong>{{ item.sales_qty_7d or 0 }}</strong> </span> ·
+                                <span title="{{ (item.sales_qty_30d or 0) }} шт за 30д · {{ '%.2f'|format(item.sales_avg_per_day_30d or 0) }} шт/день"
+                                      style="white-space:nowrap;"> 30д: <strong>{{ item.sales_qty_30d or 0 }}</strong> </span> ·
+                                <span title="{{ (item.sales_qty_90d or 0) }} шт за 90д · {{ '%.2f'|format(item.sales_avg_per_day_90d or 0) }} шт/день"
+                                      style="white-space:nowrap;"> 90д: <strong>{{ item.sales_qty_90d or 0 }}</strong> </span> ·
+                                <span title="{{ (item.sales_qty_180d or 0) }} шт за 180д · {{ '%.2f'|format(item.sales_avg_per_day_180d or 0) }} шт/день"
+                                      style="white-space:nowrap;"> 180д: <strong>{{ item.sales_qty_180d or 0 }}</strong> </span> ·
+                                <span title="{{ (item.sales_qty_360d or 0) }} шт за 360д · {{ '%.2f'|format(item.sales_avg_per_day_360d or 0) }} шт/день"
+                                      style="white-space:nowrap;"> 360д: <strong>{{ item.sales_qty_360d or 0 }}</strong> </span> </div> </td> <td data-label="Ціна на сайті" style="white-space: nowrap;"> {% if item.selling_price_catalog %}
+                            <strong>{{ "{:,.0f}".format(item.selling_price_catalog).replace(',', ' ') }} ₴</strong> {% else %}
+                            —
+                            {% endif %}
+                        </td> <td data-label="Маржа, %" data-sort-value="{{ sku_margin_pct(product, option) if sku_margin_pct(product, option) is not none else '' }}" style="white-space: nowrap;"> {% include 'procurement/_procurement_margin_cell.html' %}
+                        </td> <td data-label="Заморожений капітал" style="white-space: nowrap;"> {% if analytics and analytics.frozen_capital %}
+                            <strong>{{ "{:,.0f}".format(analytics.frozen_capital).replace(',', ' ') }} ₴</strong> {% else %}—{% endif %}
+                        </td> </tr> {% endfor %}
+                </tbody> </table> </div> {% else %}
+        <div style="text-align: center; padding: 64px 24px; color: #6b7280;"> <div style="font-size: 48px; margin-bottom: 16px;"></div> <h3 style="font-size: 18px; font-weight: 600; color: #374151; margin: 0 0 8px;">Немає товарів з терміном придатності менше {{ selected_days }} днів</h3> <p style="margin: 0;">Спробуйте збільшити період або перевірте синхронізацію фіду.</p> </div> {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function clearanceUrgencyMeta(daysLeft) {
+    if (daysLeft === null || daysLeft === undefined || daysLeft === '') {
+        return { pillBg: '#f0fdf4', pillColor: '#16a34a', urgencyClass: 'urgency-low', urgencyLabel: 'Є час' };
+    }
+    const d = Number(daysLeft);
+    if (d <= 30) return { pillBg: '#fef2f2', pillColor: '#dc2626', urgencyClass: 'urgency-critical', urgencyLabel: 'Критично' };
+    if (d <= 60) return { pillBg: '#fff7ed', pillColor: '#c2410c', urgencyClass: 'urgency-high', urgencyLabel: 'Небезпечно' };
+    if (d <= 90) return { pillBg: '#fffbeb', pillColor: '#b45309', urgencyClass: 'urgency-medium', urgencyLabel: 'Увага' };
+    return { pillBg: '#f0fdf4', pillColor: '#16a34a', urgencyClass: 'urgency-low', urgencyLabel: 'Є час' };
+}
+
+function updateClearanceStockCell(form, data) {
+    const row = form.closest('tr');
+    if (!row) return;
+    const cell = row.querySelector('.js-stock-cell');
+    if (!cell) return;
+    const badNum = cell.querySelector('.js-stock-bad-num');
+    const totalEl = cell.querySelector('.js-stock-total');
+    const worstQty = Number(data.worst_qty || 0);
+    const stockQty = Number(data.stock_qty || 0);
+    const badQty = worstQty > 0 ? worstQty : stockQty;
+    if (badNum) badNum.textContent = String(badQty);
+    cell.setAttribute('data-sort-value', String(badQty));
+    if (totalEl) {
+        if (worstQty > 0) {
+            totalEl.textContent = 'з ' + stockQty + ' разом';
+            totalEl.style.display = '';
+        } else {
+            totalEl.style.display = 'none';
+        }
+    }
+}
+
+function updateClearanceExpiryDisplay(form, data) {
+    const display = form.parentElement.querySelector('.js-expiry-display');
+    if (!display) return;
+    const meta = clearanceUrgencyMeta(data.days_until_expiry);
+
+    let dateEl = display.querySelector('.js-expiry-date-text');
+    if (data.worst_date_display) {
+        if (!dateEl) {
+            dateEl = document.createElement('div');
+            dateEl.className = 'js-expiry-date-text';
+            dateEl.style.fontWeight = '700';
+            display.prepend(dateEl);
+        }
+        dateEl.textContent = data.worst_date_display;
+        dateEl.style.display = '';
+    } else if (dateEl) {
+        dateEl.style.display = 'none';
+    }
+
+    updateClearanceStockCell(form, data);
+
+    let pill = display.querySelector('.js-days-pill');
+    if (data.days_until_expiry !== null && data.days_until_expiry !== undefined && data.worst_qty > 0) {
+        if (!pill) {
+            const wrap = document.createElement('div');
+            wrap.style.marginTop = '4px';
+            pill = document.createElement('span');
+            pill.className = 'days-pill js-days-pill';
+            wrap.appendChild(pill);
+            display.appendChild(wrap);
+        }
+        pill.textContent = data.days_until_expiry + ' дн.';
+        pill.style.background = meta.pillBg;
+        pill.style.color = meta.pillColor;
+        pill.style.border = '1px solid ' + meta.pillColor + '40';
+        pill.parentElement.style.display = '';
+    } else if (pill) {
+        pill.parentElement.style.display = 'none';
+    }
+
+    let badge = display.querySelector('.js-urgency-badge');
+    if (data.days_until_expiry !== null && data.days_until_expiry !== undefined && data.worst_qty > 0) {
+        if (!badge) {
+            const wrap = document.createElement('div');
+            wrap.style.marginTop = '4px';
+            badge = document.createElement('span');
+            badge.className = 'urgency-badge js-urgency-badge';
+            wrap.appendChild(badge);
+            display.appendChild(wrap);
+        }
+        badge.className = meta.urgencyClass + ' urgency-badge js-urgency-badge';
+        badge.textContent = meta.urgencyLabel;
+        badge.parentElement.style.display = '';
+    } else if (badge) {
+        badge.parentElement.style.display = 'none';
+    }
+}
+
+document.querySelectorAll('.js-clearance-expiry-form').forEach(function (form) {
+    form.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const statusEl = form.querySelector('.js-expiry-status');
+        const btn = form.querySelector('.btn-save-expiry');
+        const dateInput = form.querySelector('.js-worst-date');
+        const qtyInput = form.querySelector('.js-worst-qty');
+        const stockMax = parseInt(form.getAttribute('data-stock-max') || '0', 10);
+        const qty = parseInt(String(qtyInput.value || '0'), 10);
+
+        if (statusEl) {
+            statusEl.textContent = '';
+            statusEl.className = 'clearance-expiry-edit__status js-expiry-status';
+        }
+        if (qty > 0 && !dateInput.value) {
+            if (statusEl) {
+                statusEl.textContent = 'Вкажіть дату для поганого строку';
+                statusEl.classList.add('err');
+            }
+            return;
+        }
+        if (qty > stockMax) {
+            if (statusEl) {
+                statusEl.textContent = 'Не більше ' + stockMax + ' шт';
+                statusEl.classList.add('err');
+            }
+            return;
+        }
+
+        const body = new FormData(form);
+        body.set('product_id', form.getAttribute('data-product-id') || '');
+        const optId = form.getAttribute('data-option-id');
+        if (optId) body.set('option_id', optId);
+
+        if (btn) btn.disabled = true;
+        try {
+            const resp = await fetch('/procurement/clearance/expiry-lots', {
+                method: 'POST',
+                body: body,
+                headers: { 'Accept': 'application/json' },
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.ok) {
+                throw new Error((data && data.error) || 'Помилка збереження');
+            }
+            if (statusEl) {
+                statusEl.textContent = 'Збережено';
+                statusEl.classList.add('ok');
+            }
+            updateClearanceExpiryDisplay(form, data);
+        } catch (err) {
+            if (statusEl) {
+                statusEl.textContent = err.message || 'Помилка';
+                statusEl.classList.add('err');
+            }
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    });
+});
+</script>
+{% endblock %}

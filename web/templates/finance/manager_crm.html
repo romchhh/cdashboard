@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+{% block title %}Профіль менеджера: {{ manager_display }} — Cosmy Agent{% endblock %}
+{% block mobile_title %}Профіль менеджера{% endblock %}
+
+{% block head %}
+<style>
+.mcrm { max-width: 1180px; margin: 0 auto; padding: 0 4px 2.5rem; }
+.mcrm-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 45%, #1d4ed8 100%);
+  color: #f8fafc; border-radius: 16px; padding: 1.35rem 1.5rem 1.5rem;
+  margin-bottom: 1.25rem; box-shadow: 0 10px 40px rgba(15,23,42,.18);
+}
+.mcrm-hero-top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.mcrm-hero h1 { margin: 0 0 0.35rem; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+.mcrm-hero-meta { margin: 0; font-size: 0.92rem; opacity: 0.92; line-height: 1.45; }
+.mcrm-avatar {
+  width: 56px; height: 56px; border-radius: 14px; background: rgba(255,255,255,.15);
+  display: flex; align-items: center; justify-content: center; font-size: 1.35rem; font-weight: 800;
+  border: 1px solid rgba(255,255,255,.25); flex-shrink: 0;
+}
+.mcrm-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1rem; }
+.mcrm-toolbar a {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px;
+  font-size: 0.88rem; font-weight: 600; text-decoration: none; border: 1px solid rgba(255,255,255,.35);
+  color: #f8fafc; background: rgba(255,255,255,.1);
+}
+.mcrm-toolbar a:hover { background: rgba(255,255,255,.2); border-color: rgba(255,255,255,.55); }
+.mcrm-toolbar a.mcrm-btn-solid { background: #fff; color: #1e40af; border-color: #fff; }
+.mcrm-toolbar a.mcrm-btn-solid:hover { background: #e0e7ff; color: #1d4ed8; }
+
+.mcrm-layout { display: grid; grid-template-columns: 1fr 320px; gap: 1.25rem; align-items: start; }
+@media (max-width: 960px) { .mcrm-layout { grid-template-columns: 1fr; } }
+
+.mcrm-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+.mcrm-kpi {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 14px 12px;
+  box-shadow: 0 1px 3px rgba(15,23,42,.06);
+}
+.mcrm-kpi .v { font-size: 1.4rem; font-weight: 800; color: #0f172a; line-height: 1.15; }
+.mcrm-kpi .k { font-size: 0.78rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .04em; margin-top: 6px; }
+
+.mcrm-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 1rem 1.1rem 1.1rem;
+  margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(15,23,42,.05);
+}
+.mcrm-card h2 { margin: 0 0 10px; font-size: 1.05rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+.mcrm-hint { font-size: 0.86rem; color: #64748b; margin: 0 0 12px; line-height: 1.5; }
+.mcrm-aside .mcrm-card h2 { font-size: 0.98rem; }
+
+.mcrm-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid #e2e8f0; }
+.mcrm-table { width: 100%; border-collapse: collapse; font-size: 0.87rem; min-width: 520px; }
+.mcrm-table th, .mcrm-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.mcrm-table th { background: #f8fafc; color: #475569; font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: .05em; }
+.mcrm-table tbody tr:hover { background: #f8fafc; }
+.mcrm-table tbody tr:last-child td { border-bottom: none; }
+
+.mcrm-bars { display: flex; flex-direction: column; gap: 10px; }
+.mcrm-bar-row { display: grid; grid-template-columns: 1fr 42px; gap: 8px; align-items: center; }
+.mcrm-bar-label { font-size: 0.84rem; color: #334155; font-weight: 500; }
+.mcrm-bar-track { height: 8px; background: #e2e8f0; border-radius: 99px; overflow: hidden; margin-top: 4px; }
+.mcrm-bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3b82f6, #6366f1); transition: width .25s ease; }
+.mcrm-bar-count { font-size: 0.82rem; font-weight: 700; color: #1d4ed8; text-align: right; }
+
+.mcrm-pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 0.72rem; font-weight: 700; background: #e0e7ff; color: #3730a3; }
+.mcrm-dl { margin: 0; display: grid; gap: 8px; font-size: 0.86rem; }
+.mcrm-dl div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 6px; }
+.mcrm-dl span:first-child { color: #64748b; }
+.mcrm-dl span:last-child { font-weight: 600; color: #0f172a; text-align: right; word-break: break-all; }
+
+.mcrm-note { font-size: 0.82rem; color: #475569; max-width: 42rem; line-height: 1.45; white-space: pre-wrap; }
+.mcrm-period-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.mcrm-period-tabs a {
+  display: inline-block; padding: 6px 12px; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+  text-decoration: none; border: 1px solid rgba(255,255,255,.35); color: #f8fafc; background: rgba(255,255,255,.1);
+}
+.mcrm-period-tabs a.is-active { background: #fff; color: #1d4ed8; border-color: #fff; }
+.mcrm-stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.mcrm-stat-box {
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px;
+}
+.mcrm-stat-box .v { font-size: 1.2rem; font-weight: 800; color: #0f172a; }
+.mcrm-stat-box .k { font-size: 0.72rem; font-weight: 600; color: #64748b; margin-top: 4px; line-height: 1.3; }
+.mcrm-subcard { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e2e8f0; }
+.mcrm-subcard h3 { margin: 0 0 8px; font-size: 0.88rem; font-weight: 700; color: #475569; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mcrm">
+  <div class="mcrm-hero">
+    <div class="mcrm-hero-top">
+      <div>
+        <h1>Профіль менеджера</h1>
+        <p class="mcrm-hero-meta">
+          <strong style="font-size:1.05rem;">{{ manager_display|e }}</strong><br>
+          Логін: <code style="background:rgba(0,0,0,.2);padding:2px 8px;border-radius:6px;">{{ manager.username|e }}</code>
+          {% if manager.role == 'admin' %} · <span class="mcrm-pill" style="background:rgba(255,255,255,.2);color:#fff;">Адмін</span>{% endif %}
+        </p>
+      </div>
+      <div class="mcrm-avatar" aria-hidden="true">{{ (manager_display[:1] or manager.username[:1] or '?')|e }}</div>
+    </div>
+    <div class="mcrm-toolbar">
+      <a href="/managers?period={{ period_key }}" class="mcrm-btn-solid">← Менеджери</a>
+      <a href="/managers/{{ manager.id }}/edit">Налаштування облікового запису</a>
+      <a href="/clients?assigned={{ manager.username|urlencode }}&amp;email_mode=with">Клієнти з email</a>
+      <a href="/clients?assigned={{ manager.username|urlencode }}">Усі призначені клієнти</a>
+      {% if request.state.access_marketing %}
+      <a href="/clients/mailings">Розсилки</a>
+      {% endif %}
+    </div>
+    <nav class="mcrm-period-tabs" aria-label="Період статистики дій">
+      {% for key, label in period_choices %}
+      <a href="/managers/{{ manager.id }}/crm?period={{ key }}" class="{% if period_key == key %}is-active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+
+  <div class="mcrm-layout">
+    <div class="mcrm-main">
+      <div class="mcrm-kpis">
+        <div class="mcrm-kpi"><div class="v">{{ assigned_total }}</div><div class="k">Відповідальний за клієнтів</div></div>
+        <div class="mcrm-kpi"><div class="v">{{ status_counts.in_progress }}</div><div class="k">В роботі</div></div>
+        <div class="mcrm-kpi"><div class="v">{{ status_counts.communicated }}</div><div class="k">Прокомуніковано</div></div>
+        <div class="mcrm-kpi"><div class="v">{{ status_counts.neutral }}</div><div class="k">Нейтральний стан</div></div>
+        <div class="mcrm-kpi"><div class="v">{{ clients_with_any_interaction }}</div><div class="k">З каналами взаємодії</div></div>
+        <div class="mcrm-kpi"><div class="v">{{ manager_action_stats.closures }}</div><div class="k">Закрито · {{ period_label }}</div></div>
+        <div class="mcrm-kpi"><div class="v">{{ manager_action_stats.total_actions }}</div><div class="k">Усього дій · {{ period_label }}</div></div>
+        <div class="mcrm-kpi"><div class="v">{{ orders_as_manager_total }}</div><div class="k">Замовлень у фіді (збіг)</div></div>
+        <div class="mcrm-kpi"><div class="v">{{ campaigns_sent_sum }}</div><div class="k">Листів надіслано (сума)</div></div>
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Дії менеджера з клієнтами · {{ period_label }}</h2>
+        <p class="mcrm-hint">
+          Повний підрахунок за автором у журналі CRM і коментарях (не обмежено 60 записами).
+          {% if manager_action_stats.last_action_at %}
+          Остання дія: <strong>{{ manager_action_stats.last_action_at.strftime('%d.%m.%Y %H:%M') }}</strong>.
+          {% endif %}
+        </p>
+        <div class="mcrm-stat-grid">
+          <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats.status_changes }}</div><div class="k">Змін статусу</div></div>
+          <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats.status_in_progress }}</div><div class="k">→ В роботі</div></div>
+          <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats.status_communicated }}</div><div class="k">→ Прокомуніковано</div></div>
+          <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats.channel_updates }}</div><div class="k">Оновлень каналів</div></div>
+          <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats.assignments }}</div><div class="k">Призначень відповідального</div></div>
+          <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats.closures }}</div><div class="k">Закриттів лідів</div></div>
+          <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats.comments }}</div><div class="k">Коментарів на картках</div></div>
+          <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats.total_actions }}</div><div class="k">Усього дій</div></div>
+        </div>
+        <div class="mcrm-subcard">
+          <h3>Дії лише по призначених клієнтах ({{ period_label }})</h3>
+          <div class="mcrm-stat-grid">
+            <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats_assigned.status_changes }}</div><div class="k">Статуси</div></div>
+            <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats_assigned.channel_updates }}</div><div class="k">Канали</div></div>
+            <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats_assigned.closures }}</div><div class="k">Закриття</div></div>
+            <div class="mcrm-stat-box"><div class="v">{{ manager_action_stats_assigned.total_actions }}</div><div class="k">Усього</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Журнал дій менеджера</h2>
+        <p class="mcrm-hint">Останні CRM-дії, виконані <strong>цим</strong> менеджером (усі клієнти, не лише призначені). Період: {{ period_label }}.</p>
+        {% if manager_activity_log %}
+        <div class="mcrm-table-wrap">
+          <table class="mcrm-table">
+            <thead>
+              <tr>
+                <th>Час</th>
+                <th>Подія</th>
+                <th>Клієнт</th>
+                <th>Деталі</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in manager_activity_log %}
+              {% set h = row.entry %}
+              <tr>
+                <td>{% if h.created_at %}{{ h.created_at.strftime('%d.%m.%Y %H:%M') }}{% else %}—{% endif %}</td>
+                <td>{{ row.event_label|e }}</td>
+                <td>
+                  <strong>{{ row.client_name|e }}</strong>
+                  <div class="small-text" style="color:#64748b;">{{ row.client_phone|e }}</div>
+                </td>
+                <td>
+                  {% if h.processing_status %}{{ h.processing_status|processing_status_label }}{% endif %}
+                  {% if h.closure_result %} · {{ h.closure_result|closure_result_label }}{% endif %}
+                  {% if row.interaction_labels %} · {{ row.interaction_labels|join(' · ')|e }}{% endif %}
+                  {% if h.assigned_username %} · → {{ h.assigned_username|e }}{% endif %}
+                </td>
+                <td><a href="/clients/{{ row.client_id }}" class="btn-link">Картка</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="mcrm-hint">За обраний період дій не зафіксовано.</p>
+        {% endif %}
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Результати закриття лідів · {{ period_label }}</h2>
+        <p class="mcrm-hint">Скільки разів менеджер закривав ліди з кожним результатом взаємодії за обраний період.</p>
+        <div class="mcrm-bars">
+          {% for b in closure_result_bars %}
+          <div>
+            <div class="mcrm-bar-row">
+              <span class="mcrm-bar-label">{{ b.label|e }}</span>
+              <span class="mcrm-bar-count">{{ b.count }}</span>
+            </div>
+            <div class="mcrm-bar-track"><div class="mcrm-bar-fill" style="width: {{ b.pct_bar }}%; background: linear-gradient(90deg,#10b981,#059669);"></div></div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Масові канали взаємодії</h2>
+        <p class="mcrm-hint">Розсилки, боти, таргет — серед <strong>призначених</strong> клієнтів.</p>
+        <div class="mcrm-bars">
+          {% for b in interaction_bars_auto %}
+          <div>
+            <div class="mcrm-bar-row">
+              <span class="mcrm-bar-label">{{ b.label|e }}</span>
+              <span class="mcrm-bar-count">{{ b.count }}</span>
+            </div>
+            <div class="mcrm-bar-track"><div class="mcrm-bar-fill" style="width: {{ b.pct_bar }}%;"></div></div>
+            {% if assigned_total %}<div style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">{{ b.pct_of_clients }}% від призначених</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Прямий контакт</h2>
+        <p class="mcrm-hint">Дзвінки, чати, Instagram та follow-up після замовлення.</p>
+        <div class="mcrm-bars">
+          {% for b in interaction_bars_manual %}
+          <div>
+            <div class="mcrm-bar-row">
+              <span class="mcrm-bar-label">{{ b.label|e }}</span>
+              <span class="mcrm-bar-count">{{ b.count }}</span>
+            </div>
+            <div class="mcrm-bar-track"><div class="mcrm-bar-fill" style="width: {{ b.pct_bar }}%; background: linear-gradient(90deg,#f59e0b,#d97706);"></div></div>
+            {% if assigned_total %}<div style="font-size:0.75rem;color:#94a3b8;margin-top:2px;">{{ b.pct_of_clients }}% від призначених</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Призначені клієнти</h2>
+        <p class="mcrm-hint">Останні {{ assigned_client_rows|length }} за датою останнього замовлення / оновлення. Приховані клієнти (виключення експорту) не враховуються.</p>
+        {% if assigned_client_rows %}
+        <div class="mcrm-table-wrap">
+          <table class="mcrm-table">
+            <thead>
+              <tr>
+                <th>Клієнт</th>
+                <th>Телефон</th>
+                <th>Email</th>
+                <th>Статус</th>
+                <th>Канали</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in assigned_client_rows %}
+              {% set c = row.client %}
+              <tr>
+                <td><strong>{{ (c.firstname or '')|e }} {{ (c.lastname or '')|e }}</strong></td>
+                <td>{{ (c.telephone or '—')|e }}</td>
+                <td>{{ (c.email or '—')|e }}</td>
+                <td>{{ row.processing_status_label|e }}</td>
+                <td style="max-width:220px;">{{ row.interactions|e }}</td>
+                <td><a href="/clients/{{ c.id }}" class="btn-link">Відкрити</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="mcrm-hint">Немає клієнтів з <code>crm_assigned_username</code> = цей логін.</p>
+        {% endif %}
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Email-розсилки</h2>
+        <p class="mcrm-hint">Записи, де автор (<code>created_by</code>) збігається з <strong>логіном</strong> або <strong>ім’ям у профілі</strong> (без урахування регістру та пробілів по краях).</p>
+        {% if campaigns %}
+        <p class="mcrm-hint" style="margin-top:-6px;">Усього запусків (сума полів): <strong>{{ campaigns_runs_sum }}</strong> · надіслано листів (сума): <strong>{{ campaigns_sent_sum }}</strong></p>
+        <div class="mcrm-table-wrap">
+          <table class="mcrm-table">
+            <thead>
+              <tr><th>Тема</th><th>Надіслано</th><th>Запусків</th><th>Останнє</th><th>Режим</th></tr>
+            </thead>
+            <tbody>
+              {% for camp in campaigns %}
+              <tr>
+                <td>{{ camp.subject|e }}</td>
+                <td>{{ camp.sent_total or 0 }}</td>
+                <td>{{ camp.run_count or 0 }}</td>
+                <td>{% if camp.last_sent_at %}{{ camp.last_sent_at.strftime('%d.%m.%Y %H:%M') }}{% else %}—{% endif %}</td>
+                <td>{{ (camp.target_mode or '—')|e }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="mcrm-hint">Немає збережених розсилок з таким автором.</p>
+        {% endif %}
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Замовлення з фіду OpenCart</h2>
+        <p class="mcrm-hint">
+          У XML фіді для кожного замовлення передається тег <code>&lt;username&gt;</code> — він зберігається як <code>client_orders.manager_username</code>.
+          <strong>Це не завжди той самий рядок, що логін у веб-панелі:</strong> часто це логін OpenCart, ПІБ або інший ідентифікатор з магазину.
+        </p>
+        <p class="mcrm-hint" style="margin-top:-8px;">
+          Зараз збіг рахується за <strong>обома</strong> значеннями з профілю веб-користувача (логін + display_name), без урахування регістру.
+          Якщо список порожній — порівняйте свій логін з колонкою «Приклади значень у фіді» праворуч.
+        </p>
+        {% if recent_order_rows %}
+        <div class="mcrm-table-wrap">
+          <table class="mcrm-table">
+            <thead>
+              <tr><th>№ замовлення</th><th>Дата</th><th>Сума</th><th>Статус</th><th>Менеджер у фіді</th><th>Клієнт</th></tr>
+            </thead>
+            <tbody>
+              {% for row in recent_order_rows %}
+              {% set o = row.order %}
+              <tr>
+                <td><strong>{{ o.order_id }}</strong></td>
+                <td>{% if o.order_date %}{{ o.order_date.strftime('%d.%m.%Y') }}{% else %}—{% endif %}</td>
+                <td>{% if o.order_total is not none %}{{ '%.2f'|format(o.order_total) }} ₴{% else %}—{% endif %}</td>
+                <td>{{ (o.order_status or '—')|e }}</td>
+                <td><code style="font-size:0.8rem;">{{ (o.manager_username or '—')|e }}</code></td>
+                <td>{% if row.client_id %}<a href="/clients/{{ row.client_id }}" class="btn-link">Картка</a>{% else %}—{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="mcrm-hint"><strong>Немає збігів.</strong> Перевірте праворуч, як саме імена менеджерів приходять у фіді — можливо, треба узгодити логін у OpenCart з логіном у веб-панелі або додати display_name.</p>
+        {% endif %}
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Історія CRM-дій (призначені клієнти)</h2>
+        <p class="mcrm-hint">Останні записи з журналу ручного опрацювання лідів. Після закриття робочі поля скидаються, але історія залишається.</p>
+        {% if recent_crm_history %}
+        <div class="mcrm-table-wrap">
+          <table class="mcrm-table">
+            <thead><tr><th>Час</th><th>Автор</th><th>Подія</th><th>Деталі</th><th></th></tr></thead>
+            <tbody>
+              {% for row in recent_crm_history %}
+              {% set h = row.entry %}
+              <tr>
+                <td>{% if h.created_at %}{{ h.created_at.strftime('%d.%m.%Y %H:%M') }}{% else %}—{% endif %}</td>
+                <td>{{ h.author_display|e }}{% if row.by_manager %} <span class="mcrm-pill">цей менеджер</span>{% endif %}</td>
+                <td>{{ h.event_type|crm_event_type_label }}</td>
+                <td>
+                  {% if h.processing_status %}{{ h.processing_status|processing_status_label }}{% endif %}
+                  {% if h.closure_result %} · {{ h.closure_result|closure_result_label }}{% endif %}
+                  {% if h.interaction_keys %} · {{ h.interaction_keys|crm_interaction_labels_json }}{% endif %}
+                </td>
+                <td>{% if row.client_id %}<a href="/clients/{{ row.client_id }}" class="btn-link">Картка</a>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="mcrm-hint">Поки що немає CRM-історії по призначених клієнтах.</p>
+        {% endif %}
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Коментарі менеджера</h2>
+        <p class="mcrm-hint">Останні внутрішні коментарі, написані цим менеджером (на будь-яких картках клієнтів).</p>
+        {% if recent_notes %}
+        <div class="mcrm-table-wrap">
+          <table class="mcrm-table">
+            <thead><tr><th style="width:9rem;">Час</th><th>Текст</th><th></th></tr></thead>
+            <tbody>
+              {% for row in recent_notes %}
+              {% set n = row.note %}
+              <tr>
+                <td>{{ n.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td><div class="mcrm-note">{{ n.body|e }}</div></td>
+                <td>{% if row.client_id %}<a href="/clients/{{ row.client_id }}" class="btn-link">Картка</a>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="mcrm-hint">Коментарів немає.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <aside class="mcrm-aside">
+      <div class="mcrm-card">
+        <h2>Збіг із фідом</h2>
+        <p class="mcrm-hint">Використовуються такі рядки для пошуку в <code>manager_username</code>, <code>last_order_manager_username</code> та <code>email_campaigns.created_by</code>:</p>
+        <div class="mcrm-dl">
+          {% for ar in feed_alias_rows %}
+          <div><span>{{ ar.label|e }}</span><span>{{ ar.value|e }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Приклади <code>username</code> у фіді</h2>
+        <p class="mcrm-hint">Топ значень у замовленнях (як у XML). Допомагає зрозуміти, чому не збігається з веб-логіном.</p>
+        {% if feed_manager_samples %}
+        <div class="mcrm-table-wrap">
+          <table class="mcrm-table" style="min-width:0;">
+            <thead><tr><th>Значення</th><th>Замовлень</th></tr></thead>
+            <tbody>
+              {% for s in feed_manager_samples %}
+              <tr>
+                <td><code style="font-size:0.78rem;">{{ s.name|e }}</code></td>
+                <td><strong>{{ s.count }}</strong></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="mcrm-hint">Немає даних про менеджерів у замовленнях.</p>
+        {% endif %}
+      </div>
+
+      <div class="mcrm-card">
+        <h2>Джерела даних</h2>
+        <ul class="mcrm-hint" style="margin:0;padding-left:1.1rem;">
+          <li><strong>CRM:</strong> <code>crm_assigned_username</code>, <code>crm_interaction_keys</code>, <code>crm_processing_status</code>, <code>client_crm_history</code></li>
+          <li><strong>Фід:</strong> <code>client_orders.manager_username</code> з тега <code>username</code></li>
+          <li><strong>Розсилки:</strong> <code>email_campaigns.created_by</code></li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

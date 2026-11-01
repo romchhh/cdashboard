@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Продукти Cosmy —    Agent{% endblock %}
+{% block mobile_title %}Продукти{% endblock %}
+{% block content %}
+<div class="page-header"> <h1> <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/> </svg> Продукти Cosmy
+    </h1> <p class="subtitle">Категорії, товари, залишки та ціни з фіда <code>analytics_bot.xml</code></p>
+</div> {% if synced %}
+<div class="alert alert-success">Синхронізацію продуктів запущено у фоні. Сторінку можна оновити через кілька хвилин.</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-error">Помилка синхронізації: {{ error }}</div>
+{% endif %}
+
+<div class="card" style="margin-bottom: 1rem;"> <div class="card-header"> <div class="card-header-left"> <h2 class="card-title" style="margin-bottom: 0.25rem;">Категорії</h2> <p class="small-text"> Всього категорій: {{ categories|length }}
+            </p> </div> <form method="get" action="/products" class="search-form"> {% if selected_category_id %}
+            <input type="hidden" name="category_id" value="{{ selected_category_id }}"> {% endif %}
+            {% if search_query %}
+            <input type="hidden" name="q" value="{{ search_query }}"> {% endif %}
+            <input type="text" name="cat_q" value="{{ category_search_query }}" placeholder="Пошук категорій" /> <button type="submit" class="btn btn-secondary btn-sm">Знайти</button> </form> </div> <div class="card-content"> <div class="categories-chips" id="categoriesChips"> <a href="/products{% if search_query %}?q={{ search_query }}{% if category_search_query %}&cat_q={{ category_search_query }}{% endif %}{% elif category_search_query %}?cat_q={{ category_search_query }}{% endif %}"
+               class="category-chip {% if not selected_category_id %}active{% endif %}"> Усі категорії
+            </a> {% for cat in categories %}
+            {% set idx = loop.index0 %}
+            <a href="/products?category_id={{ cat.external_id }}{% if search_query %}&q={{ search_query }}{% endif %}{% if category_search_query %}&cat_q={{ category_search_query }}{% endif %}"
+               class="category-chip {% if selected_category_id == cat.external_id %}active{% endif %} {% if idx >= 20 %}category-chip-extra{% endif %}"> <span class="category-chip-name">{{ cat.name }}</span> {% if cat.products_count is not none %}
+                <span class="badge">{{ cat.products_count }}</span> {% endif %}
+            </a> {% endfor %}
+        </div> {% if categories|length > 20 %}
+        <div style="margin-top: 0.5rem;"> <button type="button" class="btn btn-secondary btn-sm" id="categoriesToggleBtn"> Показати ще
+            </button> </div> {% endif %}
+    </div> </div> </div>
+</div> <div class="card" style="margin-bottom: 1rem;"> <div class="card-header"> <div class="card-header-left"> <h2 class="card-title" style="margin-bottom: 0.25rem;">Бренди</h2> <p class="small-text"> Всього брендів: {{ brands|length }}
+            </p> </div> <form method="get" action="/products" class="search-form"> {% if selected_brand_id %}
+            <input type="hidden" name="brand_id" value="{{ selected_brand_id }}"> {% endif %}
+            {% if search_query %}
+            <input type="hidden" name="q" value="{{ search_query }}"> {% endif %}
+            {% if selected_category_id %}
+            <input type="hidden" name="category_id" value="{{ selected_category_id }}"> {% endif %}
+            {% if category_search_query %}
+            <input type="hidden" name="cat_q" value="{{ category_search_query }}"> {% endif %}
+            <input type="text" name="brand_q" value="{{ brand_search_query }}" placeholder="Пошук брендів" /> <button type="submit" class="btn btn-secondary btn-sm">Знайти</button> </form> </div> <div class="card-content"> <div class="categories-chips"> <a href="/products{% if search_query or category_search_query or selected_category_id %}?{% endif %}
+                {% set params = [] %}
+                {% if search_query %}{% set _ = params.append('q=' ~ search_query) %}{% endif %}
+                {% if category_search_query %}{% set _ = params.append('cat_q=' ~ category_search_query) %}{% endif %}
+                {% if selected_category_id %}{% set _ = params.append('category_id=' ~ selected_category_id) %}{% endif %}
+                {{ params|join('&') }}"
+               class="category-chip {% if not selected_brand_id %}active{% endif %}"> Усі бренди
+            </a> {% for b in brands %}
+            <a href="/products?brand_id={{ b.external_id }}
+                    {% if search_query %}&q={{ search_query }}{% endif %}
+                    {% if category_search_query %}&cat_q={{ category_search_query }}{% endif %}
+                    {% if selected_category_id %}&category_id={{ selected_category_id }}{% endif %}"
+               class="category-chip {% if selected_brand_id == b.external_id %}active{% endif %}"> <span class="category-chip-name">{{ b.name }}</span> {% if b.products_count is not none %}
+                <span class="badge">{{ b.products_count }}</span> {% endif %}
+            </a> {% endfor %}
+        </div> </div>
+</div> <section class="main-panel"> <div class="card"> <div class="card-header"> <div class="card-header-left"> <h2 class="card-title" style="margin-bottom: 0.25rem;">Товари</h2> <p class="small-text"> Всього: {{ total_count }} |
+                        Сторінка {{ page }} з {{ total_pages }}
+                    </p> </div> <form method="get" action="/products" class="search-form"> {% if selected_category_id %}
+                    <input type="hidden" name="category_id" value="{{ selected_category_id }}"> {% endif %}
+                    <input type="text" name="q" value="{{ search_query }}" placeholder="Пошук за назвою, артикулом, моделлю або категорією" /> <button type="submit" class="btn btn-secondary btn-sm">Пошук</button> </form> </div> <div class="card-content"> {% if products %}
+                <div class="table-wrapper"> <table class="table products-table js-sortable"> <thead> <tr> <th data-sort-type="num" style="width: 56px;" title="Порядковий номер у списку">#</th> <th data-sort-skip title="Зображення товару з фіду">Фото</th> <th data-sort-type="text" title="Назва товару">Назва</th> <th data-sort-type="text" title="Бренд з фіду">Бренд</th> <th data-sort-type="text" title="Категорія / підкатегорія з фіду">Категорія</th> <th data-sort-type="text" title="Артикул, внутрішня модель або модель OpenCart з фіду">Артикул / Модель</th> <th data-sort-type="num" title="Залишок на складі (шт) з фіду; для товарів з опціями може бути агрегат">Залишок</th> <th data-sort-type="num" title="Закупівельна та ціни продажу з фіду">Ціни</th> <th data-sort-type="num" title="Маржа, % = (ціна продажу − закупівельна) ÷ ціна продажу × 100">Маржа, %</th> <th data-sort-type="num" title="Сортування за середнім продажем/день за 30д (з фіду)">Продажі</th> <th data-sort-type="text" title="Посилання на картку в закупках або список варіантів">Деталі / Варіації</th> </tr> </thead> <tbody> {% set global_index_start = (page - 1) * per_page %}
+                            {% for p in products %}
+                            <tr> <td style="font-weight: 600; color: #6b7280; text-align: right;"> {{ global_index_start + loop.index }}
+                                </td> <td class="product-image-cell"> {% if p.image_url %}
+                                    <img src="{{ p.image_url }}" alt="{{ p.name }}" class="product-thumb"> {% else %}
+                                    <span class="product-thumb placeholder">—</span> {% endif %}
+                                </td> <td class="product-name-cell"> <a href="/procurement/product/{{ p.id }}" style="color: inherit; text-decoration: none;"> <div class="product-name">{{ p.name }}</div> </a> <div class="product-id">ID: {{ p.product_id }}</div> </td> <td class="product-category-cell"> {% if p.brand_name %}
+                                        {% if p.brand_id %}
+                                        <a href="/procurement/brand/{{ p.brand_id }}" class="small-text" style="text-decoration: none;"> {{ p.brand_name }}
+                                        </a> {% else %}
+                                        <a href="/products?brand_id={{ p.brand_external_id }}" class="small-text" style="text-decoration: none;"> {{ p.brand_name }}
+                                        </a> {% endif %}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td> <td class="product-category-cell"> {% if p.category_path %}
+                                        {{ p.category_path }}
+                                    {% elif p.leaf_category_name %}
+                                        {{ p.leaf_category_name }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td> <td> {% if p.sku %}<div>Артикул: {{ p.sku }}</div>{% endif %}
+                                    {% if p.model %}<div>Модель: {{ p.model }}</div>{% endif %}
+                                    {% if p.model_internal %}<div>Внутрішня: {{ p.model_internal }}</div>{% endif %}
+                                </td> <td> <div>Склад: {{ p.stock_qty if p.stock_qty is not none else '—' }}</div> <div>Opencart: {{ p.stock_qty_opencart if p.stock_qty_opencart is not none else '—' }}</div> </td> <td> {% if p.purchase_price is not none %}
+                                        <div>Закупка: {{ "%.2f"|format(p.purchase_price) }} ₴</div> {% endif %}
+                                    {% if p.selling_price_catalog is not none %}
+                                        <div><strong>Ціна на сайті: {{ "%.2f"|format(p.selling_price_catalog) }} ₴</strong></div> {% endif %}
+                                    {% if p.purchase_price is none and p.selling_price_catalog is none %}
+                                        —
+                                    {% endif %}
+                                </td> <td data-sort-value="{{ sku_margin_pct(p) if sku_margin_pct(p) is not none else '' }}"> {% set product = p %}
+                                    {% include 'procurement/_procurement_margin_cell.html' %}
+                                </td> <td data-sort-value="{{ p.sales_avg_per_day_30d|default(0) }}"> <div>1д: {{ p.sales_qty_1d if p.sales_qty_1d is not none else '—' }} шт ({{ "%.2f"|format(p.sales_avg_per_day_1d) if p.sales_avg_per_day_1d is not none else '—' }}/день)</div> <div>7д: {{ p.sales_qty_7d if p.sales_qty_7d is not none else '—' }} шт ({{ "%.2f"|format(p.sales_avg_per_day_7d) if p.sales_avg_per_day_7d is not none else '—' }}/день)</div> <div>30д: {{ p.sales_qty_30d if p.sales_qty_30d is not none else '—' }} шт ({{ "%.2f"|format(p.sales_avg_per_day_30d) if p.sales_avg_per_day_30d is not none else '—' }}/день)</div> <div>Останній продаж: {{ p.last_sale_date or '—' }}</div> </td> <td class="product-options-cell"> {% set opts = options_by_product.get(p.id) %}
+                                    {% if opts %}
+                                        <details> <summary>{{ opts|length }} варіацій</summary> <ul class="options-list"> {% for o in opts %}
+                                                <li> <div class="option-line"> <span class="option-name">{{ o.option_name }}: {{ o.option_value_name }}</span> {% if o.selling_price_catalog is not none %}
+                                                        <span class="option-price">{{ "%.2f"|format(o.selling_price_catalog) }} ₴</span> {% endif %}
+                                                    </div> <div class="option-meta"> ID: {{ o.product_option_value_id or '—' }}
+                                                        {% if o.option_model %} · Модель: {{ o.option_model }}{% endif %}
+                                                        <br> {% if o.stock_qty is not none %}Склад: {{ o.stock_qty }}{% endif %}
+                                                        {% if o.stock_qty_opencart is not none %} · Opencart: {{ o.stock_qty_opencart }}{% endif %}
+                                                        <br> 1д: {{ o.sales_qty_1d if o.sales_qty_1d is not none else '—' }} /
+                                                        7д: {{ o.sales_qty_7d if o.sales_qty_7d is not none else '—' }} /
+                                                        30д: {{ o.sales_qty_30d if o.sales_qty_30d is not none else '—' }}
+                                                        <br> Останній продаж: {{ o.last_sale_date or '—' }}
+                                                        {% if o.dilovod_model %}<br>Dilovod модель: {{ o.dilovod_model }}{% endif %}
+                                                        {% if o.dilovod_id %}<br>Склад: {{ o.dilovod_id }}{% else %}<br>Склад: —{% endif %}
+                                                    </div> </li> {% endfor %}
+                                            </ul> </details> {% else %}
+                                        <details> <summary>{% if p.has_options %}Опції (з фіда){% else %}Деталі{% endif %}</summary> <div class="small-text"> <div>has_options: {{ 1 if p.has_options else 0 }}</div> <div>product_data_mode: {{ p.product_data_mode or '—' }}</div> <div>category_id: {{ p.category_id or '—' }}</div> <div>subcategory_id: {{ p.subcategory_id or '—' }}</div> <div>leaf_category_id: {{ p.leaf_category_id or '—' }}</div> <div>category_path_ids: {{ p.category_path_ids or '—' }}</div> <div>created_at: {{ p.created_at }}</div> <div>updated_at: {{ p.updated_at }}</div> </div> </details> {% endif %}
+                                </td> </tr> {% endfor %}
+                        </tbody> </table> </div> {% else %}
+                <div class="empty-state"> <p>Немає товарів для відображення. Спробуйте змінити фільтри або запустіть синхронізацію.</p> </div> {% endif %}
+            </div> </div> </section>
+</div> {% if total_pages > 1 %}
+<nav class="pagination"> {% if page > 1 %}
+    <a href="{{ pagination_url(page - 1) }}">←</a> {% else %}
+    <span class="disabled">←</span> {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="current">{{ p }}</span> {% elif p <= 3 or p > total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+        <a href="{{ pagination_url(p) }}">{{ p }}</a> {% elif p == 4 or p == total_pages - 3 %}
+        <span>…</span> {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="{{ pagination_url(page + 1) }}">→</a> {% else %}
+    <span class="disabled">→</span> {% endif %}
+</nav>
+{% endif %}
+<script>
+(function() {
+  var btn = document.getElementById('categoriesToggleBtn');
+  if (!btn) return;
+  var extras = document.querySelectorAll('.category-chip-extra');
+  var expanded = false;
+  function update() {
+    extras.forEach(function(el) {
+      if (expanded) {
+        el.style.display = 'inline-flex';
+      } else {
+        el.style.display = 'none';
+      }
+    });
+    btn.textContent = expanded ? 'Згорнути' : 'Показати ще';
+  }
+  update();
+  btn.addEventListener('click', function() {
+    expanded = !expanded;
+    update();
+  });
+})();
+</script>
+{% endblock %}
+

@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}Розсилки — Cosmy Agent{% endblock %}
+{% block mobile_title %}Розсилки{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/mailings.css?v=20261014d">
+{% endblock %}
+
+{% block content %}
+<div class="mailings-page">
+  {% include "clients/clients_nav.html" %}
+
+  <div class="mailings-head">
+    <div class="mailings-head-main">
+      <h1>Розсилки</h1>
+      <p class="mailings-sub">Створюйте HTML-листи з шаблонів, перевіряйте превʼю та надсилайте всій базі або обраним адресам.</p>
+    </div>
+    <div class="mailings-head-actions">
+      <a href="/clients/mailings/unsubscribes" class="btn-mini">Відписані ({{ unsubscribed_total or 0 }})</a>
+      <a href="/clients/mailings/log" class="btn-mini">Журнал відправок</a>
+    </div>
+  </div>
+
+  {% if mailings_notice and mailings_msg %}
+  <div class="mail-flash-wrap">
+    <div class="mail-flash {{ 'ok' if mailings_notice == 'ok' else 'error' }}" role="status">
+      <span>{{ mailings_msg }}</span>
+      <button type="button" class="mail-flash-close" aria-label="Закрити">×</button>
+    </div>
+  </div>
+  {% endif %}
+
+  <div id="mailConfirmDialog" class="mail-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="mailConfirmTitle">
+    <div class="mail-dialog-backdrop" data-mail-dialog-cancel></div>
+    <div class="mail-dialog-card">
+      <h2 class="mail-dialog-title" id="mailConfirmTitle">Підтвердити відправку?</h2>
+      <p class="mail-dialog-lead" id="mailConfirmLead">Перевірте дані перед запуском розсилки.</p>
+      <dl class="mail-dialog-meta" id="mailConfirmMeta"></dl>
+      <div class="mail-dialog-actions">
+        <button type="button" class="btn-mini" id="mailConfirmCancel" data-mail-dialog-cancel>Скасувати</button>
+        <button type="button" class="btn-mini primary" id="mailConfirmOk">Так, надіслати</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mailNoticeDialog" class="mail-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="mailNoticeTitle">
+    <div class="mail-dialog-backdrop" data-mail-notice-close></div>
+    <div class="mail-dialog-card mail-dialog-card--notice">
+      <h2 class="mail-dialog-title" id="mailNoticeTitle">Увага</h2>
+      <p class="mail-dialog-lead" id="mailNoticeText"></p>
+      <div class="mail-dialog-actions mail-dialog-actions--single">
+        <button type="button" class="btn-mini primary" id="mailNoticeOk" data-mail-notice-close>Зрозуміло</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mailJobBanner" class="mail-job-banner" hidden role="status">
+    <span id="mailJobBannerText">Розсилка триває на сервері…</span>
+    <button type="button" class="btn-mini primary" id="mailJobBannerShow">Показати прогрес</button>
+  </div>
+
+  <div id="mailSendProgress" class="mail-progress" hidden aria-live="polite">
+    <div class="mail-progress-card">
+      <h2 class="mail-progress-title">Розсилка триває…</h2>
+      <p class="mail-progress-subject" id="mailProgressSubject"></p>
+      <div class="mail-progress-bar-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="mailProgressBarWrap">
+        <div class="mail-progress-bar" id="mailProgressBar" style="width:0%"></div>
+      </div>
+      <p class="mail-progress-stats" id="mailProgressStats">Підготовка…</p>
+      <p class="mail-progress-hint">Розсилка йде на сервері у фоні — вкладку можна закрити, заблокувати екран або перейти на інший сайт. Прогрес оновиться, коли ви повернетесь. Не запускайте розсилку повторно.</p>
+      <p class="mail-progress-message" id="mailProgressMessage" hidden></p>
+      <div class="mail-progress-actions mail-progress-actions--live" id="mailProgressLiveActions">
+        <button type="button" class="btn-mini mail-progress-stop" id="mailProgressStop">Зупинити розсилку</button>
+        <button type="button" class="btn-mini" id="mailProgressHide">Сховати</button>
+      </div>
+      <div class="mail-progress-actions" id="mailProgressActions" hidden>
+        <button type="button" class="btn-mini primary" id="mailProgressReload">Оновити сторінку</button>
+        <button type="button" class="btn-mini" id="mailProgressClose">Сховати</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mailings-grid">
+    <section class="mail-card">
+      <h2>Отримувачі з бази</h2>
+      <p class="mail-kpi">Доступно для розсилки: <strong>{{ eligible_recipients }}</strong> з {{ recipients_total }} email у базі.</p>
+      {% if skipped_unsub_in_base %}
+      <p class="mail-field-hint" style="margin-top:8px;">Відфільтровано відписаних: {{ skipped_unsub_in_base }}. <a href="/clients/mailings/unsubscribes">Список відписаних →</a></p>
+      {% else %}
+      <p class="mail-field-hint" style="margin-top:8px;">Фільтр зі списку клієнтів підставляється автоматично через «Розсилка» на сторінці клієнтів.</p>
+      {% endif %}
+    </section>
+
+    <section class="mail-card">
+      <h2>За 7 днів</h2>
+      {% set ws = week_stats %}
+      <p class="mail-kpi">
+        <strong>{{ ws.total_ok or 0 }}</strong> вдало ·
+        <strong>{{ ws.total_fail or 0 }}</strong> помилок ·
+        <strong>{{ ws.total_sent or 0 }}</strong> спроб
+      </p>
+      <p class="mail-field-hint" style="margin-top:8px;">
+        <a href="/clients/mailings/log">Детальніше в журналі →</a>
+      </p>
+    </section>
+
+    <section class="mail-card">
+      <h2>Шаблони</h2>
+      <div class="mail-field" style="margin:0 0 8px;">
+        <label for="fileTemplateSelect">Оберіть HTML-шаблон</label>
+        <select id="fileTemplateSelect" name="file_template_name" form="mailingsForm">
+          <option value="">— Вручну / без шаблону —</option>
+          {% for t in mail_file_templates %}
+            <option value="{{ t.name }}">{{ t.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <p id="templateHint" class="mail-field-hint">Оберіть готовий шаблон або напишіть лист вручну.</p>
+      <button type="button" class="btn-mini primary" id="saveNewTemplateBtn" style="margin-top:10px;">+ Зберегти поточний як шаблон</button>
+    </section>
+  </div>
+
+  <div class="mailings-heavy" id="mailingsHeavy">
+  <section class="mail-card mailings-compose" style="margin-top: 16px;">
+    <h2>Написати та надіслати лист</h2>
+
+    <ol class="mail-steps" aria-label="Кроки розсилки">
+      <li class="mail-step"><span class="mail-step-num">1</span> Шаблон / текст</li>
+      <li class="mail-step"><span class="mail-step-num">2</span> Отримувачі</li>
+      <li class="mail-step"><span class="mail-step-num">3</span> Превʼю</li>
+      <li class="mail-step"><span class="mail-step-num">4</span> Відправка</li>
+    </ol>
+
+    <form method="post" action="/clients/mailings/send" id="mailingsForm" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+      <div class="mail-form-row mail-form-row--meta">
+        <div class="mail-field mail-field--subject">
+          <div class="mail-field-label-row">
+            <label for="mailSubject">Тема листа</label>
+            <span id="subjectCountHint" class="mail-char-count">0 / 500</span>
+          </div>
+          <input id="mailSubject" name="subject" type="text" maxlength="500" placeholder="Наприклад: Нова колекція 13v+" required>
+        </div>
+        <div class="mail-field">
+          <label for="mailTemplateName">Назва шаблону (при збереженні)</label>
+          <input id="mailTemplateName" name="template_name" type="text" placeholder="Весняна акція / Новинки">
+        </div>
+      </div>
+
+      <div class="mail-field mail-field--body">
+        <label for="mailBody">HTML-код листа</label>
+        <p class="mail-field-hint">Перетягніть .html / .htm файл у поле нижче або вставте код вручну</p>
+        <div class="mail-body-drop" id="mailBodyDrop">
+          <input type="hidden" name="body" id="mailBodyHidden" value="">
+          <textarea id="mailBody" class="mail-body-textarea" placeholder="HTML-код листа…" required></textarea>
+        </div>
+      </div>
+
+      <div class="mail-checks mail-checks--compose">
+        <label><input type="checkbox" name="is_html" id="isHtml" checked> Лист у HTML (теги &lt;p&gt;, &lt;a&gt;, &lt;strong&gt; тощо)</label>
+        <label><input type="checkbox" name="save_as_template" id="saveAsTemplate"> Зберегти як шаблон після відправки</label>
+      </div>
+
+      <div class="mail-field mail-target">
+        <label for="targetMode">Кому надіслати</label>
+        <select id="targetMode" name="target_mode">
+          <option value="all" {% if prefill_target_mode != 'custom' %}selected{% endif %}>Усім з бази ({{ recipients_total }} email)</option>
+          <option value="custom" {% if prefill_target_mode == 'custom' %}selected{% endif %}>Вказані адреси або файл</option>
+        </select>
+        <span id="recipientCountBadge" class="mail-recipient-badge" aria-live="polite"></span>
+      </div>
+
+      <div class="mail-target-custom {% if prefill_target_mode == 'custom' %}active{% endif %}" id="customRecipientsBlock">
+        <p class="mail-sub-label" style="margin-top:4px;">Отримувачі (можна комбінувати обидва способи)</p>
+        {% if staged_recipients_count %}
+        <p class="mail-field-hint" id="stagedRecipientsHint" style="margin:8px 0 10px;">
+          З фільтрів клієнтів підготовлено <strong>{{ staged_recipients_count }}</strong> email на сервері
+          (не вставляємо весь список у поле — так планшет не зависає). Можна додати ще адреси нижче або файл.
+        </p>
+        {% endif %}
+        <div class="mail-recipient-split">
+          <div class="mail-recipient-col">
+            <div class="mail-field">
+              <label for="customRecipients">Список у полі</label>
+              <span class="mail-sub-label" style="margin-bottom:8px;font-weight:600;letter-spacing:0;text-transform:none;font-size:0.8rem;">По одному на рядок або через кому</span>
+              <textarea id="customRecipients" name="custom_recipients" placeholder="client1@example.com&#10;client2@example.com">{{ prefill_custom_recipients or '' }}</textarea>
+            </div>
+          </div>
+          <div class="mail-recipient-col">
+            <div class="mail-field">
+              <label for="recipientsFile">Файл з email</label>
+              <span class="mail-sub-label" style="margin-bottom:8px;font-weight:600;letter-spacing:0;text-transform:none;font-size:0.8rem;">CSV або XLSX</span>
+              <label class="file-dropzone" id="recipientsDropzone" for="recipientsFile" role="button" tabindex="0" aria-label="Обрати або перетягнути файл отримувачів">
+                <input id="recipientsFile" name="recipients_file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                <div class="file-dropzone-inner">
+                  <span class="file-dropzone-icon" aria-hidden="true">📎</span>
+                  <p class="file-dropzone-title">Перетягніть файл сюди</p>
+                  <p class="file-dropzone-sub">або натисніть, щоб обрати</p>
+                  <div class="file-dropzone-name" id="recipientsFileName"></div>
+                </div>
+              </label>
+              <div class="file-dropzone-actions">
+                <button type="button" class="btn-mini" id="recipientsFileClear" hidden>Прибрати файл</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mail-hint-box">
+          <strong>Підказка:</strong> адреси з поля та файлу <strong>об’єднуються</strong>, дублікати прибираються автоматично.
+        </div>
+      </div>
+
+      <div class="mail-preview-section">
+        <div class="mail-preview-header">
+          <div>
+            <p class="mail-preview-title">Попередній перегляд листа<span id="mailPreviewStatus">Завантажте HTML або введіть код</span></p>
+          </div>
+          <div class="mail-checks">
+            <label><input type="checkbox" id="enableVisualEdit"> Візуальний редактор (HTML)</label>
+          </div>
+        </div>
+        <div class="mail-preview-panel">
+          <p id="visualDropHint" class="ve-drop-hint">Перетягніть файл прямо на потрібне фото у листі</p>
+          <div id="mailPreview" class="mail-preview" aria-live="polite"></div>
+        </div>
+        <div id="visualEditControls" class="visual-edit-controls" style="display:none;margin-top:12px;">
+          <p style="margin:0;color:#64748b;font-size:0.82rem;">Клікніть на блок для редагування. Для заміни фото — drag &amp; drop на зображення.</p>
+          <div class="mail-field" style="margin:0;">
+            <label for="visualLinkInput">Посилання для обраного блоку</label>
+            <input id="visualLinkInput" type="url" placeholder="https://example.com">
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn-mini" id="applyVisualLinkBtn">Застосувати посилання</button>
+            <button type="button" class="btn-mini" id="removeVisualLinkBtn">Прибрати посилання</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mail-actions">
+        <button class="mail-send-btn" type="submit" id="mailSendBtn">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="btn-label">Надіслати листи</span>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="mail-card mailings-campaigns" style="margin-top: 16px;">
+    <h2>Збережені розсилки</h2>
+    <p class="mail-kpi" style="margin-bottom: 10px;">Останні 50 кампаній. Можна переглянути, повторити або використати як основу нового листа.</p>
+    {% if campaigns %}
+      <ul class="mail-list">
+        {% for c in campaigns %}
+          <li class="mail-list-item">
+            <div class="mail-list-top">
+              <div>
+                <p class="mail-list-title">{{ c.subject }}</p>
+                <p class="mail-list-meta">
+                  <span>{% if c.last_sent_at %}{{ c.last_sent_at.strftime("%d.%m.%Y, %H:%M") }}{% else %}—{% endif %}</span>
+                  <span>· надіслано {{ c.sent_total or 0 }}</span>
+                  <span>· запусків {{ c.run_count or 0 }}</span>
+                  {% if c.is_html %}<span class="mail-tag html">HTML</span>{% endif %}
+                  <span class="mail-tag {{ c.target_mode }}">{{ 'Усі з бази' if c.target_mode == 'all' else 'Кастомний список' }}</span>
+                  {% if c.is_template %}<span class="mail-tag">шаблон</span>{% endif %}
+                </p>
+              </div>
+              <div class="mail-list-actions">
+                <button type="button" class="btn-mini js-view-campaign" data-target="campaign-body-{{ c.id }}">Переглянути</button>
+                <button type="button" class="btn-mini js-use-campaign" data-campaign-id="{{ c.id }}">Використати</button>
+                <form method="post" action="/clients/mailings/{{ c.id }}/resend" class="js-resend-form" data-subject="{{ c.subject|e }}">
+                  <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                  <button type="submit" class="btn-mini primary">Розіслати знову</button>
+                </form>
+              </div>
+            </div>
+            <div
+              id="campaign-body-{{ c.id }}"
+              class="mail-list-body"
+              data-campaign-id="{{ c.id }}"
+              data-is-html="{{ '1' if c.is_html else '0' }}"
+            >
+              <p class="mail-field-hint mail-list-body-placeholder">Натисніть «Переглянути», щоб завантажити лист.</p>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="mail-kpi">Ще немає збережених розсилок. Після першої відправки вони з’являться тут.</p>
+    {% endif %}
+  </section>
+  </div>
+</div>
+
+<script id="mailingsPageConfig" type="application/json">{{ {
+  "recipientsTotal": recipients_total,
+  "eligibleRecipients": eligible_recipients,
+  "stagedRecipientsKey": staged_recipients_key or "",
+  "stagedRecipientsCount": staged_recipients_count or 0,
+  "templates": mail_file_templates,
+  "campaigns": campaigns_payload
+}|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/mailings.js?v=20261014d" defer></script>
+{% endblock %}

@@ -1,0 +1,521 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Cosmy Agent{% endblock %}
+{% block mobile_title %}Головна{% endblock %}
+{% block content %}
+
+<div class="dashboard-container">
+    <!-- Header Section -->
+    <div class="dashboard-header">
+        <div>
+            <h1 class="dashboard-title">Financial Dashboard</h1>
+            <p class="dashboard-subtitle">Реальний час · Оновлено {{ latest.strftime("%d.%m.%Y %H:%M") if latest else "—" }}</p>
+            {% if request.query_params.get('synced') == '1' %}
+            <p class="fop-limit-note" style="margin-top: 0.5rem;">Синхронізація запущена у фоні. Сайт можна користувати як завжди — Моно підтягне виписку протягом кількох хвилин (ліміт API 1 запит / 60 сек).</p>
+            {% endif %}
+        </div>
+        <div class="dashboard-actions">
+            {% if request.state.role == 'admin' %}
+            <a href="/sync" class="btn-action">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Синхронізація
+            </a>
+            {% endif %}
+            {% if pending_count > 0 %}
+            <a href="/pending" class="btn-action pending-badge">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                {{ pending_count }} потребують підтвердження
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Period filter -->
+    <div class="dashboard-period-form">
+        <div class="period-quick">
+            <span class="period-label">Період:</span>
+            <a href="/dashboard?period=today" class="period-btn {{ 'active' if period == 'today' and not date_single_str and not date_from_str else '' }}">Сьогодні</a>
+            <a href="/dashboard?period=yesterday" class="period-btn {{ 'active' if period == 'yesterday' and not date_from_str else '' }}">Вчора</a>
+            <a href="/dashboard?period=week" class="period-btn {{ 'active' if period == 'week' and not date_from_str else '' }}">Тиждень</a>
+            <a href="/dashboard?period=month" class="period-btn {{ 'active' if period == 'month' and not date_single_str and not date_from_str else '' }}">Місяць</a>
+            <a href="/dashboard?period=quarter" class="period-btn {{ 'active' if period == 'quarter' and not date_from_str else '' }}">Квартал</a>
+            <a href="/dashboard?period=year" class="period-btn {{ 'active' if period == 'year' and not date_from_str else '' }}">Рік (з 01.01)</a>
+        </div>
+        <form method="get" action="/dashboard" class="period-custom">
+            <label>Один день:</label>
+            <input type="date" name="date_single_str" value="{{ date_single_str }}" class="date-input-single" />
+            <label>З — По:</label>
+            <div class="date-inputs">
+                <input type="date" name="date_from_str" value="{{ date_from_str }}" />
+                <span class="date-sep">—</span>
+                <input type="date" name="date_to_str" value="{{ date_to_str }}" />
+            </div>
+            <button type="submit" class="btn-action">Застосувати</button>
+        </form>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+        <!-- Total Balance (тільки для адмінів) -->
+        {% if request.state.role != 'manager' %}
+        <div class="kpi-card kpi-balance">
+            <div class="kpi-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div class="kpi-content">
+                <div class="kpi-label">Загальний баланс</div>
+                <div class="kpi-value">{{ total_uah|fmt_ua }} ₴</div>
+                <div class="kpi-detail">
+                    <span class="kpi-badge mono">Mono: {{ total_mono_uah|fmt_ua }} ₴</span>
+                    <span class="kpi-badge nova">Nova: {{ total_nova_uah|fmt_ua }} ₴</span>
+                    <span class="kpi-badge cash">Готівка: {{ cash_balance|fmt_ua }} ₴</span>
+                    <span class="kpi-note">на дату оновлення</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Income for period (тільки для адмінів) -->
+        {% if request.state.role != 'manager' %}
+        <div class="kpi-card kpi-income">
+            <div class="kpi-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                </svg>
+            </div>
+            <div class="kpi-content">
+                <div class="kpi-label">Доходи за період</div>
+                <div class="kpi-value">{{ pl_period.income|fmt_ua }} ₴</div>
+                <div class="kpi-detail">
+                    {% if cash_income_period and cash_income_period > 0 %}
+                    <span class="kpi-badge cash">Готівка: {{ cash_income_period|fmt_ua }} ₴</span>
+                    {% endif %}
+                    {{ period_name }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Expenses for period (тільки для адмінів) -->
+        {% if request.state.role != 'manager' %}
+        <div class="kpi-card kpi-expense">
+            <div class="kpi-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/>
+                </svg>
+            </div>
+            <div class="kpi-content">
+                <div class="kpi-label">Витрати за період</div>
+                <div class="kpi-value">{{ (pl_period.expense|abs)|fmt_ua }} ₴</div>
+                <div class="kpi-detail">
+                    {% if cash_expense_period and cash_expense_period > 0 %}
+                    <span class="kpi-badge">Витрати з готівки: {{ cash_expense_period|fmt_ua }} ₴</span>
+                    {% endif %}
+                    {% if pl_period.cash_withdrawal_total and pl_period.cash_withdrawal_total > 0 %}
+                    <span class="kpi-badge">Переміщення в готівку: {{ (pl_period.cash_withdrawal_total|abs)|fmt_ua }} ₴</span>
+                    {% endif %}
+                    {% if pl_period.bogdan_total and pl_period.bogdan_total > 0 %}
+                    <span class="kpi-badge">Богдан: {{ (pl_period.bogdan_total|abs)|fmt_ua }} ₴</span>
+                    {% endif %}
+                    {{ period_name }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Profit for period (тільки для адмінів) -->
+        {% if request.state.role != 'manager' %}
+        <div class="kpi-card kpi-profit {{ 'positive' if pl_period.profit >= 0 else 'negative' }}">
+            <div class="kpi-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+            </div>
+            <div class="kpi-content">
+                <div class="kpi-label">Прибуток за період</div>
+                <div class="kpi-value">{{ pl_period.profit|fmt_ua(true) }} ₴</div>
+                <div class="kpi-detail">{{ period_name }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Заморожений капітал (Procurement Copilot) -->
+        {% if request.state.role != 'manager' and procurement_data %}
+        <div class="kpi-card kpi-warehouse">
+            <div class="kpi-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+            </div>
+            <div class="kpi-content">
+                <div class="kpi-label">Заморожений капітал (склад)</div>
+                <div class="kpi-value">{{ procurement_data.total_frozen_capital|fmt_ua }} ₴</div>
+                <div class="kpi-detail">
+                    <span class="kpi-note">{{ procurement_data.total_products }} на сайті · {{ (procurement_data.total_products or 0) - (procurement_data.out_of_stock_products or 0) }} в наявності · {{ procurement_data.total_stock_qty|fmt_ua }} шт</span>
+                    <a href="/procurement/dashboard" style="color: inherit; text-decoration: underline; margin-left: 8px;">Детальніше →</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if clients_stats %}
+        <div class="kpi-card kpi-clients">
+            <div class="kpi-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>
+            </div>
+            <div class="kpi-content">
+                <div class="kpi-label">Клієнти Cosmy (БД)</div>
+                <div class="kpi-value">{{ clients_stats.total }}</div>
+                <div class="kpi-detail">
+                    <span class="kpi-badge mono">Зареєстр.: {{ clients_stats.registered }}</span>
+                    <span class="kpi-badge nova">Гості: {{ clients_stats.guests }}</span>
+                    <span class="kpi-note">Замовлень: {{ clients_stats.orders_rows }} · LTV Σ: {{ clients_stats.sum_ltv|fmt_ua }} ₴</span>
+                    <a href="/clients" style="color: inherit; text-decoration: underline; margin-left: 8px;">Список →</a>
+                    <a href="/reports?report_type=clients_mkt" style="color: inherit; text-decoration: underline; margin-left: 8px;">Маркетинг →</a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if request.state.role != 'manager' and fop_limits %}
+    <div class="dashboard-card fop-limit-card">
+        <div class="card-header">
+            <h2 class="card-title">Ліміт надходжень ФОП (календарний рік)</h2>
+            <span class="card-subtitle">Моно + NovaPay з 01.01 · ліміт {{ fop_limits[0].limit|fmt_ua }} ₴</span>
+        </div>
+        <div class="card-content">
+            <p class="fop-limit-note">Це банківські надходження в базі Фінадміна, не податкова консультація. Перед рішенням про переліміт дивіться рядок «виписка Моно» — якщо є розрив із БД, орієнтуйтеся на виписку.</p>
+            <div class="fop-limit-table-wrap">
+                <table class="fop-limit-table">
+                    <thead>
+                        <tr>
+                            <th>ФОП</th>
+                            <th>Моно (БД)</th>
+                            <th>NovaPay</th>
+                            <th>Разом YTD</th>
+                            <th>Залишок / переліміт</th>
+                            <th>Виписка Моно</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in fop_limits %}
+                        <tr class="{% if row.over_limit %}is-over{% elif row.sync_gap %}is-gap{% elif row.warn_near %}is-warn{% endif %}">
+                            <td>
+                                <strong>{{ row.name }}</strong>
+                                <div class="fop-limit-sub">{{ row.fop_names|join(', ') }} · {{ row.used_pct }}%</div>
+                            </td>
+                            <td>{{ row.monobank|fmt_ua }} ₴</td>
+                            <td>{{ row.novapay|fmt_ua }} ₴</td>
+                            <td><strong>{{ row.total|fmt_ua }} ₴</strong></td>
+                            <td>
+                                {% if row.over_limit %}
+                                <span class="fop-limit-over">Переліміт {{ row.overlimit|fmt_ua }} ₴</span>
+                                {% else %}
+                                Залишок {{ row.remaining|fmt_ua }} ₴
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.reconcile_error %}
+                                <span class="fop-limit-gap">Звірка не пройшла: {{ row.reconcile_error }}</span>
+                                {% elif row.mono_live is not none %}
+                                    {{ row.mono_live|fmt_ua }} ₴
+                                    {% if row.sync_gap %}
+                                    <div class="fop-limit-gap">БД відстає на {{ row.mono_gap|fmt_ua }} ₴ — не орієнтуйтесь на Фінадмін</div>
+                                    {% endif %}
+                                    {% if row.reconcile_at %}
+                                    <div class="fop-limit-sub">звірка {{ row.reconcile_at }}</div>
+                                    {% endif %}
+                                {% else %}
+                                <span class="fop-limit-sub">очікує нічну звірку</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if fop_limits_summary %}
+                    <tfoot>
+                        <tr class="fop-limit-total">
+                            <td colspan="4"><strong>Разом</strong></td>
+                            <td>
+                                {% if fop_limits_summary.total_remaining < 0 %}
+                                <span class="fop-limit-over">Переліміт {{ fop_limits_summary.total_overlimit|fmt_ua }} ₴</span>
+                                {% else %}
+                                <strong>Залишок {{ fop_limits_summary.total_remaining|fmt_ua }} ₴</strong>
+                                {% endif %}
+                                <div class="fop-limit-sub">Залишок разом по всіх ФОПах</div>
+                            </td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+            {% if request.state.role == 'admin' %}
+            <p class="fop-limit-note">Щоб підтягнути дірки Моно: Синхронізація → «З початку року».</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Charts & Analytics Section -->
+    <div class="dashboard-grid">
+        <!-- Balance Details -->
+        <div class="dashboard-card balance-card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                    Баланси по рахунках
+                </h2>
+            </div>
+            <div class="card-content">
+                {% if not mono_balances and not nova_balances %}
+                <div class="empty-state">
+                    <p>Немає даних про баланси</p>
+                    {% if request.state.role == 'admin' %}
+                    <a href="/sync" class="btn-link">Запустити синхронізацію</a>
+                    {% else %}
+                    <p class="muted">Зверніться до адміністратора для синхронізації банку.</p>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="balance-details">
+                    {% if mono_balances %}
+                    <div class="balance-section">
+                        <div class="balance-header">
+                            <span class="source-badge monobank">Monobank</span>
+                            <span class="balance-total">{{ total_mono_uah|fmt_ua }} UAH</span>
+                        </div>
+                        <div class="balance-accounts">
+                            {% for b in mono_balances %}
+                            <div class="balance-item">
+                                <span class="account-name">{{ b.fop_name or 'Рахунок' }}</span>
+                                <span class="account-balance">{{ b.balance|fmt_ua }} {{ b.currency }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if nova_balances %}
+                    <div class="balance-section">
+                        <div class="balance-header">
+                            <span class="source-badge novapay">NovaPay</span>
+                            <span class="balance-total">{{ total_nova_uah|fmt_ua }} UAH</span>
+                        </div>
+                        <div class="balance-accounts">
+                            {% for b in nova_balances %}
+                            <div class="balance-item">
+                                <span class="account-name">{{ b.fop_name or 'Рахунок' }}</span>
+                                <span class="account-balance">{{ b.balance|fmt_ua }} {{ b.currency }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="balance-section">
+                        <div class="balance-header">
+                            <span class="source-badge cash">Готівка</span>
+                            <span class="balance-total">{{ cash_balance|fmt_ua }} UAH</span>
+                        </div>
+                        <div class="balance-accounts">
+                            <div class="balance-item">
+                                <span class="account-name">Каса</span>
+                                <span class="account-balance">{{ cash_balance|fmt_ua }} UAH</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Top Expense Categories (by period, desc; first 10 visible, "Показати всі" to expand) -->
+        <div class="dashboard-card expenses-card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    Категорії витрат за період
+                </h2>
+                <span class="card-subtitle">{{ period_name }}</span>
+            </div>
+            <div class="card-content">
+                {% if top_expense_categories %}
+                {% set visible_expenses = [] %}
+                {% for cat in top_expense_categories %}
+                    {% set _ = visible_expenses.append(cat) %}
+                {% endfor %}
+                {% set total_expenses = visible_expenses|sum(attribute='amount') %}
+                {% set max_amount = top_expense_categories[0].amount %}
+                <div class="expense-list" id="expense-list-all">
+                    {% for cat in visible_expenses %}
+                    {% set pct = (cat.amount / max_amount * 100)|round(1) if max_amount and max_amount > 0 else 0 %}
+                    {% set pct_total = (cat.amount / total_expenses * 100)|round(1) if total_expenses and total_expenses > 0 else 0 %}
+                    {% set tx_url = '/transactions?category_id=' ~ cat.id ~ '&date_from_str=' ~ date_from.strftime('%Y-%m-%d') ~ '&date_to_str=' ~ date_to.strftime('%Y-%m-%d') ~ '&tx_type=expense' %}
+                    <a href="{{ tx_url }}" class="expense-item {{ 'expense-item-extra' if loop.index > 10 else '' }}" data-index="{{ loop.index }}">
+                        <div class="expense-info">
+                            <span class="expense-name">{{ cat.name }}</span>
+                            <span class="expense-amount">{{ cat.amount|fmt_ua }} ₴ <span class="expense-pct">({{ pct_total }}%)</span></span>
+                        </div>
+                        <div class="expense-bar">
+                            <div class="expense-bar-fill" data-width="{{ pct }}" style="width: 0%;"></div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% if visible_expenses|length > 10 %}
+                <div class="expense-toggle-wrap">
+                    <button type="button" class="btn-link expense-toggle-btn" id="expense-toggle-btn" data-expanded="false">
+                        Показати всі ({{ visible_expenses|length }} категорій)
+                    </button>
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="empty-state">
+                    <p>Немає даних про витрати за обраний період</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="dashboard-card transactions-card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                </svg>
+                Останні транзакції
+            </h2>
+            <a href="/transactions" class="btn-link">Переглянути всі →</a>
+        </div>
+        <div class="card-content">
+            {% if recent_transactions %}
+            <div class="transactions-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Тип</th>
+                            <th>Сума</th>
+                            <th>ФОП</th>
+                            <th>Категорія</th>
+                            <th>Контрагент</th>
+                            <th>Опис</th>
+                            <th>Коментар</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tx in recent_transactions %}
+                        <tr>
+                            <td class="tx-date">{{ tx.date.strftime("%d.%m %H:%M") }}</td>
+                            <td>
+                                {% if cash_category_ids and tx.category_id in cash_category_ids %}
+                                <span class="tx-type cash-withdrawal" style="color: #3b82f6;">
+                                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        {% if tx.transaction_type.value == 'expense' %}
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"/>
+                                        {% else %}
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/>
+                                        {% endif %}
+                                    </svg>
+                                </span>
+                                {% elif tx.category_id == bogdan_category_id %}
+                                <span class="tx-type bogdan-transfer" style="color: #f59e0b;">
+                                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"/>
+                                    </svg>
+                                </span>
+                                {% else %}
+                                <span class="tx-type {{ 'income' if tx.transaction_type.value == 'income' else 'expense' }}">
+                                    {% if tx.transaction_type.value == 'income' %}
+                                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"/>
+                                    </svg>
+                                    {% else %}
+                                    <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"/>
+                                    </svg>
+                                    {% endif %}
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="tx-amount {% if cash_category_ids and tx.category_id in cash_category_ids %}cash-withdrawal{% elif tx.category_id == bogdan_category_id %}bogdan-transfer{% elif tx.transaction_type.value == 'income' %}positive{% else %}negative{% endif %}">
+                                {% if cash_category_ids and tx.category_id in cash_category_ids %}
+                                {{ (tx.amount|abs)|fmt_ua }} ₴
+                                {% elif tx.category_id == bogdan_category_id %}
+                                {{ (tx.amount|abs)|fmt_ua }} ₴
+                                {% else %}
+                                {{ tx.amount|fmt_ua(true) }} ₴
+                                {% endif %}
+                            </td>
+                            <td class="tx-fop">{{ 'Готівка' if tx.source and tx.source.value == 'cash' else (tx.fop.name if tx.fop else '—') }}</td>
+                            <td class="tx-category">
+                                <span class="tx-category-text" title="{{ tx.category.name if tx.category else '—' }}">
+                                    {{ tx.category.name if tx.category else '—' }}
+                                </span>
+                            </td>
+                            <td>{{ (tx.counterparty or '—')[:70] }}</td>
+                            <td>{{ (tx.description or '—')[:100] }}</td>
+                            <td>{{ (tx.comment or '—')[:100] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p>Немає транзакцій</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var btn = document.getElementById('expense-toggle-btn');
+  if (!btn) return;
+  var list = document.getElementById('expense-list-all');
+  var extras = list ? list.querySelectorAll('.expense-item-extra') : [];
+  var totalCount = list ? list.querySelectorAll('.expense-item').length : 0;
+
+  btn.addEventListener('click', function() {
+    var expanded = btn.getAttribute('data-expanded') === 'true';
+    if (expanded) {
+      extras.forEach(function(el) { el.classList.remove('expanded'); });
+      btn.setAttribute('data-expanded', 'false');
+      btn.textContent = 'Показати всі (' + totalCount + ')';
+    } else {
+      extras.forEach(function(el) { el.classList.add('expanded'); });
+      btn.setAttribute('data-expanded', 'true');
+      btn.textContent = 'Згорнути';
+    }
+  });
+  
+  // Set expense bar widths from data attributes
+  var bars = document.querySelectorAll('.expense-bar-fill[data-width]');
+  bars.forEach(function(bar) {
+    var width = bar.getAttribute('data-width');
+    if (width !== null) {
+      bar.style.width = width + '%';
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,133 @@
+{% from "procurement/_icons.html" import ui_icon %}
+<!-- Навігаційне меню для Procurement Copilot -->
+<nav class="procurement-nav" aria-label="Розділи товарів">
+    <a href="/procurement/dashboard" class="nav-item {% if request.url.path == '/procurement/dashboard' %}active{% endif %}">
+        {{ ui_icon('dashboard', 'nav-icon') }}<span class="nav-text">Дашборд</span>
+    </a>
+    <a href="/procurement/top-products" class="nav-item {% if request.url.path == '/procurement/top-products' %}active{% endif %}">
+        {{ ui_icon('trophy', 'nav-icon') }}<span class="nav-text">ТОП товарів</span>
+    </a>
+    <a href="/procurement/brands" class="nav-item {% if request.url.path == '/procurement/brands' or request.url.path.startswith('/procurement/brand/') and request.url.path != '/procurement/brand-margins' %}active{% endif %}">
+        {{ ui_icon('tag', 'nav-icon') }}<span class="nav-text">Бренди</span>
+    </a>
+    <a href="/procurement/brand-margins" class="nav-item {% if request.url.path == '/procurement/brand-margins' %}active{% endif %}">
+        {{ ui_icon('chart', 'nav-icon') }}<span class="nav-text">Маржа брендів</span>
+    </a>
+    <a href="/procurement/by-status" class="nav-item {% if request.url.path == '/procurement/by-status' %}active{% endif %}">
+        {{ ui_icon('trend', 'nav-icon') }}<span class="nav-text">За статусами</span>
+    </a>
+    <a href="/procurement/category-turnover" class="nav-item {% if request.url.path == '/procurement/category-turnover' %}active{% endif %}">
+        {{ ui_icon('box', 'nav-icon') }}<span class="nav-text">Оборотність</span>
+    </a>
+    <a href="/procurement/recommendations" class="nav-item {% if request.url.path == '/procurement/recommendations' %}active{% endif %}">
+        {{ ui_icon('lightbulb', 'nav-icon') }}<span class="nav-text">Рекомендації</span>
+    </a>
+    <a href="/procurement/clearance" class="nav-item nav-item--clearance {% if request.url.path == '/procurement/clearance' %}active{% endif %}">
+        {{ ui_icon('sale', 'nav-icon') }}<span class="nav-text">Розпродаж</span>
+    </a>
+    <a href="/procurement/alerts" class="nav-item {% if request.url.path == '/procurement/alerts' %}active{% endif %}">
+        {{ ui_icon('bell', 'nav-icon') }}<span class="nav-text">Алерти</span>
+        {% if unread_alerts_count and unread_alerts_count > 0 %}
+        <span class="nav-badge">{{ unread_alerts_count }}</span>
+        {% endif %}
+    </a>
+    <a href="/procurement/settings" class="nav-item {% if request.url.path == '/procurement/settings' %}active{% endif %}">
+        {{ ui_icon('settings', 'nav-icon') }}<span class="nav-text">Налаштування</span>
+    </a>
+</nav>
+
+<style>
+.procurement-nav {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 1.35rem;
+    padding: 0.7rem;
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+    border-radius: var(--radius, 20px);
+    box-shadow: var(--shadow, 0 1px 2px rgba(24, 24, 27, 0.04));
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.procurement-nav .nav-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.95rem;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill, 999px);
+    text-decoration: none;
+    color: var(--text-soft, #3f3f46);
+    font-weight: 500;
+    font-size: 0.86rem;
+    font-family: inherit;
+    letter-spacing: -0.01em;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    position: relative;
+}
+
+.procurement-nav .nav-icon {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
+.procurement-nav .nav-item:hover {
+    background: var(--bg-muted, #f4f4f5);
+    color: var(--accent-ink, #1e40af);
+}
+
+.procurement-nav .nav-item.active {
+    background: var(--accent-soft, #dbeafe);
+    color: var(--accent-ink, #1e40af);
+    border-color: rgba(37, 99, 235, 0.18);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.06);
+}
+
+.procurement-nav .nav-item--clearance:not(.active) {
+    border-color: rgba(220, 38, 38, 0.2);
+    color: #b91c1c;
+}
+
+.procurement-nav .nav-item--clearance:not(.active):hover {
+    background: #fef2f2;
+}
+
+.procurement-nav .nav-item--clearance.active {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: rgba(220, 38, 38, 0.25);
+}
+
+.procurement-nav .nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.35rem;
+    background: var(--danger, #dc2626);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    border-radius: var(--radius-pill, 999px);
+    line-height: 1;
+}
+
+@media (max-width: 768px) {
+    .procurement-nav {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        padding: 0.55rem;
+    }
+
+    .procurement-nav .nav-item {
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+}
+</style>

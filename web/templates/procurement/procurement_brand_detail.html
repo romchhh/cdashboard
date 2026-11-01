@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% from 'procurement/_procurement_sku_search_haystack.html' import sku_search_haystack_attr %}
+
+{% block title %}{{ brand_data.brand.name }} — Бренд{% endblock %}
+{% block mobile_title %}{{ brand_data.brand.name }}{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+.chart-container { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 24px; }
+.chart-title { font-size: 18px; font-weight: 600; color: #111827; margin: 0 0 20px; }
+.chart-canvas { position: relative; height: 300px; overflow: hidden; }
+.horizon-btn {
+    text-decoration: none;
+    display: inline-block;
+    padding: 6px 14px;
+    border: 2px solid #e5e7eb;
+    border-radius: var(--radius-pill, 999px);
+    background: #f9fafb;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.horizon-btn:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+}
+.horizon-btn.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+.brand-products-table tbody tr[data-href] { cursor: pointer; }
+.brand-products-table tbody tr[data-href] a.product-link {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    position: relative;
+    z-index: 1;
+}
+.brand-products-table th.brand-col-sticky,
+.brand-products-table td.brand-col-sticky {
+    position: sticky;
+    background: #fff;
+    z-index: 2;
+}
+.brand-products-table thead th.brand-col-sticky {
+    background: #f9fafb;
+    z-index: 3;
+}
+.brand-products-table th.brand-col-product,
+.brand-products-table td.brand-col-product {
+    left: 0;
+    min-width: 220px;
+    max-width: 320px;
+}
+.brand-products-table th.brand-col-stock,
+.brand-products-table td.brand-col-stock {
+    left: 220px;
+    min-width: 72px;
+    box-shadow: 4px 0 8px -4px rgba(15, 23, 42, 0.08);
+}
+.detail-section { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 24px; }
+.detail-section-title { font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 16px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.stat-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f9fafb; border-radius: 8px; }
+.stat-label { font-size: 14px; color: #6b7280; }
+.stat-value { font-size: 16px; font-weight: 600; color: #111827; }
+.trend-value { font-weight: 700; }
+.trend-up { color: #059669; }
+.trend-down { color: #dc2626; }
+.trend-neutral { color: #2563eb; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% from "procurement/_icons.html" import ui_icon %}
+
+<div class="dashboard-container procurement_dashboard"> <a href="/procurement/dashboard" class="back-button" style="display: inline-block; margin-bottom: 20px; color: #3b82f6; text-decoration: none; font-weight: 600;"> ← Назад до дашборду
+    </a> <div class="dashboard-header" style="margin-bottom: 24px;"> <h1 class="dashboard-title"><span class="dash-title-with-icon">{{ ui_icon('tag', 'dash-title-icon-svg') }}<span>{{ brand_data.brand.name }}</span></span></h1> <p class="dashboard-subtitle">Детальна аналітика бренду</p> </div> {% include 'procurement_nav.html' %}
+
+    <!-- KPI картки --> <div class="kpi-grid" style="margin-bottom: 24px;"> <div class="kpi-card kpi-warehouse"> <div class="kpi-icon"> <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg> </div> <div class="kpi-content"> <div class="kpi-label">Товарів у каталозі</div> <div class="kpi-value">{{ brand_data.products_count }}</div> <div class="kpi-detail">{{ brand_data.sku_count or 0 }} SKU (з варіаціями)</div> </div> </div> <div class="kpi-card kpi-income"> <div class="kpi-icon"> <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> </div> <div class="kpi-content"> <div class="kpi-label">В наявності</div> <div class="kpi-value">{{ brand_data.sku_in_stock or 0 }}</div> <div class="kpi-detail">SKU з залишком &gt; 0 · {{ brand_data.products_in_stock or 0 }} унікальних товарів</div> </div> </div> <div class="kpi-card kpi-expense"> <div class="kpi-icon"> <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg> </div> <div class="kpi-content"> <div class="kpi-label">Усього шт</div> <div class="kpi-value">{{ brand_data.stock_qty or 0 }}</div> <div class="kpi-detail">залишок Dilovod (не кількість OpenCart)</div> </div> </div> <div class="kpi-card kpi-balance"> <div class="kpi-icon"> <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> </div> <div class="kpi-content"> <div class="kpi-label">Заморожений капітал</div> <div class="kpi-value">{{ "{:,.0f}".format(brand_data.frozen_capital).replace(',', ' ') }} ₴</div> </div> </div> </div> <!-- Продано (виручка) по періодах — як у боті --> <div class="dashboard-card" style="margin-bottom: 24px;"> <h3 class="card-title" style="font-size: 16px; font-weight: 600; margin: 0 0 16px;">Продано (виручка) по періодах</h3> <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px;"> <div style="background: #f9fafb; padding: 16px; border-radius: 8px; text-align: center;"> <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">7 днів</div> <div style="font-weight: 700; font-size: 18px;">{{ brand_data.sales_qty_7d }} шт</div> <div style="font-size: 13px; color: #059669;">{{ "{:,.0f}".format(brand_data.revenue_7d).replace(',', ' ') }} ₴</div> </div> <div style="background: #f9fafb; padding: 16px; border-radius: 8px; text-align: center;"> <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">30 днів</div> <div style="font-weight: 700; font-size: 18px;">{{ brand_data.sales_qty_30d }} шт</div> <div style="font-size: 13px; color: #059669;">{{ "{:,.0f}".format(brand_data.revenue_30d).replace(',', ' ') }} ₴</div> </div> <div style="background: #f9fafb; padding: 16px; border-radius: 8px; text-align: center;"> <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">60 днів</div> <div style="font-weight: 700; font-size: 18px;">{{ brand_data.sales_qty_60d }} шт</div> <div style="font-size: 13px; color: #059669;">{{ "{:,.0f}".format(brand_data.revenue_60d).replace(',', ' ') }} ₴</div> </div> <div style="background: #f9fafb; padding: 16px; border-radius: 8px; text-align: center;"> <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">90 днів</div> <div style="font-weight: 700; font-size: 18px;">{{ brand_data.sales_qty_90d }} шт</div> <div style="font-size: 13px; color: #059669;">{{ "{:,.0f}".format(brand_data.revenue_90d).replace(',', ' ') }} ₴</div> </div> <div style="background: #f9fafb; padding: 16px; border-radius: 8px; text-align: center;"> <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">180 днів</div> <div style="font-weight: 700; font-size: 18px;">{{ brand_data.sales_qty_180d }} шт</div> <div style="font-size: 13px; color: #059669;">{{ "{:,.0f}".format(brand_data.revenue_180d).replace(',', ' ') }} ₴</div> </div> <div style="background: #f9fafb; padding: 16px; border-radius: 8px; text-align: center;"> <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">360 днів</div> <div style="font-weight: 700; font-size: 18px;">{{ brand_data.sales_qty_360d }} шт</div> <div style="font-size: 13px; color: #059669;">{{ "{:,.0f}".format(brand_data.revenue_360d).replace(',', ' ') }} ₴</div> </div> </div> </div> <!-- Графіки --> {% if history_data %}
+    <div class="chart-container"> <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;"> <div> <h2 class="chart-title" style="margin-bottom:6px;">Історія продажів ({{ history_days_selected }} днів)</h2> <p style="margin:0;font-size:12px;color:#6b7280;max-width:520px;line-height:1.45;"> {% if history_granularity_selected == 'week' %}
+                    <strong>За тижнями (пн–нд):</strong> продажі та виручка — сума за тиждень; залишок — на кінець тижня. Так легше бачити тренд, ніж по «рваних» днях.
+                    {% else %}
+                    <strong>По днях:</strong> кожна точка — календарний день CRM. Для довгого періоду оберіть «Тиждень» — крива буде плавнішою.
+                    {% endif %}
+                </p> </div> <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;"> <div style="display:flex;gap:6px;flex-wrap:wrap;"> {% for d in history_days_allowed %}
+                    <a href="/procurement/brand/{{ brand_data.brand.id }}?history_days={{ d }}&history_granularity={{ history_granularity_selected }}"
+                       class="horizon-btn {% if history_days_selected == d %}active{% endif %}">{{ d }}д</a> {% endfor %}
+                </div> <div style="display:flex;gap:6px;flex-wrap:wrap;"> <a href="/procurement/brand/{{ brand_data.brand.id }}?history_days={{ history_days_selected }}&history_granularity=day"
+                       class="horizon-btn {% if history_granularity_selected == 'day' %}active{% endif %}">День</a> <a href="/procurement/brand/{{ brand_data.brand.id }}?history_days={{ history_days_selected }}&history_granularity=week"
+                       class="horizon-btn {% if history_granularity_selected == 'week' %}active{% endif %}">Тиждень</a> </div> </div> </div> <div class="chart-canvas"> <canvas id="salesChart"></canvas> </div> </div> <div class="chart-container"> <h2 class="chart-title">Динаміка залишків</h2> <div class="chart-canvas"> <canvas id="stockChart"></canvas> </div> </div> <div class="chart-container"> <h2 class="chart-title">Виручка</h2> <div class="chart-canvas"> <canvas id="revenueChart"></canvas> </div> </div> {% endif %}
+
+    <!-- Динаміка попиту --> {% if brand_analytics %}
+    <div class="detail-section"> <h2 class="detail-section-title">Динаміка попиту</h2> <div class="stats-grid"> <div class="stat-item"> <span class="stat-label">Середній продаж (7д)</span> <span class="stat-value">{{ "%.2f"|format(brand_analytics.avg_daily_sales_7d or 0) }} шт/день</span> </div> <div class="stat-item"> <span class="stat-label">Середній продаж (30д)</span> <span class="stat-value">{{ "%.2f"|format(brand_analytics.avg_daily_sales_30d or 0) }} шт/день</span> </div> <div class="stat-item"> <span class="stat-label">Середній продаж (90д)</span> <span class="stat-value">{{ "%.2f"|format(brand_analytics.avg_daily_sales_90d or 0) }} шт/день</span> </div> {% macro trend_badge(value, label) %}
+            <div class="stat-item"> <span class="stat-label">{{ label }}</span> {% if value is not none %}
+                <span class="stat-value trend-value {% if value > 5 %}trend-up{% elif value < -5 %}trend-down{% else %}trend-neutral{% endif %}"> {% if value > 5 %}↑{% elif value < -5 %}↓{% else %}→{% endif %}
+                    {{ "%+.1f"|format(value) }}%
+                </span> {% else %}
+                <span class="stat-value trend-value trend-neutral">— немає даних</span> {% endif %}
+            </div> {% endmacro %}
+            {{ trend_badge(brand_analytics.trend_7d_vs_30d, "Тренд 7д vs 30д") }}
+            {{ trend_badge(brand_analytics.trend_30d_vs_90d, "Тренд 30д vs 90д") }}
+            {{ trend_badge(brand_analytics.trend_mom, "Тренд MoM (місяць до місяця)") }}
+            {{ trend_badge(brand_analytics.trend_yoy, "Тренд YoY (півроку до півроку)") }}
+        </div> </div> {% endif %}
+
+    <!-- Таблиця товарів --> <div class="dashboard-card" style="padding: 20px;" data-procurement-search-root> <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: space-between; margin-bottom: 16px;"> <h3 class="card-title" style="font-size: 16px; font-weight: 600; margin: 0;">Товари бренду</h3> <div style="flex: 1 1 240px; max-width: 360px;"> <label for="brandProductSearch" style="font-weight: 600; font-size: 13px; display: block; margin-bottom: 6px;">Пошук товару</label> <input type="search" id="brandProductSearch" class="procurement-product-search-input"
+                       data-procurement-client-search data-target-table="#brandProductsTable"
+                       placeholder="Назва, модель, артикул, опція…" autocomplete="off"
+                       style="width: 100%; padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 6px; box-sizing: border-box;"> </div> </div> <div class="table-wrapper"> <table class="data-table js-sortable brand-products-table" id="brandProductsTable" data-procurement-sku-table> <thead> <tr> <th class="brand-col-sticky brand-col-product" data-sort-type="text" title="Товар або варіант з опцією">Товар</th> <th class="brand-col-sticky brand-col-stock" data-sort-type="num" title="Поточний залишок Dilovod (шт): для опції — залишок варіанту, інакше товару. Не quantity OpenCart.">Залишок</th> <th data-sort-type="num" title="Продано штук за останній 1 день (sales_qty_1d)">1д</th> <th data-sort-type="num" title="Продано штук за останні 7 днів (sales_qty_7d)">7д</th> <th data-sort-type="num" title="Продано штук за останні 30 днів (sales_qty_30d)">30д</th> <th data-sort-type="num" title="Продано штук за останні 60 днів (sales_qty_60d)">60д</th> <th data-sort-type="num" title="Продано штук за останні 90 днів (sales_qty_90d)">90д</th> <th data-sort-type="num" title="Продано штук за останні 180 днів (sales_qty_180d)">180д</th> <th data-sort-type="num" title="Продано штук за останні 360 днів (sales_qty_360d)">360д</th> <th data-sort-type="num" title="Зміна обсягу продажів (шт) з фіду: 30д vs попередні 30д, 90д vs попередні 90д, 180д vs попередні 180д — % = (поточне вікно − попереднє) ÷ попереднє">Динаміка ↕</th> <th data-sort-type="num" title="Маржа: (ціна продажу − закупівельна) ÷ ціна продажу × 100">Маржа, %</th> <th data-sort-type="num" title="Закупівельна ціна з фіду Dilovod">Закупівельна</th> <th data-sort-type="num" title="Заморожений капітал: залишок × закупівельна ціна">Заморожено</th> </tr> </thead> <tbody> {% for item in brand_data.products %}
+                    {% set product_href = '/procurement/product/' ~ item.product.id ~ (('?option_id=' ~ item.option.id) if item.option else '') %}
+                    <tr data-href="{{ product_href }}" {{ sku_search_haystack_attr(item.product, item.option) }}> <td class="brand-col-sticky brand-col-product"> <a href="{{ product_href }}" class="product-link"> <div style="display: flex; align-items: center; gap: 10px;"> {% if item.product.image_url %}
+                                    <img src="{{ item.product.image_url }}" alt="" style="width: 40px; height: 40px; object-fit: cover; border-radius: 6px;"> {% endif %}
+                                    <div> <strong>{{ item.product.name }}</strong> {% if item.option %}
+                                        <br><small style="color: #6b7280;">{{ item.option.option_name }}: {{ item.option.option_value_name }}</small> {% endif %}
+                                    </div> </div> </a> </td> <td class="brand-col-sticky brand-col-stock" data-sort-value="{{ item.stock }}"><strong>{{ item.stock }}</strong> шт</td> <td>{{ item.sales_1d or 0 }}</td> <td>{{ item.sales_7d or 0 }}</td> <td>{{ item.sales_30d or 0 }}</td> <td>{{ item.sales_60d or 0 }}</td> <td>{{ item.sales_90d or 0 }}</td> <td>{{ item.sales_180d or 0 }}</td> <td>{{ item.sales_360d or 0 }}</td> <td style="text-align: left; vertical-align: top;" title="Динаміка з product_analytics" data-sort-value="{{ item.sales_30d or 0 }}"> {% with item=item %}
+                            {% include 'procurement/_procurement_dynamics_cell.html' %}
+                            {% endwith %}
+                        </td> <td data-sort-value="{{ sku_margin_pct(item.product, item.option) if sku_margin_pct(item.product, item.option) is not none else '' }}" style="white-space: nowrap;"> {% with product=item.product, option=item.option %}
+                            {% include 'procurement/_procurement_margin_cell.html' %}
+                            {% endwith %}
+                        </td> <td data-sort-value="{{ sku_purchase_price(item.product, item.option) if sku_purchase_price(item.product, item.option) is not none and sku_purchase_price(item.product, item.option) > 1 else '' }}" style="white-space: nowrap;"> {% with product=item.product, option=item.option %}
+                            {% include 'procurement/_procurement_purchase_price_cell.html' %}
+                            {% endwith %}
+                        </td> <td data-sort-value="{{ item.frozen }}">{{ "{:,.0f}".format(item.frozen).replace(',', ' ') }} ₴</td> </tr> {% endfor %}
+                </tbody> </table> </div> </div>
+</div> <style>
+.procurement_dashboard .kpi-grid { margin-bottom: 24px; }
+.data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.data-table th,
+.data-table td {
+    padding: 0.7rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+.data-table th:last-child,
+.data-table td:last-child {
+    border-right: none;
+}
+.data-table th {
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+.data-table tbody tr {
+    transition: background 0.15s ease;
+}
+.data-table tbody tr:nth-child(even):not(:hover) {
+    background: #fcfcfd;
+}
+.data-table tbody tr:hover {
+    background: #f8fafc;
+}
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.data-table tbody tr.hidden {
+    display: none;
+}
+
+.data-table td:nth-child(n+2):nth-last-child(n+2) { text-align: center; font-variant-numeric: tabular-nums; }
+.data-table tbody tr:hover { background: #f9fafb; }
+.brand-products-table tbody tr:hover td.brand-col-sticky { background: #f9fafb; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var table = document.getElementById('brandProductsTable');
+    if (!table) return;
+    table.querySelectorAll('tbody tr[data-href]').forEach(function (row) {
+        row.addEventListener('click', function (e) {
+            if (e.target.closest('a')) return;
+            var href = row.getAttribute('data-href');
+            if (href) window.location.href = href;
+        });
+    });
+})();
+</script>
+{% if history_data %}
+<script type="application/json" id="brand-history-data">{{ history_data|tojson }}</script>
+<script type="application/json" id="brand-history-meta">{{ {'granularity': history_granularity_selected}|tojson }}</script>
+<script>
+(function () {
+    const dataEl = document.getElementById('brand-history-data');
+    const metaEl = document.getElementById('brand-history-meta');
+    if (!dataEl) return;
+    const historyData = JSON.parse(dataEl.textContent);
+    const meta = metaEl ? JSON.parse(metaEl.textContent) : {};
+    const isWeek = meta.granularity === 'week';
+    const salesType = isWeek ? 'bar' : 'line';
+
+// Графік продажів
+new Chart(document.getElementById('salesChart'), {
+    type: salesType,
+    data: {
+        labels: historyData.map(d => d.date),
+        datasets: [{
+            label: isWeek ? 'Продажі за тиждень (шт)' : 'Продажі (шт)',
+            data: historyData.map(d => d.sales),
+            borderColor: '#3b82f6',
+            backgroundColor: isWeek ? 'rgba(59, 130, 246, 0.75)' : 'rgba(59, 130, 246, 0.1)',
+            tension: isWeek ? 0 : 0.35,
+            fill: !isWeek,
+            borderWidth: isWeek ? 0 : 2,
+            borderRadius: isWeek ? 4 : 0,
+            borderSkipped: false,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+// Графік залишків
+new Chart(document.getElementById('stockChart'), {
+    type: 'line',
+    data: {
+        labels: historyData.map(d => d.date),
+        datasets: [{
+            label: 'Залишок (шт)',
+            data: historyData.map(d => d.stock),
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.4,
+            fill: true,
+            borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+// Графік виручки
+new Chart(document.getElementById('revenueChart'), {
+    type: 'bar',
+    data: {
+        labels: historyData.map(d => d.date),
+        datasets: [{
+            label: isWeek ? 'Виручка за тиждень (₴)' : 'Виручка (₴)',
+            data: historyData.map(d => d.revenue),
+            backgroundColor: '#f59e0b',
+            borderRadius: 4,
+            borderSkipped: false
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+})();
+</script>
+{% endif %}
+{% endblock %}

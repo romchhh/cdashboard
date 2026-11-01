@@ -1,0 +1,780 @@
+{% extends "base.html" %}
+
+{% block title %}{{ product.name }} — Детальна аналітика{% endblock %}
+{% block mobile_title %}Товар{% endblock %}
+
+{% block head %}
+<style>
+.product-header {
+    display: flex;
+    gap: 24px;
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+    align-items: start;
+}
+
+.product-image-large {
+    width: 200px;
+    height: 200px;
+    object-fit: cover;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.product-info {
+    flex: 1;
+}
+
+.product-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 8px;
+}
+
+.product-category {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 16px;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.metric-box {
+    padding: 16px;
+    border-radius: 8px;
+    --card-accent: #3b82f6;
+}
+
+.metric-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.expiry-section {
+    background: white;
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+    border: 1px solid #e5e7eb;
+}
+.expiry-section h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.expiry-hint {
+    font-size: 0.84rem;
+    color: #64748b;
+    line-height: 1.5;
+    margin: 0 0 14px;
+}
+.expiry-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    margin-bottom: 14px;
+    font-size: 0.88rem;
+}
+.expiry-summary strong { color: #0f172a; }
+.expiry-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.expiry-table th, .expiry-table td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+.expiry-table th { font-size: 0.72rem; text-transform: uppercase; color: #64748b; background: #f8fafc; }
+.expiry-row-warn { background: #fffbeb; }
+.expiry-row-danger { background: #fef2f2; }
+.expiry-flash { padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.88rem; }
+.expiry-flash.ok { background: #ecfdf5; border: 1px solid #6ee7b7; color: #065f46; }
+.expiry-flash.err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+.expiry-admin-form input[type="date"], .expiry-admin-form input[type="number"] {
+    border: 1px solid #cbd5e1; border-radius: 8px; padding: 6px 8px; font-size: 0.88rem; width: 100%;
+}
+.expiry-admin-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+.expiry-badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 0.72rem; font-weight: 600; background: #e0e7ff; color: #3730a3; }
+
+.metric-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.chart-container {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+}
+
+.chart-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 20px;
+}
+
+.chart-canvas {
+    position: relative;
+    height: 300px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.stat-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+}
+
+.badge.success {
+    background: #10b981;
+}
+
+.badge.warning {
+    background: #f59e0b;
+}
+
+.badge.danger {
+    background: #ef4444;
+}
+
+.badge.info {
+    background: #3b82f6;
+}
+
+.back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #f3f4f6;
+    color: #374151;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    margin-bottom: 24px;
+    transition: all 0.2s;
+}
+
+.back-button:hover {
+    background: #e5e7eb;
+}
+
+.options-section {
+    background: white;
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+}
+
+.options-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 12px;
+}
+
+.options-subtitle {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 0 0 12px;
+}
+
+.options-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.options-table th,
+.options-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+    text-align: left;
+    white-space: nowrap;
+}
+.options-table th:last-child,
+.options-table td:last-child {
+    border-right: none;
+}
+
+.options-table th {
+    font-weight: 600;
+    color: #6b7280;
+    background: #f9fafb;
+}
+
+.options-table td strong {
+    font-weight: 600;
+    color: #111827;
+}
+
+.options-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.options-tag {
+    display: inline-flex;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+@media (max-width: 768px) {
+    .product-header {
+        flex-direction: column;
+    }
+    
+    .product-image-large {
+        width: 100%;
+        max-width: 300px;
+        height: auto;
+        margin: 0 auto;
+    }
+    
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% from "procurement/_icons.html" import ui_icon %}
+
+{% include 'procurement_nav.html' %}
+<a href="javascript:history.back()" class="back-button"> ← Назад
+</a> <!-- Заголовок товару -->
+<div class="product-header"> {% if product.image_url %}
+    <img src="{{ product.image_url }}" alt="{{ product.name }}" class="product-image-large"> {% endif %}
+    <div class="product-info"> <h1 class="product-title"><span class="dash-title-with-icon">{{ ui_icon('box', 'dash-title-icon-svg') }}<span>{{ product.name }}
+            {% if active_option and active_option.option_name or active_option and active_option.option_value_name %}
+                <span style="font-size: 15px; font-weight: 500; color: #6b7280;"> — {{ active_option.option_name or 'Опція' }}: {{ active_option.option_value_name or '' }}
+                </span> {% endif %}</span></span></h1> <div class="product-category"> {% if brand %}
+             {{ ui_icon('tag') }} Бренд:
+            <a href="/procurement/brand/{{ brand.id }}" style="color: inherit; text-decoration: none;"><strong>{{ brand.name }}</strong></a> {% if brand.products_count is not none %}
+                <span class="small-text" style="margin-left: 4px; color: #6b7280;"> (товарів у бренді: {{ brand.products_count }})
+                </span> {% endif %}
+            <br> {% endif %}
+            {% if product.brand_id and product.brand_name %}<a href="/procurement/brand/{{ product.brand_id }}" style="color: inherit;">{{ product.brand_name }}</a>{% elif product.brand_name %}{{ product.brand_name }}{% elif product.category_name %}{{ product.category_name }}{% else %}—{% endif %}
+            {% if analytics %}
+            {% if analytics.status == 'fast_mover' %}
+            <span class="badge success">Fast Mover</span> {% elif analytics.status == 'medium_mover' %}
+            <span class="badge" style="background:#3b82f6;color:white;">Medium Mover</span> {% elif analytics.status == 'slow_mover' %}
+            <span class="badge warning">Slow Mover</span> {% elif analytics.status == 'dead_stock' %}
+            <span class="badge danger">Dead Stock</span> {% elif analytics.status == 'out_of_stock' %}
+            <span class="badge danger">Немає</span> {% elif analytics.status == 'new' %}
+            <span class="badge info">🆕 Новий</span> {% endif %}
+            {% endif %}
+        </div> <div class="metrics-grid"> {% set header_stock = (active_option.stock_qty if active_option and active_option.stock_qty is not none else product.stock_qty) %}
+            <div class="metric-box {% if header_stock and header_stock > 10 %}success{% elif header_stock and header_stock > 0 %}warning{% else %}danger{% endif %}"> <div class="metric-label">Залишок</div> <div class="metric-value">{{ header_stock or 0 }}</div> </div> {% if analytics %}
+            <div class="metric-box"> <div class="metric-label">Продаж/день</div> <div class="metric-value">{{ "%.2f"|format(analytics.avg_daily_sales or 0) }}</div> </div> <div class="metric-box {% if analytics.turnover_days and analytics.turnover_days < 7 %}danger{% elif analytics.turnover_days and analytics.turnover_days < 14 %}warning{% else %}success{% endif %}"> <div class="metric-label">Оборотність</div> <div class="metric-value">{{ analytics.turnover_days or 0 }} дн</div> </div> <div class="metric-box"> <div class="metric-label">Заморожено</div> <div class="metric-value">{{ "{:,.0f}".format(analytics.frozen_capital or 0).replace(',', ' ') }} ₴</div> </div> <div class="metric-box"> <div class="metric-label">Собівартість (закупка)</div> <div class="metric-value"> {% if active_option and active_option.purchase_price is not none %}
+                        {{ "%.2f"|format(active_option.purchase_price) }} ₴
+                    {% elif product.purchase_price is not none %}
+                        {{ "%.2f"|format(product.purchase_price) }} ₴
+                    {% else %}
+                        —
+                    {% endif %}
+                </div> </div> <div class="metric-box"> <div class="metric-label">Ціна продажу</div> <div class="metric-value"> {% if active_option and active_option.selling_price_catalog is not none %}
+                        {{ "%.2f"|format(active_option.selling_price_catalog) }} ₴
+                    {% elif product.selling_price_catalog is not none %}
+                        {{ "%.2f"|format(product.selling_price_catalog) }} ₴
+                    {% else %}
+                        —
+                    {% endif %}
+                </div> </div> {% set active_stock = (active_option.stock_qty if active_option and active_option.stock_qty is not none else product.stock_qty) or 0 %}
+            {% if expiry_ui and expiry_ui.earliest_expiry and active_stock > 0 %}
+            {% set days_exp = analytics.days_until_expiry if analytics else None %}
+            <div class="metric-box {% if days_exp is not none and days_exp <= 30 %}danger{% elif days_exp is not none and days_exp <= 90 %}warning{% else %}{% endif %}"> <div class="metric-label">Найближчий строк</div> <div class="metric-value" style="font-size: 18px;">{{ expiry_ui.earliest_expiry.strftime('%d.%m.%Y') }}</div> {% if days_exp is not none %}
+                {% if days_exp <= 30 %}{% set expiry_days_color = '#dc2626' %}
+                {% elif days_exp <= 90 %}{% set expiry_days_color = '#b45309' %}
+                {% else %}{% set expiry_days_color = '#6b7280' %}{% endif %}
+                <div style="font-size: 12px; margin-top: 4px; color: {{ expiry_days_color }};"> {% if days_exp <= 0 %} Прострочено!
+                    {% elif days_exp <= 7 %}Залишилось {{ days_exp }} дн.
+                    {% elif days_exp <= 30 %}{{ days_exp }} днів
+                    {% elif days_exp <= 90 %}{{ days_exp }} днів
+                    {% else %}{{ days_exp }} днів
+                    {% endif %}
+                </div> {% endif %}
+            </div> {% endif %}
+
+            {% endif %}
+        </div> {% if product.stock_status %}
+        <div style="margin-top: 12px; font-size: 13px; color: #6b7280;"> Статус наявності: <strong style="color: #374151;">{{ product.stock_status }}</strong> </div> {% endif %}
+    </div>
+</div> {% if expiry_ui %}
+<section class="expiry-section" id="expiryLotsSection"> <h2>Найгірший строк придатності</h2> {% if request.query_params.get('expiry_ok') %}
+    <div class="expiry-flash ok" role="status">Збережено. При продажах (зменшенні залишку з фіду) кількість із найгіршим строком зменшується автоматично.</div> {% elif request.query_params.get('expiry_err') %}
+    <div class="expiry-flash err" role="alert">{{ request.query_params.get('expiry_err')|e }}</div> {% endif %}
+    <p class="expiry-hint"> Залишок на складі: <strong>{{ expiry_ui.stock_qty }} шт</strong>.
+        Відстежується лише <strong>найгірший</strong> строк — решта одиниць не розбивається по датах.
+        {% if expiry_ui.use_manual_lots %}<span class="expiry-badge">Ручний режим</span>{% else %}<span class="expiry-badge" style="background:#f1f5f9;color:#475569;">З фіду</span>{% endif %}
+        {% if expiry_ui.feed_single_date and not expiry_ui.worst_qty %}
+        · У фіді дата: {{ expiry_ui.feed_single_date.strftime('%d.%m.%Y') }} — задайте кількість із найгіршим строком вручну, якщо на складі є різні партії.
+        {% endif %}
+    </p> <div class="expiry-summary"> {% if expiry_ui.worst_qty > 0 and expiry_ui.worst_date %}
+        <span>Найгірший строк: <strong>{{ expiry_ui.worst_qty }} шт</strong> до <strong>{{ expiry_ui.worst_date.strftime('%d.%m.%Y') }}</strong></span> {% elif expiry_ui.worst_qty > 0 %}
+        <span>Найгірший строк: <strong>{{ expiry_ui.worst_qty }} шт</strong></span> {% else %}
+        <span>Найгірший строк: <strong>не задано</strong></span> {% endif %}
+        <span>Інший залишок (не відстежується): <strong>{{ expiry_ui.other_qty }} шт</strong></span> </div> {% if expiry_ui.worst_qty > 0 %}
+    <p class="expiry-hint" style="margin-top:8px;"> Приклад: залишок {{ expiry_ui.stock_qty }} шт, із них {{ expiry_ui.worst_qty }} з критичним строком —
+        решта {{ expiry_ui.other_qty }} шт мають кращий строк і в системі окремо не ведуться.
+    </p> {% else %}
+    <p class="expiry-hint" style="margin-top:8px;"> Вкажіть, скільки одиниць мають найкоротший / критичний строк придатності (наприклад, 2 з 10).
+    </p> {% endif %}
+
+    {% if is_admin and expiry_ui.stock_qty > 0 %}
+    <form method="post" action="/procurement/product/{{ product.id }}/expiry-lots" class="expiry-admin-form" id="expiryLotsForm" data-stock-max="{{ expiry_ui.stock_qty }}" style="margin-top:16px;padding-top:16px;border-top:1px dashed #e2e8f0;"> <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}"> {% if active_option %}<input type="hidden" name="option_id" value="{{ active_option.id }}">{% endif %}
+        <p class="expiry-hint" style="margin-bottom:10px;"> <strong>Редагування (адмін):</strong> дата та кількість одиниць із <em>найгіршим</em> строком.
+            При продажі система зменшує і загальний залишок, і цей лічильник (припущення: спочатку йдуть товари з гіршим строком).
+            Надходження на склад лічильник не збільшує — оновіть вручну, коли зʼявиться нова партія з поганим строком.
+        </p> <div class="expiry-admin-form" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;"> <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;"> Дата найгіршого строку
+                <input type="date" name="worst_expiry_date" id="worstExpiryDate"
+                    value="{% if expiry_ui.worst_date %}{{ expiry_ui.worst_date.isoformat() }}{% endif %}"
+                    style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;"> </label> <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;"> Кількість, шт
+                <input type="number" name="worst_expiry_qty" id="worstExpiryQty" min="0" step="1" max="{{ expiry_ui.stock_qty }}"
+                    value="{{ expiry_ui.worst_qty if expiry_ui.worst_qty else '' }}"
+                    placeholder="0"
+                    style="width:100px;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;"> </label> <button type="submit" class="btn-mini primary">Зберегти</button> <span id="expiryLotsValidation" class="expiry-hint" style="margin:0;color:#b45309;"></span> </div> </form> {% elif not is_admin %}
+    <p class="expiry-hint" style="margin-top:12px;">Редагування доступне лише адміністратору.</p> {% elif expiry_ui.stock_qty <= 0 %}
+    <p class="expiry-hint" style="margin-top:12px;">Недоступно при нульовому залишку.</p> {% endif %}
+</section>
+{% endif %}
+
+{% if options %}
+<!-- Опції товару -->
+<div class="options-section"> <h2 class="options-title">Опції товару</h2> <p class="options-subtitle"> Варіанти цього товару (обʼєм / формат / модель) з окремими залишками та цінами.
+    </p> <div style="overflow-x: auto;"> <table class="options-table js-sortable"> <thead> <tr> <th data-sort-type="text" title="Назва опції та значення (наприклад Об'єм: 50 мл)">Опція</th> <th data-sort-type="text" title="Модель варіанту або коду з Діловоду">Модель</th> <th data-sort-type="num" title="Залишок на складі (шт) для цієї опції з фіду">Залишок</th> <th data-sort-type="num" title="Сортування за середнім продажем/день за 30д; у клітинці — шт за 7/30/90д">Продажі (7/30/90д)</th> <th data-sort-type="num" title="Ціна в каталозі (selling_price_catalog) для цієї опції">Ціна на сайті</th> <th data-sort-type="text" title="Позначки: наявність у Діловоді, строк придатності опції, статус наявності">Джерела</th> </tr> </thead> <tbody> {% for opt in options %}
+                <tr {% if active_option and active_option.id == opt.id %}style="background: #eff6ff;"{% endif %}> <td> <a href="/procurement/product/{{ product.id }}?option_id={{ opt.id }}" style="color: inherit; text-decoration: none;"> {% if opt.option_name or opt.option_value_name %}
+                                <strong>{{ opt.option_name or 'Опція' }}: {{ opt.option_value_name or '—' }}</strong> {% else %}
+                                <strong>Без назви</strong> {% endif %}
+                            {% if active_option and active_option.id == opt.id %}
+                                <span class="options-tag" style="margin-left: 6px; background: #3b82f6; color: white;">Обрана</span> {% endif %}
+                        </a> </td> <td> {% if opt.option_model %}
+                            {{ opt.option_model }}
+                        {% elif opt.dilovod_model %}
+                            {{ opt.dilovod_model }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td> <td> {% if opt.stock_qty is not none %}
+                            <strong>{{ opt.stock_qty }}</strong> шт
+                        {% elif opt.stock_qty_opencart is not none %}
+                            <strong>{{ opt.stock_qty_opencart }}</strong> шт
+                            <span style="font-size: 11px; color: #9ca3af;">(OpenCart)</span> {% else %}
+                            0 шт
+                        {% endif %}
+                    </td> <td data-sort-value="{{ opt.sales_avg_per_day_30d or 0 }}"> <span>7д: <strong>{{ opt.sales_qty_7d or 0 }}</strong></span><br> <span>30д: <strong>{{ opt.sales_qty_30d or 0 }}</strong></span><br> <span style="color: #6b7280;">90д: {{ opt.sales_qty_90d or 0 }}</span> </td> <td> {% if opt.selling_price_catalog is not none %}
+                            <strong>{{ "{:,.0f}".format(opt.selling_price_catalog).replace(',', ' ') }} ₴</strong> {% else %}
+                            —
+                        {% endif %}
+                    </td> <td> <div class="options-tags"> {% if opt.dilovod_id %}
+                            <span class="options-tag">Діловод</span> {% endif %}
+                            {% if opt.date_expired and (opt.stock_qty or 0) > 0 %}
+                            <span class="options-tag">Термін: {{ opt.date_expired.strftime('%d.%m.%Y') }}</span> {% endif %}
+                            {% if opt.stock_status %}
+                            <span class="options-tag">{{ opt.stock_status }}</span> {% endif %}
+                        </div> </td> </tr> {% endfor %}
+            </tbody> </table> </div>
+</div>
+{% endif %}
+
+<!-- Детальна аналітика -->
+{% if analytics %}
+
+<!-- Блок динаміки попиту (тренди) -->
+<div class="detail-section"> <h2 class="detail-section-title">Динаміка попиту</h2> <div class="stats-grid"> <div class="stat-item"> <span class="stat-label">Середній продаж (7д)</span> <span class="stat-value">{{ "%.2f"|format(analytics.avg_daily_sales_7d or 0) }} шт/день</span> </div> <div class="stat-item"> <span class="stat-label">Середній продаж (30д)</span> <span class="stat-value">{{ "%.2f"|format(analytics.avg_daily_sales or 0) }} шт/день</span> </div> <div class="stat-item"> <span class="stat-label">Середній продаж (90д)</span> <span class="stat-value">{{ "%.2f"|format(analytics.avg_daily_sales_90d or 0) }} шт/день</span> </div> {% macro trend_badge(value, label) %}
+        <div class="stat-item"> <span class="stat-label">{{ label }}</span> {% if value is not none %}
+            <span class="stat-value trend-value {% if value > 5 %}trend-up{% elif value < -5 %}trend-down{% else %}trend-neutral{% endif %}"> {% if value > 5 %}↑{% elif value < -5 %}↓{% else %}→{% endif %}
+                {{ "%+.1f"|format(value) }}%
+            </span> {% else %}
+            <span class="stat-value trend-value trend-neutral">— немає даних</span> {% endif %}
+        </div> {% endmacro %}
+
+        {{ trend_badge(analytics.trend_7d_vs_30d, "Тренд 7д vs 30д") }}
+        {{ trend_badge(analytics.trend_30d_vs_90d, "Тренд 30д vs 90д") }}
+        {{ trend_badge(analytics.trend_mom, "Тренд MoM (місяць до місяця)") }}
+        {{ trend_badge(analytics.trend_yoy, "Тренд YoY (рік до року)") }}
+
+        <div class="stat-item"> <span class="stat-label">Днів без продажів</span> <span class="stat-value {% if analytics.days_without_sales and analytics.days_without_sales >= 30 %}trend-down{% elif analytics.days_without_sales and analytics.days_without_sales >= 14 %}trend-neutral{% endif %}"> {{ analytics.days_without_sales or 0 }}
+            </span> </div> {% if analytics.last_sale_date %}
+        <div class="stat-item"> <span class="stat-label">Остання продажа</span> <span class="stat-value">{{ analytics.last_sale_date.strftime('%d.%m.%Y') }}</span> </div> {% endif %}
+    </div>
+</div> <!-- Блок розширеної статистики продажів із фіду -->
+<div class="detail-section"> <h2 class="detail-section-title">Статистика продажів із фіду</h2> {% set stat_item = active_option if active_option else product %}
+    {% set unit_price = (active_option.selling_price_catalog or product.selling_price_catalog) if active_option else product.selling_price_catalog %}
+
+    <!-- Рядки з абсолютними даними --> <div class="stats-grid" style="margin-bottom: 24px;"> {% set periods = [
+            ('1д',   stat_item.sales_qty_1d,   stat_item.sales_avg_per_day_1d),
+            ('7д',   stat_item.sales_qty_7d,   stat_item.sales_avg_per_day_7d),
+            ('30д',  stat_item.sales_qty_30d,  stat_item.sales_avg_per_day_30d),
+            ('60д',  stat_item.sales_qty_60d,  stat_item.sales_avg_per_day_60d),
+            ('90д',  stat_item.sales_qty_90d,  stat_item.sales_avg_per_day_90d),
+            ('180д', stat_item.sales_qty_180d, stat_item.sales_avg_per_day_180d),
+            ('360д', stat_item.sales_qty_360d, stat_item.sales_avg_per_day_360d),
+        ] %}
+        {% for label, qty, avg in periods %}
+        <div class="stat-item"> <span class="stat-label">Продажів за {{ label }}</span> <span class="stat-value">{{ qty if qty is not none else '—' }} шт</span> {% if avg is not none %}
+            <span style="font-size: 12px; color: #6b7280;">{{ "%.4f"|format(avg) }} шт/день</span> {% endif %}
+        </div> {% endfor %}
+    </div> <!-- Продано (виручка) по періодах — як у боті --> {% if unit_price %}
+    <h3 style="font-size: 15px; font-weight: 600; color: #374151; margin: 0 0 12px;">Продано (виручка) по періодах</h3> <div class="stats-grid" style="margin-bottom: 24px;"> {% set rev_periods = [
+            ('7д',   stat_item.sales_qty_7d),
+            ('30д',  stat_item.sales_qty_30d),
+            ('60д',  stat_item.sales_qty_60d),
+            ('90д',  stat_item.sales_qty_90d),
+            ('180д', stat_item.sales_qty_180d),
+            ('360д', stat_item.sales_qty_360d),
+        ] %}
+        {% for label, qty in rev_periods %}
+        {% set rev = ((qty or 0) * unit_price) %}
+        <div class="stat-item"> <span class="stat-label">Виручка за {{ label }}</span> <span class="stat-value" style="color: #059669;">{{ "{:,.0f}".format(rev).replace(',', ' ') }} ₴</span> </div> {% endfor %}
+    </div> {% endif %}
+
+    <!-- Порівняльні блоки: поточний vs попередній однаковий період --> <h3 style="font-size: 15px; font-weight: 600; color: #374151; margin: 0 0 16px;">Порівняння по блоках</h3> <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;"> {# --- 30д vs 30д --- #}
+        {% set cur30  = stat_item.sales_qty_30d  or 0 %}
+        {% set prev30 = ((stat_item.sales_qty_60d or 0) - cur30) %}
+        {% set avg_cur30  = stat_item.sales_avg_per_day_30d  or 0 %}
+        {% set avg_prev30 = (((stat_item.sales_qty_60d or 0) - cur30) / 30) if stat_item.sales_qty_60d is not none else none %}
+        {% if stat_item.sales_qty_60d is not none %}
+        {% set diff30 = cur30 - prev30 %}
+        {% set pct30  = ((diff30 / prev30 * 100) | round(1)) if prev30 > 0 else none %}
+        <div class="compare-block"> <div class="compare-title">Місяць до місяця <span style="font-weight:400; color:#9ca3af;">(30д)</span></div> <div class="compare-row"> <div class="compare-col current"> <div class="compare-col-label">Останні 30 днів</div> <div class="compare-col-value">{{ cur30 }} шт</div> <div class="compare-col-avg">{{ "%.3f"|format(avg_cur30) }} шт/день</div> </div> <div class="compare-arrow {% if diff30 > 0 %}up{% elif diff30 < 0 %}down{% else %}flat{% endif %}"> {% if pct30 is not none %}
+                        {% if diff30 > 0 %}↑ +{{ pct30 }}%{% elif diff30 < 0 %}↓ {{ pct30 }}%{% else %}→ 0%{% endif %}
+                    {% else %}—{% endif %}
+                </div> <div class="compare-col prev"> <div class="compare-col-label">Попередні 30 днів</div> <div class="compare-col-value">{{ prev30 }} шт</div> {% if avg_prev30 is not none %}<div class="compare-col-avg">{{ "%.3f"|format(avg_prev30) }} шт/день</div>{% endif %}
+                </div> </div> </div> {% endif %}
+
+        {# --- 90д vs 90д --- #}
+        {% set cur90  = stat_item.sales_qty_90d  or 0 %}
+        {% set prev90 = ((stat_item.sales_qty_180d or 0) - cur90) %}
+        {% if stat_item.sales_qty_180d is not none %}
+        {% set diff90 = cur90 - prev90 %}
+        {% set pct90  = ((diff90 / prev90 * 100) | round(1)) if prev90 > 0 else none %}
+        <div class="compare-block"> <div class="compare-title">Квартал до кварталу <span style="font-weight:400; color:#9ca3af;">(90д)</span></div> <div class="compare-row"> <div class="compare-col current"> <div class="compare-col-label">Останні 90 днів</div> <div class="compare-col-value">{{ cur90 }} шт</div> <div class="compare-col-avg">{{ "%.3f"|format(stat_item.sales_avg_per_day_90d or 0) }} шт/день</div> </div> <div class="compare-arrow {% if diff90 > 0 %}up{% elif diff90 < 0 %}down{% else %}flat{% endif %}"> {% if pct90 is not none %}
+                        {% if diff90 > 0 %}↑ +{{ pct90 }}%{% elif diff90 < 0 %}↓ {{ pct90 }}%{% else %}→ 0%{% endif %}
+                    {% else %}—{% endif %}
+                </div> <div class="compare-col prev"> <div class="compare-col-label">Попередні 90 днів</div> <div class="compare-col-value">{{ prev90 }} шт</div> <div class="compare-col-avg">{{ "%.3f"|format((prev90 / 90)) }} шт/день</div> </div> </div> </div> {% endif %}
+
+        {# --- 180д vs 180д --- #}
+        {% set cur180  = stat_item.sales_qty_180d or 0 %}
+        {% set prev180 = ((stat_item.sales_qty_360d or 0) - cur180) %}
+        {% if stat_item.sales_qty_360d is not none %}
+        {% set diff180 = cur180 - prev180 %}
+        {% set pct180  = ((diff180 / prev180 * 100) | round(1)) if prev180 > 0 else none %}
+        <div class="compare-block"> <div class="compare-title">Півроку до півроку <span style="font-weight:400; color:#9ca3af;">(180д)</span></div> <div class="compare-row"> <div class="compare-col current"> <div class="compare-col-label">Останні 180 днів</div> <div class="compare-col-value">{{ cur180 }} шт</div> <div class="compare-col-avg">{{ "%.3f"|format(stat_item.sales_avg_per_day_180d or 0) }} шт/день</div> </div> <div class="compare-arrow {% if diff180 > 0 %}up{% elif diff180 < 0 %}down{% else %}flat{% endif %}"> {% if pct180 is not none %}
+                        {% if diff180 > 0 %}↑ +{{ pct180 }}%{% elif diff180 < 0 %}↓ {{ pct180 }}%{% else %}→ 0%{% endif %}
+                    {% else %}—{% endif %}
+                </div> <div class="compare-col prev"> <div class="compare-col-label">Попередні 180 днів</div> <div class="compare-col-value">{{ prev180 }} шт</div> <div class="compare-col-avg">{{ "%.3f"|format((prev180 / 180)) }} шт/день</div> </div> </div> </div> {% endif %}
+
+    </div>
+</div> <style>
+.compare-block {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px 18px;
+}
+.compare-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 12px;
+}
+.compare-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.compare-col {
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    border-radius: 8px;
+}
+.compare-col.current { background: #eff6ff; border: 1px solid #bfdbfe; }
+.compare-col.prev    { background: #f3f4f6; border: 1px solid #e5e7eb; }
+.compare-col-label   { font-size: 11px; color: #6b7280; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.compare-col-value   { font-size: 22px; font-weight: 800; color: #111827; line-height: 1.1; }
+.compare-col-avg     { font-size: 11px; color: #6b7280; margin-top: 3px; }
+.compare-arrow {
+    flex: 0 0 60px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 800;
+    padding: 6px 4px;
+    border-radius: 8px;
+}
+.compare-arrow.up   { color: #059669; background: #d1fae5; }
+.compare-arrow.down { color: #dc2626; background: #fee2e2; }
+.compare-arrow.flat { color: #6b7280; background: #f3f4f6; }
+</style> <!-- Блок прогнозу попиту -->
+<div class="detail-section"> <h2 class="detail-section-title">Прогноз продажів</h2> <div class="forecast-grid"> <div class="forecast-card"> <div class="forecast-period">7 днів</div> <div class="forecast-qty">{{ "%.0f"|format(analytics.forecasted_sales_7d or 0) }} шт</div> <div class="forecast-revenue"> {% if analytics.forecasted_sales_7d and product.selling_price_catalog %}
+                    ≈ {{ "{:,.0f}".format(analytics.forecasted_sales_7d * product.selling_price_catalog).replace(',', ' ') }} ₴
+                {% endif %}
+            </div> </div> <div class="forecast-card"> <div class="forecast-period">14 днів</div> <div class="forecast-qty">{{ "%.0f"|format(analytics.forecasted_sales_14d or 0) }} шт</div> <div class="forecast-revenue"> {% if analytics.forecasted_sales_14d and product.selling_price_catalog %}
+                    ≈ {{ "{:,.0f}".format(analytics.forecasted_sales_14d * product.selling_price_catalog).replace(',', ' ') }} ₴
+                {% endif %}
+            </div> </div> <div class="forecast-card highlight"> <div class="forecast-period">30 днів</div> <div class="forecast-qty">{{ "%.0f"|format(analytics.forecasted_sales_30d or 0) }} шт</div> <div class="forecast-revenue"> {% if analytics.forecasted_sales_30d and product.selling_price_catalog %}
+                    ≈ {{ "{:,.0f}".format(analytics.forecasted_sales_30d * product.selling_price_catalog).replace(',', ' ') }} ₴
+                {% endif %}
+            </div> </div> </div>
+</div> <!-- Блок рекомендованої закупки з формулами -->
+<div class="detail-section"> <h2 class="detail-section-title">Рекомендована закупка</h2> <p class="detail-section-subtitle"> Формула: <code>потреба = avg_daily_sales × горизонт − поточний_залишок</code> {% if analytics.avg_daily_sales and product.stock_qty is not none %}
+        <br> Поточні значення:
+        <strong>{{ "%.2f"|format(analytics.avg_daily_sales) }}</strong> шт/день ×  горизонт
+        − <strong>{{ product.stock_qty }}</strong> шт залишку
+        {% endif %}
+    </p> <div class="purchase-grid"> {% set horizons = [
+            (1,   analytics.recommended_purchase_1d,  "1 день"),
+            (7,   analytics.recommended_purchase_7d,  "7 днів"),
+            (30,  (analytics.recommended_purchase_30d or analytics.recommended_purchase_qty), "30 днів"),
+            (60,  analytics.recommended_purchase_60d,  "60 днів"),
+            (90,  analytics.recommended_purchase_90d,  "90 днів"),
+            (180, analytics.recommended_purchase_180d, "180 днів"),
+            (360, analytics.recommended_purchase_360d, "360 днів"),
+        ] %}
+        {% for days, qty, label in horizons %}
+        <div class="purchase-card {% if qty and qty > 0 %}has-qty{% endif %}"> <div class="purchase-horizon">{{ label }}</div> <div class="purchase-qty {% if qty and qty > 0 %}qty-positive{% else %}qty-zero{% endif %}"> {{ qty or 0 }} шт
+            </div> {% if analytics.avg_daily_sales and analytics.avg_daily_sales > 0 and product.stock_qty is not none %}
+            <div class="purchase-formula"> {{ "%.1f"|format(analytics.avg_daily_sales * days) }} − {{ product.stock_qty }} = {{ qty or 0 }}
+            </div> {% endif %}
+        </div> {% endfor %}
+    </div> <div class="stat-item" style="margin-top: 16px; max-width: 320px;"> <span class="stat-label">Страховий запас</span> <span class="stat-value">{{ analytics.safety_stock_days or 0 }} днів</span> </div> <div class="stat-item" style="max-width: 320px;"> <span class="stat-label">Потенційна виручка (30д)</span> <span class="stat-value">{{ "{:,.0f}".format(analytics.potential_revenue_7d or 0).replace(',', ' ') }} ₴</span> </div>
+</div> <style>
+.detail-section {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+}
+
+.detail-section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 16px;
+}
+
+.detail-section-subtitle {
+    font-size: 13px;
+    color: #6b7280;
+    margin: -8px 0 16px;
+    line-height: 1.6;
+}
+
+.detail-section-subtitle code {
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #374151;
+}
+
+.trend-value {
+    font-weight: 700;
+}
+
+.trend-up {
+    color: #059669;
+}
+
+.trend-down {
+    color: #dc2626;
+}
+
+.trend-neutral {
+    color: #2563eb;
+}
+
+/* Прогноз */
+.forecast-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+}
+
+.forecast-card {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    border: 2px solid transparent;
+}
+
+.forecast-card.highlight {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.forecast-period {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.forecast-qty {
+    font-size: 28px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.forecast-revenue {
+    font-size: 13px;
+    color: #059669;
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+/* Рекомендована закупка */
+.purchase-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.purchase-card {
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+    border: 1px solid #e5e7eb;
+}
+
+.purchase-card.has-qty {
+    border-color: #10b981;
+    background: #f0fdf4;
+}
+
+.purchase-horizon {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.purchase-qty {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.qty-positive {
+    color: #059669;
+}
+
+.qty-zero {
+    color: #9ca3af;
+}
+
+.purchase-formula {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 6px;
+}
+
+@media (max-width: 768px) {
+    .forecast-grid, .purchase-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+</style> {% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if expiry_ui and is_admin and expiry_ui.stock_qty > 0 %}
+<script>
+(function () {
+    var form = document.getElementById('expiryLotsForm');
+    var qtyInp = document.getElementById('worstExpiryQty');
+    var dateInp = document.getElementById('worstExpiryDate');
+    var validationEl = document.getElementById('expiryLotsValidation');
+    var stockMax = form ? parseInt(form.getAttribute('data-stock-max') || '0', 10) : 0;
+
+    function validate(show) {
+        if (!validationEl) return true;
+        var qty = parseInt(String(qtyInp && qtyInp.value || '').trim(), 10);
+        if (isNaN(qty) || qty < 0) qty = 0;
+        if (qty > stockMax) {
+            if (show) {
+                validationEl.textContent = 'Кількість (' + qty + ' шт) не може перевищувати залишок (' + stockMax + ' шт).';
+            }
+            return false;
+        }
+        if (qty > 0 && dateInp && !String(dateInp.value || '').trim()) {
+            if (show) {
+                validationEl.textContent = 'Вкажіть дату найгіршого строку.';
+            }
+            return false;
+        }
+        validationEl.textContent = qty > 0 && qty < stockMax
+            ? 'Решта ' + (stockMax - qty) + ' шт не відстежується (кращий строк).'
+            : '';
+        return true;
+    }
+
+    if (qtyInp) qtyInp.addEventListener('input', function () { validate(false); });
+    if (dateInp) dateInp.addEventListener('input', function () { validate(false); });
+
+    if (form) {
+        form.addEventListener('submit', function (ev) {
+            if (!validate(true)) {
+                ev.preventDefault();
+            }
+        });
+    }
+})();
+</script>
+{% endif %}
+{% endblock %}

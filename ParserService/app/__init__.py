@@ -1,0 +1,1 @@
+"""Cosmy price parser microservice."""

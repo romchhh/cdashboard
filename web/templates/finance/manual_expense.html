@@ -1,0 +1,450 @@
+{% extends "base.html" %}
+{% block title %}Витрата поза картами — Cosmy Agent{% endblock %}
+{% block mobile_title %}Витрата поза картами{% endblock %}
+
+{% macro filter_hidden_fields() %}
+<input type="hidden" name="filter_period" value="{{ period|default('month') }}">
+<input type="hidden" name="filter_date_from_str" value="{{ date_from_str|default('') }}">
+<input type="hidden" name="filter_date_to_str" value="{{ date_to_str|default('') }}">
+<input type="hidden" name="filter_date_single_str" value="{{ date_single_str|default('') }}">
+<input type="hidden" name="filter_page" value="{{ page|default(1) }}">
+{% endmacro %}
+
+{% block content %}
+{% from "procurement/_icons.html" import ui_icon %}
+
+<div class="page-header">
+    <h1>
+        <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        Витрата поза картами
+    </h1>
+    <p class="subtitle">Списання товару, оплата з особистої карти та інші витрати поза межами підключених карт</p>
+</div>
+
+{% if success == '1' %}
+<p class="success">✅ Витрату збережено.</p>
+{% elif success == 'edited' %}
+<p class="success">✅ Витрату оновлено.</p>
+{% elif success == 'deleted' %}
+<p class="success">✅ Витрату видалено.</p>
+{% endif %}
+{% if error == 'amount' %}
+<p class="error">❌ Введіть коректну суму (число більше нуля).</p>
+{% elif error == 'category' %}
+<p class="error">❌ Оберіть категорію витрат.</p>
+{% elif error == 'notfound' %}
+<p class="error">❌ Витрату не знайдено.</p>
+{% endif %}
+
+<div class="manual-expense-top">
+    <div class="card manual-expense-form-card">
+        <h2 class="card-title manual-expense-form-title">Додати витрату</h2>
+        <form method="post" action="/manual-expense" class="manual-expense-form">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            {{ filter_hidden_fields() }}
+            <div class="manual-expense-form-grid">
+                <div class="form-group">
+                    <label for="amount">Сума (грн) *</label>
+                    <input type="text" id="amount" name="amount" placeholder="500" required>
+                </div>
+                <div class="form-group">
+                    <label for="category_id">Категорія *</label>
+                    <select id="category_id" name="category_id" required>
+                        <option value="">— оберіть —</option>
+                        {% for cat in expense_categories %}
+                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="datetime_tx">Дата та час</label>
+                    <input type="datetime-local" id="datetime_tx" name="datetime_tx" class="input-datetime" title="Якщо порожнє — поточний момент">
+                </div>
+                <div class="form-group manual-expense-form-desc">
+                    <label for="description">Опис / Коментар</label>
+                    <input type="text" id="description" name="description" placeholder="Списання товару, оплата з особистої карти…">
+                </div>
+            </div>
+            <div class="manual-expense-form-actions">
+                <button type="submit" class="btn btn-warning">Зберегти витрату</button>
+                <button type="reset" class="btn btn-secondary">Скасувати</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card manual-expense-filter-card">
+        <h2 class="card-title manual-expense-form-title">Фільтр по даті</h2>
+        <form method="get" action="/manual-expense" id="manualExpenseFilterForm">
+            <div class="filter-section" style="margin-bottom: 1rem;">
+                <label class="filter-label">{{ ui_icon('zap') }} Швидкий період</label>
+                <div class="period-buttons">
+                    <button type="button" class="period-btn {% if period == 'all' %}active{% endif %}" data-period="all">Усі</button>
+                    <button type="button" class="period-btn {% if period == 'today' %}active{% endif %}" data-period="today">Сьогодні</button>
+                    <button type="button" class="period-btn {% if period == 'yesterday' %}active{% endif %}" data-period="yesterday">Вчора</button>
+                    <button type="button" class="period-btn {% if period == 'week' %}active{% endif %}" data-period="week">Тиждень</button>
+                    <button type="button" class="period-btn {% if period == 'month' %}active{% endif %}" data-period="month">Місяць</button>
+                    <button type="button" class="period-btn {% if period == 'quarter' %}active{% endif %}" data-period="quarter">Квартал</button>
+                    <button type="button" class="period-btn {% if period == 'year' %}active{% endif %}" data-period="year">Рік</button>
+                </div>
+                <input type="hidden" name="period" id="periodInputManual" value="{{ period|default('month') }}">
+            </div>
+            <div class="filter-section" style="margin-bottom: 1rem;">
+                <label class="filter-label">{{ ui_icon('calendar') }} Діапазон</label>
+                <div class="date-inputs">
+                    <input type="date" name="date_from_str" id="dateFromManual"
+                           value="{{ date_from.strftime('%Y-%m-%d') if date_from is defined and date_from and not date_single_str else date_from_str|default('') }}">
+                    <span class="date-sep">—</span>
+                    <input type="date" name="date_to_str" id="dateToManual"
+                           value="{{ date_to.strftime('%Y-%m-%d') if date_to is defined and date_to and not date_single_str else date_to_str|default('') }}">
+                </div>
+            </div>
+            <div class="filter-section" style="margin-bottom: 1rem;">
+                <label class="filter-label">{{ ui_icon('calendar') }} Один день</label>
+                <input type="date" name="date_single_str" id="dateSingleManual"
+                       value="{{ date_single_str|default('') }}" class="date-input-single">
+            </div>
+            <div class="filter-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="submit" class="btn btn-primary">{{ ui_icon('search') }} Показати</button>
+                <a href="/manual-expense" class="btn btn-secondary">{{ ui_icon('refresh') }} Скинути</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card" id="manual-expense-history">
+    <div class="manual-expense-list-head">
+        <div>
+            <h2 class="card-title" style="margin:0;">Витрати поза картами</h2>
+            <p class="manual-expense-period-label">
+                {% if period == 'all' %}
+                Усі внесені вручну витрати (від новіших до старіших)
+                {% elif date_from and date_to %}
+                {{ date_from.strftime('%d.%m.%Y') }} – {{ date_to.strftime('%d.%m.%Y') }}
+                {% if period_name %}<span class="muted">({{ period_name }})</span>{% endif %}
+                {% else %}
+                {{ period_name or 'Обраний період' }}
+                {% endif %}
+            </p>
+        </div>
+        <div class="manual-expense-period-total">
+            <span class="manual-expense-period-total-label">Разом за період</span>
+            <strong class="expense">{{ period_total|fmt_ua }} грн</strong>
+            <span class="muted">{{ total_count }} {{ 'запис' if total_count == 1 else ('записи' if total_count in [2,3,4] or (total_count > 20 and total_count % 10 in [2,3,4]) else 'записів') }}</span>
+        </div>
+    </div>
+
+    {% if manual_expenses %}
+    <div class="transactions-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Сума</th>
+                    <th>Категорія</th>
+                    <th>Опис</th>
+                    <th>Оператор</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in manual_expenses %}
+                <tr data-tx-id="{{ tx.id }}"
+                    data-amount="{{ tx.amount }}"
+                    data-datetime="{{ tx.date.strftime('%Y-%m-%dT%H:%M') }}"
+                    data-description="{{ (tx.description or tx.comment or '')|e }}"
+                    data-category-id="{{ tx.category_id or '' }}">
+                    <td>{{ tx.date.strftime("%d.%m.%Y %H:%M") }}</td>
+                    <td class="expense">{{ tx.amount|fmt_ua }} грн</td>
+                    <td>{{ tx.category.name if tx.category else '—' }}</td>
+                    <td>{{ (tx.description or tx.comment or '—')[:100] }}</td>
+                    <td>{{ tx.operator_username or '—' }}</td>
+                    <td>
+                        <button type="button" class="btn btn-small btn-edit js-manual-edit" title="Редагувати">✎</button>
+                        <form method="post" action="/manual-expense/{{ tx.id }}/delete" class="manual-delete-form" onsubmit="return confirm('Видалити цю витрату?');" style="display: inline;">
+                            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                            {{ filter_hidden_fields() }}
+                            <button type="submit" class="btn btn-small btn-danger" title="Видалити">✕</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if total_pages > 1 %}
+    {% set pg_base = '/manual-expense?period=' ~ (period|default('month')|urlencode) ~ ('&date_from_str=' ~ date_from_str|urlencode if date_from_str else '') ~ ('&date_to_str=' ~ date_to_str|urlencode if date_to_str else '') ~ ('&date_single_str=' ~ date_single_str|urlencode if date_single_str else '') %}
+    <nav class="pagination" style="margin-top: 1rem; display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap;">
+        {% if page > 1 %}
+        <a href="{{ pg_base }}&page={{ page - 1 }}" class="btn btn-secondary btn-sm">← Попередня</a>
+        {% endif %}
+        <span style="font-size: 14px; color: #374151;">Сторінка {{ page }} з {{ total_pages }}</span>
+        {% if page < total_pages %}
+        <a href="{{ pg_base }}&page={{ page + 1 }}" class="btn btn-secondary btn-sm">Наступна →</a>
+        {% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <p class="empty-state">Немає витрат за обраний період. Спробуйте <a href="/manual-expense?period=all#manual-expense-history">переглянути всі</a> або розширити діапазон дат.</p>
+    {% endif %}
+
+    <p style="margin-top: 1rem; text-align: center;">
+        {% if period == 'all' %}
+        <a href="/manual-expense?period=month#manual-expense-history" class="btn-link">← Показати лише останній місяць</a>
+        {% else %}
+        <a href="/manual-expense?period=all#manual-expense-history" class="btn-link">Переглянути всі витрати поза картами →</a>
+        {% endif %}
+    </p>
+</div>
+
+<div id="modal-manual-edit" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-labelledby="modal-manual-edit-title">
+        <div class="modal-header">
+            <h2 id="modal-manual-edit-title" class="modal-title">Редагувати витрату</h2>
+            <button type="button" class="modal-close js-close-modal" aria-label="Закрити">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <form method="post" id="form-manual-edit" action="">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            {{ filter_hidden_fields() }}
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="edit_manual_amount">Сума (грн) *</label>
+                    <input type="text" id="edit_manual_amount" name="amount" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_manual_category">Категорія *</label>
+                    <select id="edit_manual_category" name="category_id" required>
+                        <option value="">— оберіть —</option>
+                        {% for cat in expense_categories %}
+                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit_manual_datetime">Дата та час</label>
+                    <input type="datetime-local" id="edit_manual_datetime" name="datetime_tx" class="input-datetime">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex: 1;">
+                    <label for="edit_manual_description">Опис / Коментар</label>
+                    <input type="text" id="edit_manual_description" name="description" placeholder="наприклад: Списання товару для реклами">
+                </div>
+            </div>
+            <div class="form-actions-row">
+                <button type="submit" class="btn btn-warning" style="background: #f59e0b; color: white; border-color: #f59e0b;">Зберегти зміни</button>
+                <button type="button" class="btn btn-secondary js-close-modal">Скасувати</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.manual-expense-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
+    gap: 16px;
+    margin-bottom: 20px;
+    align-items: start;
+}
+@media (max-width: 960px) {
+    .manual-expense-top { grid-template-columns: 1fr; }
+}
+.manual-expense-form-card,
+.manual-expense-filter-card {
+    padding: 16px 18px;
+    margin-bottom: 0;
+}
+.manual-expense-form-title {
+    font-size: 1rem;
+    margin: 0 0 12px;
+}
+.manual-expense-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+}
+.manual-expense-form-desc {
+    grid-column: 1 / -1;
+}
+.manual-expense-form .form-group label {
+    font-size: 0.82rem;
+    margin-bottom: 4px;
+}
+.manual-expense-form input,
+.manual-expense-form select {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.9rem;
+}
+.manual-expense-form-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+.manual-expense-form-actions .btn {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.875rem;
+}
+.manual-expense-filter-card .filter-label {
+    font-size: 0.82rem;
+    margin-bottom: 6px;
+}
+.manual-expense-filter-card .period-btn {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+}
+.manual-expense-list-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.manual-expense-period-label {
+    margin: 4px 0 0;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+.manual-expense-period-total {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: flex-end;
+}
+.manual-expense-period-total-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+    font-weight: 600;
+}
+.manual-expense-period-total strong {
+    font-size: 1.35rem;
+}
+</style>
+
+<script>
+function getPeriodRange(period) {
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    function ymd(d) {
+        var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+    var from, to;
+    if (period === 'today') { from = to = today; }
+    else if (period === 'yesterday') {
+        var yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+        from = to = yesterday;
+    } else {
+        to = new Date(today);
+        from = new Date(today);
+        if (period === 'week') from.setDate(from.getDate() - 6);
+        else if (period === 'month') from.setMonth(from.getMonth() - 1);
+        else if (period === 'quarter') from.setMonth(Math.floor(from.getMonth() / 3) * 3, 1);
+        else if (period === 'year') from = new Date(from.getFullYear(), 0, 1);
+        else { from.setDate(1); }
+    }
+    return { from: ymd(from), to: ymd(to) };
+}
+
+(function() {
+    function openModal(modalId) {
+        var modal = document.getElementById(modalId);
+        if (modal) {
+            modal.setAttribute('aria-hidden', 'false');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeModal(modalId) {
+        var modal = document.getElementById(modalId);
+        if (modal) {
+            modal.setAttribute('aria-hidden', 'true');
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+    }
+
+    document.querySelectorAll('.js-close-modal').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var modal = this.closest('.modal-overlay');
+            if (modal) closeModal(modal.id);
+        });
+    });
+
+    document.querySelectorAll('.js-manual-edit').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var row = this.closest('tr');
+            if (!row) return;
+            var form = document.getElementById('form-manual-edit');
+            if (!form) return;
+            form.action = '/manual-expense/' + row.getAttribute('data-tx-id') + '/edit';
+            document.getElementById('edit_manual_amount').value = row.getAttribute('data-amount') || '';
+            document.getElementById('edit_manual_datetime').value = row.getAttribute('data-datetime') || '';
+            document.getElementById('edit_manual_description').value = row.getAttribute('data-description') || '';
+            document.getElementById('edit_manual_category').value = row.getAttribute('data-category-id') || '';
+            openModal('modal-manual-edit');
+        });
+    });
+
+    document.getElementById('modal-manual-edit')?.addEventListener('click', function(e) {
+        if (e.target === this) closeModal('modal-manual-edit');
+    });
+
+    var periodButtons = document.querySelectorAll('#manualExpenseFilterForm .period-btn');
+    var periodInput = document.getElementById('periodInputManual');
+    var dateFrom = document.getElementById('dateFromManual');
+    var dateTo = document.getElementById('dateToManual');
+    var dateSingle = document.getElementById('dateSingleManual');
+
+    periodButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            periodButtons.forEach(function(b) { b.classList.remove('active'); });
+            this.classList.add('active');
+            var period = this.dataset.period;
+            periodInput.value = period;
+            if (period === 'all') {
+                if (dateFrom) dateFrom.value = '';
+                if (dateTo) dateTo.value = '';
+                if (dateSingle) dateSingle.value = '';
+            } else {
+                var range = getPeriodRange(period);
+                dateFrom.value = range.from;
+                dateTo.value = range.to;
+                if (dateSingle) dateSingle.value = '';
+            }
+        });
+    });
+
+    if (dateFrom) dateFrom.addEventListener('change', function() {
+        periodButtons.forEach(function(b) { b.classList.remove('active'); });
+        if (periodInput) periodInput.value = '';
+        if (dateSingle) dateSingle.value = '';
+    });
+    if (dateTo) dateTo.addEventListener('change', function() {
+        periodButtons.forEach(function(b) { b.classList.remove('active'); });
+        if (periodInput) periodInput.value = '';
+        if (dateSingle) dateSingle.value = '';
+    });
+    if (dateSingle) dateSingle.addEventListener('change', function() {
+        if (this.value) {
+            periodButtons.forEach(function(b) { b.classList.remove('active'); });
+            if (periodInput) periodInput.value = '';
+            if (dateFrom) dateFrom.value = '';
+            if (dateTo) dateTo.value = '';
+        }
+    });
+})();
+</script>
+{% endblock %}

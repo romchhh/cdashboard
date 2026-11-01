@@ -1,0 +1,17 @@
+{% from "procurement/_icons.html" import ui_icon %}
+<nav class="parser-tabs" aria-label="Розділи парсера">
+    <a href="/parser/brands" class="{% if page in ('brands', 'brand', 'home') %}is-active{% endif %}">
+        {{ ui_icon('tag') }} Бренди
+        {% if brands %}<span class="tab-count">{{ brands|length }}</span>{% endif %}
+    </a>
+    <a href="/parser/search" class="{% if page == 'search' %}is-active{% endif %}">
+        {{ ui_icon('search') }} Пошук товару
+    </a>
+    <a href="/parser/logs" class="{% if page == 'logs' %}is-active{% endif %}">
+        {{ ui_icon('warning') }} Логи
+        {% if log_error_count %}<span class="tab-count">{{ log_error_count }}</span>{% endif %}
+    </a>
+    <a href="/parser/settings" class="{% if page == 'settings' %}is-active{% endif %}">
+        {{ ui_icon('settings') }} Налаштування
+    </a>
+</nav>

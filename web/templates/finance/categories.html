@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Категорії — Cosmy Agent{% endblock %}
+{% block mobile_title %}Категорії{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>
+        <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+        </svg>
+        Категорії
+    </h1>
+    <p class="subtitle">Список категорій витрат і доходів</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">
+    {% if error == 'has_transactions' %}
+    Не можна видалити категорію, до якої прив’язані транзакції.
+    {% elif error == 'init_failed' %}
+    Помилка ініціалізації категорій. Перевірте логи сервера.
+    {% else %}
+    {{ error }}
+    {% endif %}
+</div>
+{% endif %}
+
+{% if success == 'init' %}
+<div class="alert" style="background: rgba(16, 185, 129, 0.12); color: #059669; border: 1px solid rgba(16, 185, 129, 0.3); padding: 1rem 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
+    ✅ Категорії успішно оновлено з конфігурації!
+</div>
+{% endif %}
+
+<div class="cat-add-bar">
+    <form method="post" action="/categories/add" class="cat-add-form">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <input type="text" name="name" placeholder="Назва категорії" required class="cat-add-input" autocomplete="off">
+        <label class="cat-add-checkbox">
+            <input type="checkbox" name="is_expense" value="1" checked> Витрата
+        </label>
+        <button type="submit" class="btn btn-primary">Додати</button>
+    </form>
+</div>
+
+{% if not categories %}
+<p class="empty-state">Немає категорій. Додайте першу вище.</p>
+{% else %}
+<ul class="cat-list">
+    {% for cat in categories %}
+    <li class="cat-item {{ 'expense' if cat.is_expense else 'income' }}">
+        <a href="/categories/{{ cat.id }}/edit" class="cat-name">{{ cat.name }}</a>
+        <span class="cat-type-badge">{{ 'Витрата' if cat.is_expense else 'Дохід' }}</span>
+        {% if tx_counts.get(cat.id, 0) == 0 %}
+        <form method="post" action="/categories/{{ cat.id }}/delete" class="cat-delete-form" onsubmit="return confirm('Видалити «{{ cat.name }}»?');">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <button type="submit" class="cat-delete-btn" title="Видалити">&times;</button>
+        </form>
+        {% else %}
+        <span class="cat-count" title="Транзакцій">{{ tx_counts.get(cat.id, 0) }}</span>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

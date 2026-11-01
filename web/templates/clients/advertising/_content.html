@@ -1,0 +1,1740 @@
+{% macro ad_estimated_roas_note() %}
+{% if not report.campaign_attribution_utm %}
+<p class="mkt-table-note">ROAS по кампаніях і брендах — <strong>оціночний</strong>: дохід розподілено пропорційно витратам каналу, не за UTM кампанії.</p>
+{% else %}
+<p class="mkt-table-note">ROAS по кампаніях — з CRM за <strong>utm_campaign</strong>. Бренди — пропорційно доходу каналу.</p>
+{% endif %}
+{% endmacro %}
+
+{% macro ad_chart_granularity_head(title, subtitle_base) %}
+{% set chart_gran = report.chart_granularity or 'day' %}
+{% set gran_ua = {
+  'day': 'по днях',
+  'week': 'по тижнях',
+  'month': 'по місяцях',
+  'quarter': 'по кварталах',
+} %}
+<div class="mkt-card__head">
+  <div>
+    <h2 class="mkt-card__title">{{ title }}</h2>
+    <p class="mkt-card__subtitle">{{ subtitle_base }} {{ gran_ua.get(chart_gran, 'по днях') }}</p>
+  </div>
+  <select class="mkt-chart-granularity" data-chart-granularity aria-label="Гранулярність графіка">
+    <option value="day" {% if chart_gran == 'day' %}selected{% endif %}>За день</option>
+    <option value="week" {% if chart_gran == 'week' %}selected{% endif %}>За тиждень</option>
+    <option value="month" {% if chart_gran == 'month' %}selected{% endif %}>За місяць</option>
+    <option value="quarter" {% if chart_gran == 'quarter' %}selected{% endif %}>За квартал</option>
+  </select>
+</div>
+{% endmacro %}
+
+{% macro ad_nav_icon(slug) %}
+{% if slug == 'overview' %}
+<svg class="mkt-nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+{% elif slug == 'google_ads' %}
+<svg class="mkt-nav-link__icon mkt-nav-link__icon--brand" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+{% elif slug == 'meta' %}
+<svg class="mkt-nav-link__icon mkt-nav-link__icon--brand" viewBox="0 0 24 24" aria-hidden="true"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+{% elif slug == 'seo' %}
+<svg class="mkt-nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="#34A853" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+{% elif slug == 'direct' %}
+<svg class="mkt-nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+{% elif slug == 'other' %}
+<svg class="mkt-nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+{% elif slug == 'business' %}
+<svg class="mkt-nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+{% elif slug == 'insights' %}
+<svg class="mkt-nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/></svg>
+{% elif slug == 'details' %}
+<svg class="mkt-nav-link__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+{% endif %}
+{% endmacro %}
+
+{% macro ad_metric_help(key_or_label='') %}
+{% if key_or_label %}
+{% set tip = metric_help(key_or_label) %}
+{% if tip %}
+<span class="mkt-metric-help" tabindex="0" role="button" aria-label="Довідка про показник">
+  <span class="mkt-metric-help__icon" aria-hidden="true">?</span>
+  <span class="mkt-metric-help__tip" role="tooltip">{{ tip }}</span>
+</span>
+{% endif %}
+{% endif %}
+{% endmacro %}
+
+{% macro ad_th(label, help_key='', sort='') %}
+<th{% if sort %} data-sort="{{ sort }}"{% endif %}>
+  <span class="mkt-th-label">{{ label }}{{ ad_metric_help(help_key or label) }}</span>
+</th>
+{% endmacro %}
+
+{% macro ad_inline_label(label, help_key='') %}
+<span class="mkt-inline-label">{{ label }}{{ ad_metric_help(help_key or label) }}</span>
+{% endmacro %}
+
+{% macro ad_delta_pct(value, inverted=false) %}
+{% if value is not none %}
+  {% set is_pos = value >= 0 %}
+  {% set is_good = (is_pos and not inverted) or (not is_pos and inverted) %}
+  <span class="mkt-table-delta {% if is_good %}mkt-table-delta--up{% else %}mkt-table-delta--down{% endif %}" title="{{ metric_help('delta_orders') or 'Зміна vs попередній період' }}">
+    {% if is_pos %}↑{% else %}↓{% endif %} {{ value | abs }}%
+  </span>
+{% else %}
+  <span class="mkt-table-delta mkt-table-delta--muted">—</span>
+{% endif %}
+{% endmacro %}
+
+{% macro ad_metric_with_delta(display, sort_value, delta, inverted=false) %}
+<td data-value="{{ sort_value }}">
+  <div class="mkt-metric-with-delta">
+    <span>{{ display }}</span>
+    {{ ad_delta_pct(delta, inverted) }}
+  </div>
+</td>
+{% endmacro %}
+
+{% macro ad_crm_brands_table(title, brands, compare_label) %}
+<div class="mkt-card">
+  {{ ad_table_head(title) }}
+  <div class="mkt-table-wrap">
+    <table class="mkt-table" data-sortable>
+      <thead><tr>
+        {{ ad_th("Бренд") }}
+        {{ ad_th("Замовлення", sort='num') }}
+        {{ ad_th("Δ замовлення", sort='num') }}
+        {{ ad_th("Дохід", sort='num') }}
+        {{ ad_th("Δ дохід", sort='num') }}
+        {{ ad_th("Частка", sort='num') }}
+      </tr></thead>
+      <tbody>
+        {% for b in brands %}
+        <tr>
+          <td>{{ b.brand }}</td>
+          <td data-value="{{ b.orders }}">{{ b.orders | fmt_ua }}</td>
+          <td data-value="{{ b.delta_orders_pct if b.delta_orders_pct is not none else '' }}">{{ ad_delta_pct(b.delta_orders_pct) }}</td>
+          <td data-value="{{ b.revenue }}">{{ b.revenue | fmt_ua }} ₴</td>
+          <td data-value="{{ b.delta_revenue_pct if b.delta_revenue_pct is not none else '' }}">{{ ad_delta_pct(b.delta_revenue_pct) }}</td>
+          <td>{{ b.revenue_share_pct or 0 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="mkt-table-note">Δ замовлення і Δ дохід — {{ compare_label }}.</p>
+</div>
+{% endmacro %}
+
+{% macro ad_paid_brands_table(title, brands, compare_label) %}
+<div class="mkt-card">
+  {{ ad_table_head(title) }}
+  <div class="mkt-table-wrap">
+    <table class="mkt-table" data-sortable>
+      <thead><tr>
+        {{ ad_th("Бренд") }}
+        {{ ad_th("Замовлення", sort='num') }}
+        {{ ad_th("Δ замовлення", sort='num') }}
+        {{ ad_th("Дохід", sort='num') }}
+        {{ ad_th("Δ дохід", sort='num') }}
+        {{ ad_th("Витрати ≈", sort='num') }}
+        {{ ad_th("ROAS", sort='num') }}
+        {{ ad_th("Частка доходу", sort='num') }}
+      </tr></thead>
+      <tbody>
+        {% for b in brands %}
+        <tr>
+          <td>{{ b.brand }}</td>
+          <td data-value="{{ b.orders }}">{{ b.orders | fmt_ua }}</td>
+          <td data-value="{{ b.delta_orders_pct if b.delta_orders_pct is not none else '' }}">{{ ad_delta_pct(b.delta_orders_pct) }}</td>
+          <td data-value="{{ b.revenue }}">{{ b.revenue | fmt_ua }} ₴</td>
+          <td data-value="{{ b.delta_revenue_pct if b.delta_revenue_pct is not none else '' }}">{{ ad_delta_pct(b.delta_revenue_pct) }}</td>
+          <td data-value="{{ b.spend or 0 }}" title="Орієнтовно: частка витрат каналу пропорційно доходу бренду">{{ (b.spend or 0) | fmt_ua }} ₴</td>
+          <td data-value="{{ b.roas_pct or '' }}">{{ b.roas_pct or '—' }}</td>
+          <td>{{ b.revenue_share_pct or 0 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="mkt-table-note">Δ дохід і Δ замовлення — {{ compare_label }}. Витрати по брендах — <strong>оціночні</strong> (пропорційно доходу каналу).</p>
+  {{ ad_estimated_roas_note() }}
+</div>
+{% endmacro %}
+
+{% macro ad_table_head(title) %}
+<div class="mkt-card__head mkt-card__head--table">
+  <div class="mkt-card__head-left">
+    <h2 class="mkt-card__title">{{ title }}</h2>
+    <span class="mkt-table-count" data-table-count></span>
+  </div>
+  <input type="search" class="mkt-table-search" placeholder="Пошук у таблиці…" aria-label="Пошук у таблиці">
+</div>
+{% endmacro %}
+
+{% macro kpi_card(label, value, delta_pct=none, icon_svg=none, accent='blue', inverted=false, unit='', subtitle='', value_title='', help_key='') %}
+<div class="kpi-card kpi-card--{{ accent }}">
+  <div class="kpi-card__icon">
+    {% if icon_svg %}{{ icon_svg | safe }}{% else %}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+    {% endif %}
+  </div>
+  <div class="kpi-card__body">
+    <div class="kpi-card__label">{{ label }}{{ ad_metric_help(help_key or label) }}</div>
+    <div class="kpi-card__value"{% if value_title %} title="{{ value_title }}"{% endif %}>{{ value }}{% if unit %}<span class="kpi-card__unit"> {{ unit }}</span>{% endif %}</div>
+    {% if delta_pct is not none %}
+      {% set is_pos = delta_pct >= 0 %}
+      {% set is_good = (is_pos and not inverted) or (not is_pos and inverted) %}
+      <div class="kpi-card__footer">
+        <div class="kpi-card__delta {% if is_good %}kpi-card__delta--up{% else %}kpi-card__delta--down{% endif %}">
+          {% if is_pos %}↑{% else %}↓{% endif %} {{ delta_pct | abs }}%
+        </div>
+        {% if subtitle %}<div class="kpi-card__delta-sub">{{ subtitle }}</div>{% endif %}
+      </div>
+    {% elif subtitle %}
+      <div class="kpi-card__sub">{{ subtitle }}</div>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro insight_category_icon(category) %}
+  {% if category == 'google_ads' %}
+  <svg class="mkt-insight-card__glyph" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+  {% elif category == 'meta' %}
+  <svg class="mkt-insight-card__glyph" viewBox="0 0 24 24" aria-hidden="true"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+  {% elif category == 'seo' %}
+  <svg class="mkt-insight-card__glyph" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  {% elif category == 'cross' %}
+  <svg class="mkt-insight-card__glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 00-4-4H3"/><path d="M21 12h-5.7a4 4 0 00-4 4V22"/><path d="M3 12h5.7a4 4 0 014 4V3"/></svg>
+  {% else %}
+  <svg class="mkt-insight-card__glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/></svg>
+  {% endif %}
+{% endmacro %}
+
+{% macro insight_signal_badge(item) %}
+  {% set signal = item.signal_type or 'neutral' %}
+  {% if signal == 'risk' or item.trend == 'down' %}
+  <span class="mkt-insight-card__signal mkt-insight-card__signal--risk" title="Ризик"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg></span>
+  {% elif signal == 'positive' or item.trend == 'up' %}
+  <span class="mkt-insight-card__signal mkt-insight-card__signal--positive" title="Зростання"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg></span>
+  {% elif signal == 'anomaly' or item.trend == 'warn' %}
+  <span class="mkt-insight-card__signal mkt-insight-card__signal--anomaly" title="Аномалія"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 9v4"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></span>
+  {% elif signal == 'opportunity' %}
+  <span class="mkt-insight-card__signal mkt-insight-card__signal--opportunity" title="Можливість"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 00-4 12.7V17h8v-2.3A7 7 0 0012 2z"/></svg></span>
+  {% else %}
+  <span class="mkt-insight-card__signal mkt-insight-card__signal--neutral" title="Інсайт"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><circle cx="12" cy="16" r="1" fill="currentColor" stroke="none"/></svg></span>
+  {% endif %}
+{% endmacro %}
+
+{# SVG іконки для KPI карток #}
+{% set icon_spend %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>{% endset %}
+{% set icon_revenue %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>{% endset %}
+{% set icon_roas %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>{% endset %}
+{% set icon_conv %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>{% endset %}
+{% set icon_cpa %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>{% endset %}
+{% set icon_orders %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>{% endset %}
+{% set icon_clicks %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 15l-5 5M9.5 4a6.5 6.5 0 100 13 6.5 6.5 0 000-13z"/><line x1="14" y1="9" x2="21" y2="2"/></svg>{% endset %}
+{% set icon_ctr %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>{% endset %}
+{% set icon_cpc %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M14.31 8l5.74 9.94M9.69 8h11.48M7.38 12l5.74-9.94M9.69 16 3.95 6.06M14.31 16H2.83M16.62 12 10.88 21.94"/></svg>{% endset %}
+{% set icon_imp %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>{% endset %}
+{% set icon_avg %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>{% endset %}
+{% set icon_sessions %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>{% endset %}
+{% set icon_organic %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20"/><path d="M12 2c-4 4.5-4 9-4 13"/><path d="M12 2c4 4.5 4 9 4 13"/><path d="M2 12h20"/><path d="M12 22V2"/></svg>{% endset %}
+{% set icon_position %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>{% endset %}
+{% set icon_reach %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>{% endset %}
+{% set icon_freq %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/></svg>{% endset %}
+
+{% set k = report.kpi %}
+{% set d = k.delta if k.delta is defined else {} %}
+{% set s = ad_section %}
+{% set qp = "?date_from=" ~ report.period.from_iso ~ "&date_to=" ~ report.period.to_iso[:10] ~ ("&compare=" ~ report.period.compare if report.period.compare is defined and report.period.compare != 'prev' else "") ~ ("&chart_granularity=" ~ report.chart_granularity if report.chart_granularity is defined and report.chart_granularity and report.chart_granularity != 'day' else "") %}
+{% set kpi_cmp = report.period.compare_label if report.period.compare_label is defined else "vs попередній період" %}
+
+<div class="mkt-wrap" data-section="{{ s }}"
+     data-integrations='{{ report.section_integrations | tojson }}'
+     data-is-admin="{{ '1' if is_admin else '0' }}"
+     data-csrf="{{ request.state.csrf_token }}">
+
+  {# ── Шапка: заголовок + фільтр дат ── #}
+  <div class="mkt-topbar">
+    <div class="mkt-topbar__left">
+      <h1 class="mkt-topbar__title">
+        {% if s == 'google_ads' %}
+          <span class="mkt-topbar__logo mkt-topbar__logo--google">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          </span>
+          Google Ads
+        {% elif s == 'meta' %}
+          <span class="mkt-topbar__logo mkt-topbar__logo--meta">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+          </span>
+          Meta Ads
+        {% elif s == 'seo' %}
+          <span class="mkt-topbar__logo mkt-topbar__logo--seo">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#34A853" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          SEO (Органічний трафік)
+        {% elif s == 'direct' %}
+          Прямий трафік (Direct)
+        {% elif s == 'other' %}
+          Інші джерела
+        {% elif s == 'business' %}
+          Бізнес-аналітика
+        {% elif s == 'insights' %}
+          Інсайти
+        {% elif s == 'details' %}
+          Деталізація
+        {% else %}
+          Аналіз реклами — Огляд
+        {% endif %}
+      </h1>
+    </div>
+    <div class="mkt-topbar__right">
+      <form class="mkt-period-form" method="get" action="{{ ad_dash_prefix }}/{{ s }}" data-mkt-period-form>
+        <input type="hidden" name="compare" value="{{ report.period.compare if report.period.compare is defined else 'prev' }}" data-compare-input>
+        <input type="hidden" name="chart_granularity" value="{{ report.chart_granularity or 'day' }}" data-chart-granularity-input>
+        <input type="date" class="mkt-period-form__input mkt-period-form__input--hidden" name="date_from"
+               value="{{ report.period.from_iso }}" max="{{ report.period.max_date_iso }}">
+        <input type="date" class="mkt-period-form__input mkt-period-form__input--hidden" name="date_to"
+               value="{{ report.period.to_iso[:10] }}" max="{{ report.period.max_date_iso }}">
+        <div class="mkt-toolbar">
+          <button type="button" class="mkt-period-pill" id="mktPeriodPill" aria-haspopup="dialog" aria-expanded="false">
+            <svg class="mkt-period-pill__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span class="mkt-period-pill__text">{{ report.period.from_display }} — {{ report.period.to_display }}</span>
+          </button>
+          {% if report.period.compare_range_display is defined and report.period.compare_range_display %}
+          <span class="mkt-period-compare-pill" data-compare-range-pill title="Період для Δ у KPI і таблицях">
+            Δ {{ report.period.compare_range_display }}
+          </span>
+          {% else %}
+          <span class="mkt-period-compare-pill" data-compare-range-pill hidden></span>
+          {% endif %}
+          <div class="mkt-period-popover" id="mktPeriodPopover" hidden role="dialog" aria-label="Обрати період">
+            <div class="mkt-period-presets">
+              <button type="button" class="mkt-period-preset" data-preset="month">Місяць</button>
+              <button type="button" class="mkt-period-preset" data-days="7">7 днів</button>
+              <button type="button" class="mkt-period-preset" data-days="30">30 днів</button>
+              <button type="button" class="mkt-period-preset" data-days="90">90 днів</button>
+            </div>
+            <div class="mkt-period-compare">
+              <span class="mkt-period-compare__label">Порівняти з:</span>
+              <button type="button" class="mkt-period-compare-btn {% if not report.period.compare or report.period.compare == 'prev' %}is-active{% endif %}" data-compare="prev">Попередній період</button>
+              <button type="button" class="mkt-period-compare-btn {% if report.period.compare == 'yoy' %}is-active{% endif %}" data-compare="yoy">Минулий рік (YoY)</button>
+            </div>
+            <p class="mkt-period-compare-range" data-compare-range>
+              {% if report.period.compare_range_display is defined and report.period.compare_range_display %}
+              Δ порівнюються з: <strong>{{ report.period.compare_range_display }}</strong>
+              {% if report.period.compare_kind is defined %}<span class="mkt-muted">({{ report.period.compare_kind }})</span>{% endif %}
+              {% endif %}
+            </p>
+            <div class="mkt-period-popover__dates">
+              <label class="mkt-period-popover__field">З<input type="date" class="mkt-period-form__input" data-period-from value="{{ report.period.from_iso }}" max="{{ report.period.max_date_iso }}"></label>
+              <label class="mkt-period-popover__field">По<input type="date" class="mkt-period-form__input" data-period-to value="{{ report.period.to_iso[:10] }}" max="{{ report.period.max_date_iso }}"></label>
+            </div>
+            <button type="submit" class="mkt-period-form__btn mkt-period-form__btn--apply">Застосувати</button>
+            {% if report.period.notes_ua %}
+            <p class="mkt-period-note" data-period-note>{{ report.period.notes_ua }}</p>
+            {% else %}
+            <p class="mkt-period-note" data-period-note hidden></p>
+            {% endif %}
+          </div>
+          <div class="mkt-toolbar__actions">
+            <button type="submit" name="refresh" value="1" class="mkt-icon-btn" title="Оновити з API" aria-label="Оновити з API">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            </button>
+            <a class="mkt-icon-btn"
+               href="{{ ad_dash_prefix }}/{{ s }}/export.csv?date_from={{ report.period.from_iso }}&date_to={{ report.period.to_iso[:10] }}{% if report.period.compare and report.period.compare != 'prev' %}&compare={{ report.period.compare }}{% endif %}"
+               title="Експорт CSV" aria-label="Експорт CSV">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </a>
+            <a class="mkt-icon-btn"
+               href="{{ ad_dash_prefix }}/{{ s }}/export.xlsx?date_from={{ report.period.from_iso }}&date_to={{ report.period.to_iso[:10] }}{% if report.period.compare and report.period.compare != 'prev' %}&compare={{ report.period.compare }}{% endif %}"
+               title="Експорт Excel" aria-label="Експорт Excel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+            </a>
+            <button type="button"
+                    class="mkt-icon-btn mkt-icon-btn--settings{% if report.section_integrations and report.section_integrations.has_issues %} mkt-icon-btn--warn{% endif %}"
+                    id="mktIntegrationSettingsBtn"
+                    title="Налаштування API" aria-label="Налаштування API" aria-haspopup="dialog"
+                    {% if not show_integration_settings %}hidden{% endif %}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            </button>
+            <a class="mkt-icon-btn mkt-icon-btn--sync"
+               href="{{ ad_dash_prefix }}/{{ s }}?date_from={{ report.period.from_iso }}&date_to={{ report.period.to_iso[:10] }}&sync_crm=1"
+               title="Синхронізувати CRM" aria-label="Синхронізувати CRM">
+              <span class="mkt-icon-btn__label">CRM</span>
+            </a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <nav class="mkt-section-nav" aria-label="Розділи аналізу реклами">
+    {% set ad_sections = [
+      ('overview', 'Огляд'),
+      ('google_ads', 'Google Ads'),
+      ('meta', 'Meta Ads'),
+      ('seo', 'SEO'),
+      ('direct', 'Прямий'),
+      ('other', 'Інші'),
+      ('business', 'Бізнес'),
+      ('insights', 'Інсайти'),
+      ('details', 'Деталізація'),
+    ] %}
+    {% for slug, label in ad_sections %}
+    <a href="{{ ad_dash_prefix }}/{{ slug }}{{ qp }}"
+       class="mkt-nav-link {% if s == slug %}is-active{% endif %}"
+       data-mkt-section="{{ slug }}"
+       {% if s == slug %}aria-current="page"{% endif %}>{{ ad_nav_icon(slug) }}<span class="mkt-nav-link__label">{{ label }}</span></a>
+    {% endfor %}
+  </nav>
+
+  <div class="mkt-page-body" id="mktPageBody">
+
+  {# ── Помилка завантаження звіту ── #}
+  {% if report.load_error %}
+  <div class="mkt-alert mkt-alert--auth">
+    ⚠️ Не вдалося завантажити звіт: {{ report.load_error }}
+    <button type="button" class="mkt-alert__btn" onclick="window.location.reload()">Оновити сторінку</button>
+  </div>
+  {% endif %}
+
+  {# ── Помилка API ── #}
+  {% if report.api_status and report.api_status.error %}
+  <div class="mkt-alert">⚠ {{ report.api_status.error }}</div>
+  {% endif %}
+
+  {# ── Плашки прострочених / відсутніх ключів API ── #}
+  {% if report.section_integrations and report.section_integrations.alerts %}
+  {% for alert in report.section_integrations.alerts %}
+  <div class="mkt-alert {% if alert.severity == 'auth_error' %}mkt-alert--auth{% elif alert.severity == 'off' %}mkt-alert--info{% endif %}">
+    {% if alert.severity == 'auth_error' %}🔑{% else %}ℹ{% endif %}
+    <strong>{{ alert.label }}:</strong> {{ alert.message }}
+    {% if show_integration_settings %}
+    <button type="button" class="mkt-alert__btn mkt-open-integration-settings" data-integration-key="{{ alert.key }}">Налаштування</button>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {# ── Нотис після збереження ключів ── #}
+  {% if integration_notice %}
+  <div class="mkt-alert {% if '✅' in integration_notice %}mkt-alert--ok{% endif %}">{{ integration_notice }}</div>
+  {% endif %}
+
+  {# ── Нотис після синхронізації CRM ── #}
+  {% if sync_notice %}
+  <div class="mkt-alert {% if '✅' in sync_notice %}mkt-alert--ok{% endif %}">{{ sync_notice }}</div>
+  {% endif %}
+
+  {# ── Попередження якщо немає CRM-даних ── #}
+  {% if report.kpi.revenue == 0 and report.kpi.orders == 0 %}
+  <div class="mkt-alert mkt-alert--info">
+    ℹ Дані CRM за обраний період відсутні.
+    <a href="{{ ad_dash_prefix }}/{{ ad_section }}?date_from={{ report.period.from_iso }}&date_to={{ report.period.to_iso[:10] }}&sync_crm=1"
+       class="mkt-alert__btn">🔄 Синхронізувати клієнтів і замовлення</a>
+  </div>
+  {% endif %}
+
+  {# ════════════════════════════════════════════════════════════
+     ОГЛЯД
+  ════════════════════════════════════════════════════════════ #}
+  {% if s == 'overview' %}
+
+  <div class="kpi-row kpi-row--overview">
+    {% set spend_prefix = '≈ ' if k.spend_approximate else '' %}
+    {{ kpi_card("Витрати", spend_prefix ~ (k.spend | fmt_ua_compact) ~ " ₴", d.get('spend_pct'), icon_spend, 'blue', false, '', kpi_cmp, (spend_prefix ~ (k.spend | fmt_ua) ~ " ₴")) }}
+    {{ kpi_card("Дохід", k.revenue | fmt_ua_compact ~ " ₴", d.get('revenue_pct'), icon_revenue, 'green', false, '', kpi_cmp, (k.revenue | fmt_ua ~ " ₴")) }}
+    {{ kpi_card("ROAS", k.roas_pct if k.roas_pct else "—", d.get('roas_pct'), icon_roas, 'purple', false) }}
+    {{ kpi_card("CPA", (k.cpa | fmt_ua_compact ~ " ₴") if k.cpa else "—", d.get('cpa_pct'), icon_cpa, 'orange', true, '', kpi_cmp if k.cpa else '', ((k.cpa | fmt_ua ~ " ₴") if k.cpa else '')) }}
+    {{ kpi_card("Замовлення", k.orders | fmt_ua, d.get('orders_pct'), icon_orders, 'indigo', false, '', kpi_cmp) }}
+    {{ kpi_card("Коефіцієнт конверсії", k.conversion_rate_pct or "—", d.get('conversion_rate_pct'), icon_conv, 'teal', false, '', kpi_cmp) }}
+    {{ kpi_card("Середній чек", (k.avg_check | fmt_ua_compact ~ " ₴") if k.avg_check else "—", d.get('avg_check_pct'), icon_avg, 'pink', false, '', kpi_cmp if k.avg_check else '', ((k.avg_check | fmt_ua ~ " ₴") if k.avg_check else '')) }}
+  </div>
+  {% if k.spend_fx_note %}
+  <p class="mkt-table-note">{{ k.spend_fx_note }}</p>
+  {% endif %}
+  <p class="mkt-table-note">Дохід, замовлення, ROAS і CPA — з CRM Cosmy. Витрати — у ₴ (курс НБУ). CR зведений = усі CRM замовлення ÷ сумарний трафік каналів (кліки + сесії).</p>
+
+  <div class="mkt-overview-charts">
+    <div class="mkt-card mkt-card--donut">
+      <div class="mkt-card__head">
+        <div>
+          <h2 class="mkt-card__title">Ефективність каналів</h2>
+          <p class="mkt-card__subtitle">Розподіл доходу за джерелами трафіку</p>
+        </div>
+      </div>
+      {% if report.donut and report.donut.values %}
+      <div class="mkt-donut-with-table">
+        <div class="mkt-donut-wrap">
+          <canvas id="channelDonut" class="donut-canvas"
+            data-donut='{{ report.donut | tojson }}'
+            data-center-label="Дохід"
+            data-center-value="{{ report.donut.total | fmt_ua }} ₴"></canvas>
+        </div>
+        <div class="mkt-donut-legend">
+          <table class="mkt-mini-table">
+            <thead><tr>{{ ad_th("Канал") }}{{ ad_th("Дохід") }}{{ ad_th("Частка") }}</tr></thead>
+            <tbody>
+              {% for row in report.donut.legend %}
+              <tr>
+                <td><span class="mkt-dot" style="background:{{ row.color }}"></span>{{ row.label }}</td>
+                <td>{{ row.value | fmt_ua }} ₴</td>
+                <td>{{ row.pct }}%</td>
+              </tr>
+              {% endfor %}
+              {% set total_rev = report.overview_channels | sum(attribute='revenue') %}
+              <tr class="mkt-mini-table__total"><td>Всього</td><td>{{ total_rev | fmt_ua }} ₴</td><td>100%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% else %}
+      <p class="mkt-chart-empty">Немає даних по каналах за обраний період</p>
+      {% endif %}
+    </div>
+    <div class="mkt-card mkt-card--chart">
+      {{ ad_chart_granularity_head("Динаміка", "Витрати, дохід і замовлення") }}
+      {% if report.chart %}
+      <div class="mkt-chart-wrap">
+        <canvas id="mktMainChart"
+          data-chart='{{ report.chart | tojson }}'
+          data-mode="overview"></canvas>
+      </div>
+      {% else %}
+      <p class="mkt-chart-empty">Немає даних для графіка за обраний період</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% set gp = report.extra.google_preview if report.extra else none %}
+  {% set mp = report.extra.meta_preview if report.extra else none %}
+  {% set sp = report.extra.seo_preview if report.extra else none %}
+  {% set biz = report.extra.business if report.extra else none %}
+
+  {% if gp %}
+  <div class="mkt-channel-block mkt-channel-block--google">
+    <div class="mkt-channel-block__head">
+      <h2 class="mkt-channel-block__title">Google Ads</h2>
+      <a href="{{ ad_dash_prefix }}/google_ads{{ qp }}" class="mkt-channel-block__link">Переглянути все →</a>
+    </div>
+    <div class="mkt-channel-block__kpis">
+      <div><span>{{ ad_inline_label("Витрати") }}</span><strong>{{ gp.spend | fmt_ua }} {{ gp.currency_suffix or '₴' }}</strong>{% if gp.spend_uah and gp.currency_suffix and gp.currency_suffix != '₴' %} <span class="mkt-muted">≈ {{ gp.spend_uah | fmt_ua }} ₴</span>{% endif %}</div>
+      <div><span>{{ ad_inline_label("Дохід CRM", "revenue_crm") }}</span><strong>{{ gp.revenue | fmt_ua }} ₴</strong>{% if gp.revenue_share_pct is not none %} <span class="mkt-muted">({{ gp.revenue_share_pct }}%)</span>{% endif %}</div>
+      <div><span>{{ ad_inline_label("CRM замовлення", "crm_orders") }}</span><strong>{{ gp.orders | fmt_ua }}</strong></div>
+      <div><span>{{ ad_inline_label("CPA CRM", "cpa_crm") }}</span><strong>{% if gp.crm_cpa %}{{ gp.crm_cpa | fmt_ua }} ₴{% else %}—{% endif %}</strong></div>
+      <div><span>{{ ad_inline_label("ROAS CRM", "roas") }}</span><strong>{{ gp.roas_pct or '—' }}</strong></div>
+      <div><span>{{ ad_inline_label("Коефіцієнт конверсії") }}</span><strong>{{ gp.conversion_rate_pct or '—' }}</strong></div>
+    </div>
+    <p class="mkt-table-note">Частка в дужках — % від загального доходу CRM. CPA CRM = витрати (₴) ÷ CRM замовлення. ROAS CRM = дохід CRM ÷ витрати (₴). Дохід збігається з рядком Google Ads у таблиці «Канали» нижче.</p>
+    {% if gp.revenue_google and gp.revenue_google != gp.revenue %}
+    <p class="mkt-table-note">Дохід Google (conv. value by conv. time): {{ gp.revenue_google | fmt_ua }} {{ gp.currency_suffix or '₴' }} — за датою конверсії; від CRM може відрізнятись через вікно атрибуції Google.</p>
+    {% endif %}
+    {% if gp.campaigns %}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table mkt-table--compact" data-sortable>
+        <thead><tr>
+          {{ ad_th("Кампанія") }}
+          {{ ad_th("Витрати", sort='num') }}
+          {{ ad_th("Дохід CRM", sort='num') }}
+          {{ ad_th("Конверсії Google", sort='num') }}
+          {{ ad_th("CRM замовлення", sort='num') }}
+          {{ ad_th("ROAS CRM", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for c in gp.campaigns %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td data-value="{{ c.spend }}">{{ c.spend | fmt_ua }} {{ gp.currency_suffix or '₴' }}{% if c.spend_uah and gp.currency_suffix and gp.currency_suffix != '₴' %} <span class="mkt-muted">≈ {{ c.spend_uah | fmt_ua }} ₴</span>{% endif %}</td>
+            <td data-value="{{ c.revenue or 0 }}">{{ (c.revenue or 0) | fmt_ua }} ₴</td>
+            {{ ad_metric_with_delta(c.conversions or 0, c.conversions or 0, c.delta_conversions_pct) }}
+            {{ ad_metric_with_delta(c.crm_orders or 0, c.crm_orders or 0, c.delta_orders_pct) }}
+            <td>{{ c.roas_pct or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ ad_estimated_roas_note() }}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if mp %}
+  <div class="mkt-channel-block mkt-channel-block--meta">
+    <div class="mkt-channel-block__head">
+      <h2 class="mkt-channel-block__title">Meta Ads</h2>
+      <a href="{{ ad_dash_prefix }}/meta{{ qp }}" class="mkt-channel-block__link">Переглянути все →</a>
+    </div>
+    <div class="mkt-channel-block__kpis">
+      <div><span>{{ ad_inline_label("Витрати") }}</span><strong>{{ mp.spend | fmt_ua }} {{ mp.currency_suffix or '$' }}</strong>{% if mp.spend_uah and mp.currency_suffix and mp.currency_suffix != '₴' %} <span class="mkt-muted">≈ {{ mp.spend_uah | fmt_ua }} ₴</span>{% endif %}</div>
+      <div><span>{{ ad_inline_label("Дохід CRM", "revenue_crm") }}</span><strong>{{ mp.revenue | fmt_ua }} ₴</strong>{% if mp.revenue_share_pct is not none %} <span class="mkt-muted">({{ mp.revenue_share_pct }}%)</span>{% endif %}</div>
+      <div><span>{{ ad_inline_label("CRM замовлення", "crm_orders") }}</span><strong>{{ mp.orders | fmt_ua }}</strong></div>
+      <div><span>{{ ad_inline_label("Покупки Meta", "meta_purchases") }}</span><strong>{{ mp.purchases | fmt_ua if mp.purchases else '—' }}</strong></div>
+      <div><span>{{ ad_inline_label("CPA CRM", "cpa_crm") }}</span><strong>{% if mp.crm_cpa %}{{ mp.crm_cpa | fmt_ua }} ₴{% else %}—{% endif %}</strong></div>
+      <div><span>{{ ad_inline_label("CPA Meta", "cpa_meta") }}</span><strong>{% if mp.meta_cpa %}{{ mp.meta_cpa | fmt_ua }} {{ mp.currency_suffix or '$' }}{% else %}—{% endif %}</strong></div>
+      <div><span>{{ ad_inline_label("ROAS CRM", "roas") }}</span><strong>{{ mp.roas_pct or '—' }}</strong></div>
+    </div>
+    <p class="mkt-table-note">CRM замовлення — успішні покупки Cosmy з UTM Meta ({{ mp.orders | fmt_ua }} за період). Покупки Meta — події purchase в Ads Manager ({{ mp.purchases | fmt_ua if mp.purchases else '—' }}); числа часто відрізняються через різне вікно атрибуції та правила Meta. У таблиці CRM прив’язується за збігом <code>utm_campaign</code> з назвою кампанії.</p>
+    {% if mp.unassigned_crm_orders %}
+    <p class="mkt-table-note">Без прив’язки до топ-кампаній: {{ mp.unassigned_crm_orders | fmt_ua }} CRM замовлень ({{ mp.unassigned_crm_revenue | fmt_ua }} ₴) — інший utm_campaign або без нього.</p>
+    {% endif %}
+    {% if mp.campaigns %}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table mkt-table--compact" data-sortable>
+        <thead><tr>
+          {{ ad_th("Кампанія") }}
+          {{ ad_th("Витрати", sort='num') }}
+          {{ ad_th("Дохід CRM", sort='num') }}
+          {{ ad_th("CRM замовлення", sort='num') }}
+          {{ ad_th("Покупки Meta", sort='num') }}
+          {{ ad_th("ROAS CRM", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for c in mp.campaigns %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td data-value="{{ c.spend }}">{{ c.spend | fmt_ua }} {{ mp.currency_suffix or '$' }}</td>
+            <td data-value="{{ c.crm_revenue or 0 }}">{{ (c.crm_revenue or 0) | fmt_ua }} ₴</td>
+            {{ ad_metric_with_delta(c.crm_orders or 0, c.crm_orders or 0, c.delta_orders_pct) }}
+            {{ ad_metric_with_delta(c.meta_purchases or c.purchases or 0, c.meta_purchases or c.purchases or 0, c.delta_conversions_pct) }}
+            <td>{{ c.roas_pct or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ ad_estimated_roas_note() }}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if sp %}
+  <div class="mkt-channel-block mkt-channel-block--seo">
+    <div class="mkt-channel-block__head">
+      <h2 class="mkt-channel-block__title">SEO (Органічний)</h2>
+      <a href="{{ ad_dash_prefix }}/seo{{ qp }}" class="mkt-channel-block__link">Переглянути все →</a>
+    </div>
+    <div class="mkt-channel-block__kpis">
+      <div><span>{{ ad_inline_label("Органічний трафік") }}</span><strong>{{ (sp.clicks or 0) | fmt_ua }}</strong></div>
+      <div><span>{{ ad_inline_label("Дохід CRM", "revenue_crm") }}</span><strong>{{ sp.revenue | fmt_ua }} ₴</strong>{% if sp.revenue_share_pct is not none %} <span class="mkt-muted">({{ sp.revenue_share_pct }}%)</span>{% endif %}</div>
+      <div><span>{{ ad_inline_label("CRM замовлення", "crm_orders") }}</span><strong>{{ sp.orders | fmt_ua }}</strong></div>
+      <div><span>{{ ad_inline_label("Коефіцієнт конверсії") }}</span><strong>{{ sp.conversion_rate_pct or '—' }}</strong></div>
+      <div><span>{{ ad_inline_label("CTR") }}</span><strong>{% if sp.ctr %}{{ sp.ctr }}%{% else %}—{% endif %}</strong></div>
+      <div><span>{{ ad_inline_label("Витрати SEO") }}</span><strong>{{ (sp.spend or 0) | fmt_ua }} ₴</strong></div>
+      <div><span>{{ ad_inline_label("ROAS CRM", "roas") }}</span><strong>{{ sp.roas_pct or '—' }}</strong></div>
+    </div>
+    <p class="mkt-table-note">Витрати SEO — ручні записи на сторінці SEO (дата, сума, опис). <a href="{{ ad_dash_prefix }}/seo{{ qp }}">Керувати витратами →</a></p>
+    {% if sp.chart %}
+    <div class="mkt-chart-wrap mkt-chart-wrap--mini">
+      <canvas class="mkt-mini-chart" data-chart='{{ sp.chart | tojson }}' data-mode="seo"></canvas>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if biz %}
+  <div class="mkt-card__head mkt-card__head--inline">
+    <h2 class="mkt-card__title">Бізнес-аналітика</h2>
+    <a href="{{ ad_dash_prefix }}/business{{ qp }}" class="mkt-channel-block__link">Повний звіт →</a>
+  </div>
+  <div class="mkt-business-grid">
+    <div class="mkt-card mkt-card--mini">
+      <h3 class="mkt-card__title">Топ канали (UTM)</h3>
+      <table class="mkt-mini-table">
+        <thead><tr>{{ ad_th("Канал", help_key='marketing_channel') }}{{ ad_th("Дохід") }}{{ ad_th("Частка") }}</tr></thead>
+        <tbody>
+          {% for row in biz.top_channels or biz.top_categories %}
+          <tr><td>{{ row.label or row.name }}</td><td>{{ row.revenue | fmt_ua }} ₴</td><td>{{ row.share_pct }}%</td></tr>
+          {% else %}<tr><td colspan="3" class="mkt-empty-cell">Немає даних</td></tr>{% endfor %}
+        </tbody>
+      </table>
+      <p class="mkt-table-note">Канал визначається за UTM замовлення (або першого джерела клієнта) — ті самі правила, що в таблиці «Канали» на огляді.</p>
+    </div>
+    <div class="mkt-card mkt-card--mini">
+      <h3 class="mkt-card__title">Топ бренди</h3>
+      <table class="mkt-mini-table">
+        <thead><tr>{{ ad_th("Бренд") }}{{ ad_th("Замовлення") }}{{ ad_th("Дохід") }}{{ ad_th("Частка") }}</tr></thead>
+        <tbody>
+          {% for b in report.top_brands[:5] %}
+          <tr>
+            <td>{{ b.brand }}</td>
+            {{ ad_metric_with_delta(b.orders | fmt_ua, b.orders, b.delta_orders_pct) }}
+            <td>{{ b.revenue | fmt_ua }} ₴</td>
+            <td>{{ b.revenue_share_pct }}%</td>
+          </tr>
+          {% else %}<tr><td colspan="4" class="mkt-empty-cell">Немає даних</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mkt-card mkt-card--mini">
+      <h3 class="mkt-card__title">Топ міста</h3>
+      <table class="mkt-mini-table">
+        <thead><tr>{{ ad_th("Місто") }}{{ ad_th("Дохід") }}{{ ad_th("Частка") }}</tr></thead>
+        <tbody>
+          {% for row in biz.top_cities %}
+          <tr><td>{{ row.name }}</td><td>{{ row.revenue | fmt_ua }} ₴</td><td>{{ row.share_pct }}%</td></tr>
+          {% else %}<tr><td colspan="3" class="mkt-empty-cell">Немає даних</td></tr>{% endfor %}
+        </tbody>
+      </table>
+      <p class="mkt-table-note">Міста з різним написанням (Київ / Киев, Одеса / Одесса тощо) обʼєднуються автоматично за канонічною назвою.</p>
+    </div>
+    <div class="mkt-card mkt-card--mini mkt-card--mix">
+      <h3 class="mkt-card__title">Нові vs повторні покупці</h3>
+      <div class="mkt-customer-mix">
+        <canvas id="customerMixDonut"
+          data-donut='{{ {"labels":["Нові","Повторні"],"values":[biz.customer_mix.new_revenue, biz.customer_mix.returning_revenue],"colors":["#3b82f6","#22c55e"]} | tojson }}'
+          data-center-label="Дохід"></canvas>
+        <div class="mkt-customer-mix__legend">
+          <div><span class="mkt-dot" style="background:#3b82f6"></span>{{ ad_inline_label("Нові покупці", "customer_new") }}: {{ biz.customer_mix.new_pct }}% ({{ biz.customer_mix.new_revenue | fmt_ua }} ₴)</div>
+          <div><span class="mkt-dot" style="background:#22c55e"></span>{{ ad_inline_label("Повторні покупці", "customer_returning") }}: {{ biz.customer_mix.returning_pct }}% ({{ biz.customer_mix.returning_revenue | fmt_ua }} ₴)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if report.overview_channels %}
+  <div class="mkt-card mkt-card--table">
+    {{ ad_table_head("Канали — деталізація") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead>
+          <tr>
+            {{ ad_th("Канал") }}
+            {{ ad_th("Витрати", sort='num') }}
+            {{ ad_th("Дохід", sort='num') }}
+            {{ ad_th("ROAS", sort='num') }}
+            {{ ad_th("Замовлення", sort='num') }}
+            {{ ad_th("Δ замовлення", sort='num') }}
+            {{ ad_th("Коефіцієнт конверсії", sort='num') }}
+            {{ ad_th("Частка", sort='num') }}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report.overview_channels %}
+          {% set ch_url = {'google_ads':'google_ads','meta_ads':'meta','seo':'seo','direct':'direct','other':'other'}.get(row.channel, 'other') %}
+          <tr>
+            <td><a class="mkt-channel-link" href="{{ ad_dash_prefix }}/{{ ch_url }}{{ qp }}">{{ row.label }}</a></td>
+            <td data-value="{{ row.spend_uah if row.spend_uah is defined else row.spend }}">
+              {% if row.spend_approximate %}
+              {{ row.spend_display | fmt_ua }} {{ row.spend_suffix or '$' }}
+              <span class="mkt-muted">≈ {{ row.spend_uah | fmt_ua }} ₴</span>
+              {% else %}
+              {{ row.spend | fmt_ua }} {{ row.spend_suffix or '₴' }}
+              {% endif %}
+            </td>
+            <td data-value="{{ row.revenue }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ row.revenue | fmt_ua }} ₴</span>
+                {{ ad_delta_pct(row.delta_revenue_pct) }}
+              </div>
+            </td>
+            <td data-value="{{ row.roas or 0 }}">{{ row.roas_pct or '—' }}</td>
+            <td data-value="{{ row.orders }}">{{ row.orders | fmt_ua }}</td>
+            <td data-value="{{ row.delta_orders_pct if row.delta_orders_pct is not none else '' }}">{{ ad_delta_pct(row.delta_orders_pct) }}</td>
+            <td data-value="{{ row.conversion_rate or 0 }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ row.conversion_rate_pct or '—' }}</span>
+                {{ ad_delta_pct(row.delta_conversion_rate_pct) }}
+              </div>
+            </td>
+            <td data-value="{{ row.revenue_share_pct }}">{{ row.revenue_share_pct }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="mkt-table-note">Δ замовлення, Δ дохід і Δ конверсія — {{ report.period.compare_label }}. ROAS = дохід CRM ÷ витрати (₴). CR = замовлення CRM ÷ трафік каналу (кліки або сесії). <strong>Прямий трафік</strong> — без UTM і без зовнішнього referer (type-in, закладки). <strong>Інші джерела</strong> — email, реферали, платний трафік без Google/Meta, усе інше.</p>
+  </div>
+  {% endif %}
+
+  {# ════════════════════════════════════════════════════════════
+     GOOGLE ADS
+  ════════════════════════════════════════════════════════════ #}
+  {% elif s == 'google_ads' %}
+  {% set cur = k.currency_suffix or '₴' %}
+  {% set rev_label = "Дохід Google" if k.revenue_source == 'google' else ("Дохід CRM" if k.revenue_source == 'crm' else "Дохід") %}
+
+  <div class="kpi-row kpi-row--overview">
+    {{ kpi_card("Витрати", k.spend | fmt_ua_compact ~ " " ~ cur, d.get('spend_pct'), icon_spend, 'blue', false, '', kpi_cmp, (k.spend | fmt_ua ~ " " ~ cur)) }}
+    {{ kpi_card(rev_label, k.revenue | fmt_ua_compact ~ (" ₴" if k.revenue_source == 'crm' else (" " ~ cur)), d.get('revenue_pct'), icon_revenue, 'green', false, '', kpi_cmp, (k.revenue | fmt_ua ~ (" ₴" if k.revenue_source == 'crm' else (" " ~ cur))), help_key=('revenue_google' if k.revenue_source == 'google' else ('revenue_crm' if k.revenue_source == 'crm' else 'revenue'))) }}
+    {{ kpi_card(k.roas_label or "ROAS CRM", k.roas_pct if k.roas_pct else "—", d.get('roas_pct'), icon_roas, 'purple', false, '', kpi_cmp, '', help_key=('roas_google' if k.revenue_source == 'google' else 'roas')) }}
+    {{ kpi_card("Конверсії Google", (k.gads_conversions | string) if k.gads_conversions is not none else "—", d.get('gads_conversions_pct'), icon_conv, 'teal', false, '', kpi_cmp, '', help_key='conversions') }}
+    {{ kpi_card("CPA CRM", (k.crm_cpa | fmt_ua_compact ~ " ₴") if k.crm_cpa else "—", d.get('cpa_pct'), icon_cpa, 'orange', true, '', kpi_cmp if k.crm_cpa else '', help_key='cpa_crm') }}
+    {{ kpi_card("Кліки", k.clicks | fmt_ua, d.get('clicks_pct'), icon_clicks, 'indigo', false) }}
+  </div>
+  <div class="kpi-row kpi-row--overview">
+    {% set ctr = k.ctr if k.ctr is not none else ((100 * k.clicks / k.impressions | round(2)) if k.impressions and k.clicks else none) %}
+    {% set cpc = k.cpc if k.cpc is not none else ((k.spend / k.clicks | round(2)) if k.clicks else none) %}
+    {{ kpi_card("CTR", (ctr | string ~ "%") if ctr is not none else "—", none, icon_ctr, 'pink', false) }}
+    {{ kpi_card("CPC", (cpc | fmt_ua ~ " " ~ cur) if cpc else "—", none, icon_cpc, 'yellow', true) }}
+    {{ kpi_card("Покази", k.impressions | fmt_ua, d.get('impressions_pct'), icon_imp, 'gray', false) }}
+    {{ kpi_card("Показник якості", (k.avg_quality_score | string) if k.avg_quality_score else "—", none, icon_roas, 'purple', false) }}
+    {{ kpi_card("Search Impr. Share", (k.search_impression_share | string ~ "%") if k.search_impression_share else "—", none, icon_sessions, 'blue', false) }}
+    {{ kpi_card("CRM замовлення", k.crm_orders | fmt_ua, d.get('crm_orders_pct'), icon_orders, 'green', false) }}
+    {{ kpi_card("CPA Google", (k.gads_cpa | fmt_ua_compact ~ " " ~ cur) if k.gads_cpa else "—", d.get('gads_cpa_pct'), icon_cpa, 'yellow', true, '', kpi_cmp if k.gads_cpa else '', help_key='cpa_google') }}
+    {{ kpi_card("Коефіцієнт конверсії", k.conversion_rate_pct or "—", d.get('conversion_rate_pct'), icon_conv, 'teal', false, '', kpi_cmp) }}
+  </div>
+  <p class="mkt-note" style="margin: -4px 0 12px; font-size: 12px; color: #6b7280;">
+    Google Ads: витрати/кліки/покази — за датою кліку; конверсії — by conv. time ({{ k.currency or 'UAH' }}).
+    У KPI — дохід CRM (як на огляді та в таблиці каналів): {{ k.crm_orders | fmt_ua }} замовлень, {{ k.crm_revenue | fmt_ua }} ₴.
+    {% if k.gads_revenue and k.gads_revenue != k.crm_revenue %}
+    Дохід Google (by conv. time): {{ k.gads_revenue | fmt_ua }} {{ k.currency or 'UAH' }}{% if k.gads_roas_pct %} · ROAS Google {{ k.gads_roas_pct }}{% endif %}.
+    {% endif %}
+  </p>
+
+  <div class="mkt-two-col">
+    <div class="mkt-card">
+      {{ ad_chart_granularity_head("Динаміка (Витрати / Дохід / ROAS)", "Витрати, дохід і ROAS") }}
+      <div class="mkt-chart-wrap">
+        <canvas id="mktMainChart"
+          data-chart='{{ report.chart | tojson }}'
+          data-mode="default"></canvas>
+      </div>
+    </div>
+    <div class="mkt-card">
+      <div class="mkt-card__head"><h2 class="mkt-card__title">Витрати за типом кампанії</h2></div>
+      {% if report.donut and report.donut.labels %}
+      <div class="mkt-donut-centered">
+        <canvas id="typeDonut" data-donut='{{ report.donut | tojson }}' data-center-label="Кампанії"></canvas>
+      </div>
+      <div class="mkt-donut-legend-row">
+        {% for item in report.donut.legend %}
+        <span class="mkt-legend-chip" style="--dot:{{ item.color }}">{{ item.label }} {{ item.pct }}%</span>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="mkt-empty">API не налаштовано або немає даних</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if report.extra.campaigns %}
+  <div class="mkt-card">
+    {{ ad_table_head("Топ кампаній") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("Кампанія") }}
+          {{ ad_th("Тип", "campaign_type", sort='string') }}
+          {{ ad_th("Витрати", sort='num') }}
+          {{ ad_th("Дохід Google", sort='num') }}
+          {{ ad_th("Конверсії", sort='num') }}
+          {{ ad_th("ROAS", sort='num') }}
+          {{ ad_th("CRM замовлення", sort='num') }}
+          {{ ad_th("Δ замовлення", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for c in report.extra.campaigns %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td>{{ c.type }}</td>
+            <td data-value="{{ c.spend }}">{{ c.spend | fmt_ua }} {{ cur }}</td>
+            <td data-value="{{ c.gads_revenue or c.revenue or 0 }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ (c.gads_revenue or c.revenue or 0) | fmt_ua }} {{ cur }}</span>
+                {{ ad_delta_pct(c.delta_revenue_pct) }}
+              </div>
+            </td>
+            <td data-value="{{ c.gads_conversions or c.conversions or 0 }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ c.gads_conversions or c.conversions or 0 }}</span>
+                {{ ad_delta_pct(c.delta_conversions_pct) }}
+              </div>
+            </td>
+            <td data-value="{{ c.gads_roas_pct or c.roas_pct or 0 }}">{{ c.gads_roas_pct or c.roas_pct or '—' }}</td>
+            <td data-value="{{ c.crm_orders or 0 }}">{{ c.crm_orders or 0 }}</td>
+            <td data-value="{{ c.delta_orders_pct if c.delta_orders_pct is not none else '' }}">{{ ad_delta_pct(c.delta_orders_pct) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ ad_estimated_roas_note() }}
+    <p class="mkt-table-note">Δ замовлення, конверсії та дохід — {{ report.period.compare_label }}.</p>
+  </div>
+  {% endif %}
+
+  {% if report.top_brands %}
+  {{ ad_paid_brands_table("Топ брендів (CRM, Google Ads)", report.top_brands, report.period.compare_label) }}
+  {% endif %}
+
+  {% if report.extra.keywords %}
+  <div class="mkt-card">
+    {{ ad_table_head("Топ ключових слів") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("Ключове слово") }}
+          {{ ad_th("Тип відповідності") }}
+          {{ ad_th("Покази", sort='num') }}
+          {{ ad_th("Кліки", sort='num') }}
+          {{ ad_th("CTR", sort='num') }}
+          {{ ad_th("CPC", sort='num') }}
+          {{ ad_th("Конверсії", sort='num') }}
+          {{ ad_th("Якість", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for kw in report.extra.keywords %}
+          <tr>
+            <td>{{ kw.keyword }}</td>
+            <td>{{ kw.match_type }}</td>
+            <td data-value="{{ kw.impressions or 0 }}">{{ (kw.impressions or 0) | fmt_ua }}</td>
+            <td data-value="{{ kw.clicks }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ kw.clicks | fmt_ua }}</span>
+                {{ ad_delta_pct(kw.delta_clicks_pct) }}
+              </div>
+            </td>
+            <td data-value="{{ kw.ctr or 0 }}">{{ kw.ctr or 0 }}%</td>
+            <td data-value="{{ kw.cpc or 0 }}">{{ kw.cpc or 0 }} {{ cur }}</td>
+            {{ ad_metric_with_delta(kw.conversions or 0, kw.conversions or 0, kw.delta_conversions_pct) }}
+            <td>{{ kw.quality_score or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ════════════════════════════════════════════════════════════
+     META ADS
+  ════════════════════════════════════════════════════════════ #}
+  {% elif s == 'meta' %}
+  {% set cur = k.currency_suffix or '$' %}
+
+  <div class="kpi-row kpi-row--overview">
+    {{ kpi_card("Витрати", k.spend | fmt_ua_compact ~ " " ~ cur, d.get('spend_pct'), icon_spend, 'blue', false, '', kpi_cmp, (k.spend | fmt_ua ~ " " ~ cur)) }}
+    {{ kpi_card("Дохід CRM", k.crm_revenue | fmt_ua_compact ~ " ₴", d.get('crm_revenue_pct'), icon_revenue, 'green', false, '', kpi_cmp, (k.crm_revenue | fmt_ua ~ " ₴"), help_key='revenue_crm') }}
+    {{ kpi_card("ROAS CRM", k.roas_pct if k.roas_pct else "—", d.get('roas_pct'), icon_roas, 'purple', false, '', kpi_cmp) }}
+    {{ kpi_card("ROAS Meta", k.meta_roas_pct if k.meta_roas_pct else "—", d.get('meta_roas_pct'), icon_roas, 'indigo', false, '', kpi_cmp, '', help_key='roas_meta') }}
+    {{ kpi_card("Покази", k.impressions | fmt_ua, d.get('impressions_pct'), icon_imp, 'teal', false) }}
+    {{ kpi_card("Охоплення", (k.reach | fmt_ua) if k.reach else "—", d.get('reach_pct'), icon_reach, 'indigo', false) }}
+    {{ kpi_card("Частота", k.frequency if k.frequency else "—", none, icon_freq, 'pink', false) }}
+  </div>
+  <div class="kpi-row kpi-row--overview">
+    {% set ctr = (100 * k.clicks / k.impressions | round(2)) if k.impressions and k.clicks else none %}
+    {% set cpc = (k.spend / k.clicks | round(2)) if k.clicks else none %}
+    {{ kpi_card("Кліки", k.clicks | fmt_ua, d.get('clicks_pct'), icon_clicks, 'blue', false, '', kpi_cmp) }}
+    {{ kpi_card("CTR",        (ctr | string ~ "%") if ctr else "—",              none, icon_ctr,  'blue',   false) }}
+    {{ kpi_card("CPC",        (cpc | fmt_ua ~ " " ~ cur) if cpc else "—",             none, icon_cpc,  'yellow', true) }}
+    {{ kpi_card("CPM",        (k.cpm | fmt_ua ~ " " ~ cur) if k.cpm else "—",         none, icon_imp,  'gray',   true) }}
+    {{ kpi_card("CRM замовлення", k.crm_orders | fmt_ua, d.get('crm_orders_pct'), icon_conv, 'green', false, '', kpi_cmp) }}
+    {{ kpi_card("Дохід Meta", (k.meta_revenue | fmt_ua_compact ~ " " ~ cur) if k.meta_revenue is not none else "—", d.get('meta_revenue_pct'), icon_revenue, 'teal', false, '', kpi_cmp, ((k.meta_revenue | fmt_ua ~ " " ~ cur) if k.meta_revenue is not none else ''), help_key='revenue_meta') }}
+    {{ kpi_card("Покупки Meta", k.purchases | fmt_ua if k.purchases else "—", d.get('purchases_pct'), icon_orders, 'teal', false, '', kpi_cmp, '', help_key='meta_purchases') }}
+    {{ kpi_card("CPA CRM", (k.crm_cpa | fmt_ua_compact ~ " ₴") if k.crm_cpa else "—", d.get('crm_cpa_pct'), icon_cpa, 'orange', true, '', kpi_cmp if k.crm_cpa else '', help_key='cpa_crm') }}
+    {{ kpi_card("CPA Meta", (k.cpa | fmt_ua_compact ~ " " ~ cur) if k.cpa else "—", d.get('cpa_pct'), icon_cpa, 'yellow', true, '', kpi_cmp if k.cpa else '', help_key='cpa_meta') }}
+    {{ kpi_card("Коефіцієнт конверсії", k.conversion_rate_pct or "—", d.get('conversion_rate_pct'), icon_conv, 'green', false, '', kpi_cmp) }}
+  </div>
+  <p class="mkt-note" style="margin: -4px 0 12px; font-size: 12px; color: #6b7280;">
+    Meta Ads: витрати, покази, охоплення, CTR/CPC/CPM і покупки — з Ads Manager ({{ k.currency or 'USD' }}).
+    Дохід CRM і кількість замовлень — успішні замовлення з адмінки Cosmy за UTM Facebook/Instagram:
+    {{ k.crm_orders | fmt_ua }} шт., {{ k.crm_revenue | fmt_ua }} ₴.
+    {% if k.meta_roas_pct and k.meta_roas_pct != '—' %}ROAS Meta: {{ k.meta_roas_pct }}.{% endif %}
+  </p>
+
+  <div class="mkt-two-col">
+    <div class="mkt-card">
+      {{ ad_chart_granularity_head("Динаміка (Витрати / Дохід CRM / ROAS)", "Витрати в ₴, дохід CRM і ROAS") }}
+      <div class="mkt-chart-wrap">
+        <canvas id="mktMainChart"
+          data-chart='{{ report.chart | tojson }}'
+          data-mode="default"></canvas>
+      </div>
+    </div>
+    <div class="mkt-card">
+      <div class="mkt-card__head"><h2 class="mkt-card__title">Витрати за плейсментами</h2></div>
+      {% if report.donut and report.donut.labels %}
+      <div class="mkt-donut-centered">
+        <canvas id="typeDonut" data-donut='{{ report.donut | tojson }}' data-center-label="Плейсменти"></canvas>
+      </div>
+      <div class="mkt-donut-legend-row">
+        {% for item in report.donut.legend %}
+        <span class="mkt-legend-chip" style="--dot:{{ item.color }}">{{ item.label }} {{ item.pct }}%</span>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="mkt-empty">Немає даних по плейсментах</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if report.extra.campaigns %}
+  <div class="mkt-card">
+    {{ ad_table_head("Топ кампаній") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("Кампанія") }}
+          {{ ad_th("Ціль", sort='string') }}
+          {{ ad_th("Витрати", sort='num') }}
+          {{ ad_th("Дохід CRM", sort='num') }}
+          {{ ad_th("CRM замовлення", sort='num') }}
+          {{ ad_th("ROAS CRM", sort='num') }}
+          {{ ad_th("Дохід Meta", sort='num') }}
+          {{ ad_th("Покупки Meta", sort='num') }}
+          {{ ad_th("Δ замовлення", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for c in report.extra.campaigns %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td>{{ c.objective or '—' }}</td>
+            <td data-value="{{ c.spend }}">{{ c.spend | fmt_ua }} {{ cur }}</td>
+            <td data-value="{{ c.crm_revenue or 0 }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ (c.crm_revenue or 0) | fmt_ua }} ₴</span>
+                {{ ad_delta_pct(c.delta_revenue_pct) }}
+              </div>
+            </td>
+            <td data-value="{{ c.crm_orders or 0 }}">{{ c.crm_orders or 0 }}</td>
+            <td>{{ c.roas_pct or '—' }}</td>
+            <td data-value="{{ c.meta_revenue or 0 }}">{{ (c.meta_revenue or 0) | fmt_ua }} {{ cur }}</td>
+            <td data-value="{{ c.meta_purchases or c.purchases or 0 }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ c.meta_purchases or c.purchases or 0 }}</span>
+                {{ ad_delta_pct(c.delta_conversions_pct) }}
+              </div>
+            </td>
+            <td data-value="{{ c.delta_orders_pct if c.delta_orders_pct is not none else '' }}">{{ ad_delta_pct(c.delta_orders_pct) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ ad_estimated_roas_note() }}
+    <p class="mkt-table-note">Δ замовлення CRM і дохід CRM — {{ report.period.compare_label }}. Дохід Meta — purchase_value з Ads Manager.</p>
+  </div>
+  {% endif %}
+
+  {% if report.top_brands %}
+  {{ ad_paid_brands_table("Топ брендів (CRM, Meta)", report.top_brands, report.period.compare_label) }}
+  {% endif %}
+
+  {% if report.extra.audience %}
+  <div class="mkt-card">
+    {{ ad_table_head("Розподіл за аудиторією (стать / вік)") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("Сегмент") }}
+          {{ ad_th("Витрати", sort='num') }}
+          {{ ad_th("Покази", sort='num') }}
+          {{ ad_th("Кліки", sort='num') }}
+          {{ ad_th("Охоплення", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for a in report.extra.audience %}
+          <tr>
+            <td>{{ a.segment }}</td>
+            <td data-value="{{ a.spend }}">{{ a.spend | fmt_ua }} {{ cur }}</td>
+            <td data-value="{{ a.impressions }}">{{ a.impressions | fmt_ua }}</td>
+            <td data-value="{{ a.clicks }}">{{ a.clicks | fmt_ua }}</td>
+            <td data-value="{{ a.reach }}">{{ a.reach | fmt_ua }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ════════════════════════════════════════════════════════════
+     SEO
+  ════════════════════════════════════════════════════════════ #}
+  {% elif s == 'seo' %}
+
+  <div class="kpi-row kpi-row--overview kpi-row--cols-3">
+    {{ kpi_card("Кліки GSC", (k.gsc_clicks | fmt_ua) if k.gsc_clicks is not none else "—", d.get('organic_clicks_pct'), icon_organic, 'green', false, '', kpi_cmp) }}
+    {{ kpi_card("Дохід CRM", k.revenue | fmt_ua_compact ~ " ₴", d.get('revenue_pct'), icon_revenue, 'teal', false, '', kpi_cmp, (k.revenue | fmt_ua ~ " ₴")) }}
+    {{ kpi_card("Замовлення", k.orders | fmt_ua, d.get('orders_pct'), icon_conv, 'blue', false, '', kpi_cmp) }}
+    {{ kpi_card("Коефіцієнт конверсії", k.conversion_rate_pct or "—", d.get('conversion_rate_pct'), icon_conv, 'teal', false, '', kpi_cmp) }}
+    {{ kpi_card("CTR (з видачі)", (k.organic_ctr | string ~ "%") if k.organic_ctr else "—", none, icon_ctr, 'pink', false) }}
+    {{ kpi_card("Сесії GA4", (k.ga4_sessions | fmt_ua) if k.ga4_sessions else "—", d.get('ga4_sessions_pct'), icon_sessions, 'indigo', false, '', kpi_cmp) }}
+  </div>
+  <div class="kpi-row kpi-row--overview kpi-row--cols-3">
+    {{ kpi_card("KW в ТОП-10", (k.kw_top10 | string) if k.kw_top10 is not none else "—", none, icon_clicks, 'green', false) }}
+    {{ kpi_card("KW в ТОП-3", (k.kw_top3 | string) if k.kw_top3 is not none else "—", none, icon_clicks, 'blue', false) }}
+    {{ kpi_card("Індексовані сторінки", (k.indexed_pages | fmt_ua) if k.indexed_pages else "—", none, icon_imp, 'purple', false) }}
+    {{ kpi_card("Реферальні домени", (k.referring_domains | string) if k.referring_domains is not none else "—", none, icon_reach, 'teal', false) }}
+    {{ kpi_card("Показник відмов", (k.bounce_rate | string ~ "%") if k.bounce_rate else "—", d.get('bounce_rate_pct'), icon_cpa, 'orange', true, '', kpi_cmp) }}
+    {{ kpi_card("Сторінок / сесію", (k.pages_per_session | string) if k.pages_per_session else "—", none, icon_avg, 'gray', false) }}
+    {{ kpi_card("Витрати SEO", (k.spend | fmt_ua_compact ~ " ₴") if k.spend else "0 ₴", d.get('spend_pct'), icon_spend, 'orange', false, '', kpi_cmp, ((k.spend | fmt_ua ~ " ₴") if k.spend else "0 ₴")) }}
+    {{ kpi_card("ROAS CRM", k.roas_pct if k.roas_pct else "—", d.get('roas_pct'), icon_roas, 'purple', false, '', kpi_cmp if k.roas_pct else '', help_key='roas') }}
+  </div>
+  <p class="mkt-table-note">Витрати SEO — сума записів нижче за обраний період. ROAS CRM = дохід CRM ÷ витрати SEO.</p>
+  {% if report.gsc_data_note %}
+  <p class="mkt-period-note mkt-period-note--warn">{{ report.gsc_data_note }}</p>
+  {% endif %}
+
+  <div class="mkt-card mkt-card--seo-expenses" id="mktSeoExpenses"
+       data-period-from="{{ report.period.from_iso[:10] }}"
+       data-period-to="{{ report.period.to_iso[:10] }}">
+    <div class="mkt-card__head mkt-card__head--inline">
+      <h2 class="mkt-card__title">Витрати на SEO</h2>
+      <span class="mkt-muted" id="mktSeoExpensesTotal">
+        Разом за період: {{ (report.extra.seo_expenses_total if report.extra else 0) | fmt_ua }} ₴
+      </span>
+    </div>
+    <form id="mktSeoExpenseForm" class="mkt-seo-expense-form">
+      <input type="hidden" name="expense_id" id="mktSeoExpenseId" value="">
+      <label class="mkt-seo-expense-form__field">
+        <span>Дата</span>
+        <input type="date" name="expense_date" id="mktSeoExpenseDate" required>
+      </label>
+      <label class="mkt-seo-expense-form__field">
+        <span>Сума, ₴</span>
+        <input type="number" name="amount_uah" id="mktSeoExpenseAmount" min="0.01" step="0.01" required placeholder="0.00">
+      </label>
+      <label class="mkt-seo-expense-form__field mkt-seo-expense-form__field--grow">
+        <span>За що (опис)</span>
+        <input type="text" name="description" id="mktSeoExpenseDescription" maxlength="500" required placeholder="Напр. лінкбілдинг, копірайт, SEO-аудит">
+      </label>
+      <div class="mkt-seo-expense-form__actions">
+        <button type="submit" class="mkt-period-form__btn mkt-period-form__btn--apply" id="mktSeoExpenseSubmit">Додати витрату</button>
+        <button type="button" class="mkt-period-form__btn" id="mktSeoExpenseCancel" hidden>Скасувати</button>
+      </div>
+    </form>
+    <p class="mkt-table-note mkt-seo-expense-form__error" id="mktSeoExpenseError" hidden></p>
+    <div class="mkt-table-wrap">
+      <table class="mkt-table mkt-table--compact" id="mktSeoExpensesTable" data-sortable>
+        <thead><tr>
+          {{ ad_th("Дата", sort='num') }}
+          {{ ad_th("Сума", sort='num') }}
+          {{ ad_th("Опис") }}
+          <th></th>
+        </tr></thead>
+        <tbody>
+          {% for row in (report.extra.seo_expenses if report.extra else []) or [] %}
+          <tr data-expense-id="{{ row.id }}">
+            <td data-value="{{ row.expense_date }}">{{ row.expense_date }}</td>
+            <td data-value="{{ row.amount_uah }}">{{ row.amount_uah | fmt_ua }} ₴</td>
+            <td>{{ row.description }}</td>
+            <td class="mkt-seo-expense-actions">
+              <button type="button" class="mkt-seo-expense-btn mkt-seo-expense-edit"
+                data-id="{{ row.id }}"
+                data-date="{{ row.expense_date }}"
+                data-amount="{{ row.amount_uah }}"
+                data-description="{{ row.description }}">Редагувати</button>
+              <button type="button" class="mkt-seo-expense-btn mkt-seo-expense-btn--danger mkt-seo-expense-delete"
+                data-id="{{ row.id }}">Видалити</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr class="mkt-seo-expense-empty"><td colspan="4" class="mkt-empty-cell">Немає витрат за обраний період — додайте першу вище</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="mkt-two-col">
+    <div class="mkt-card">
+      {{ ad_chart_granularity_head("Динаміка (Трафік / Дохід)", "Кліки GSC та дохід CRM") }}
+      <div class="mkt-chart-wrap">
+        <canvas id="mktMainChart"
+          data-chart='{{ report.chart | tojson }}'
+          data-mode="seo"></canvas>
+      </div>
+      <div class="mkt-chart-legend">
+        <span class="mkt-legend-chip" style="--dot:#34A853">● Кліки GSC</span>
+        <span class="mkt-legend-chip" style="--dot:#4285F4">● Дохід CRM</span>
+      </div>
+    </div>
+    <div class="mkt-card">
+      <div class="mkt-card__head"><h2 class="mkt-card__title">Трафік за типом сторінок</h2></div>
+      {% if report.donut and report.donut.labels %}
+      <div class="mkt-donut-centered">
+        <canvas id="typeDonut" data-donut='{{ report.donut | tojson }}' data-center-label="Сторінки"></canvas>
+      </div>
+      <div class="mkt-donut-legend-row">
+        {% for item in report.donut.legend %}
+        <span class="mkt-legend-chip" style="--dot:{{ item.color }}">{{ item.label }} {{ item.pct }}%</span>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="mkt-empty">Немає даних по сторінках</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if report.extra.queries %}
+  <div class="mkt-card">
+    {{ ad_table_head("Топ ключових слів") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("Ключове слово") }}
+          {{ ad_th("Позиція", sort='num') }}
+          {{ ad_th("Зміна", sort='num') }}
+          {{ ad_th("Кліки", sort='num') }}
+          {{ ad_th("URL") }}
+        </tr></thead>
+        <tbody>
+          {% for q in report.extra.queries %}
+          <tr>
+            <td>{{ q.key }}</td>
+            <td data-value="{{ q.position or 0 }}">{{ q.position or '—' }}</td>
+            <td data-value="{{ q.position_change or 0 }}">
+              {% if q.position_change %}
+                {% if q.position_change > 0 %}
+                  <span class="delta-good">↑ +{{ q.position_change }}</span>
+                {% else %}
+                  <span class="delta-bad">↓ {{ q.position_change }}</span>
+                {% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td data-value="{{ q.clicks }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ q.clicks | fmt_ua }}</span>
+                {{ ad_delta_pct(q.delta_clicks_pct) }}
+              </div>
+            </td>
+            <td class="td-url">{{ q.page or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if report.top_brands %}
+  <div class="mkt-card">
+    {{ ad_table_head("Топ брендів (CRM, SEO)") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("Бренд") }}
+          {{ ad_th("Замовлення", sort='num') }}
+          {{ ad_th("Δ замовлення", sort='num') }}
+          {{ ad_th("Дохід", sort='num') }}
+          {{ ad_th("Δ дохід", sort='num') }}
+          {{ ad_th("Частка", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for b in report.top_brands %}
+          <tr>
+            <td>{{ b.brand }}</td>
+            <td data-value="{{ b.orders }}">{{ b.orders | fmt_ua }}</td>
+            <td data-value="{{ b.delta_orders_pct if b.delta_orders_pct is not none else '' }}">{{ ad_delta_pct(b.delta_orders_pct) }}</td>
+            <td data-value="{{ b.revenue }}">{{ b.revenue | fmt_ua }} ₴</td>
+            <td data-value="{{ b.delta_revenue_pct if b.delta_revenue_pct is not none else '' }}">{{ ad_delta_pct(b.delta_revenue_pct) }}</td>
+            <td>{{ b.revenue_share_pct or 0 }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="mkt-table-note">Δ замовлення і Δ дохід — {{ report.period.compare_label }}.</p>
+  </div>
+  {% endif %}
+
+  {% if report.extra.landing_pages %}
+  <div class="mkt-card">
+    {{ ad_table_head("Топ посадкових сторінок") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("URL") }}
+          {{ ad_th("Кліки GSC", sort='num') }}
+          {{ ad_th("Замовлення", sort='num') }}
+          {{ ad_th("Дохід", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for page in report.extra.landing_pages %}
+          <tr>
+            <td class="td-url">{{ page.url }}</td>
+            <td data-value="{{ page.clicks }}">{{ page.clicks | fmt_ua }}</td>
+            <td data-value="{{ page.orders }}">{{ page.orders | fmt_ua }}</td>
+            <td data-value="{{ page.revenue }}">{{ page.revenue | fmt_ua }} ₴</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ════════════════════════════════════════════════════════════
+     DIRECT
+  ════════════════════════════════════════════════════════════ #}
+  {% elif s == 'direct' %}
+
+  <div class="kpi-row kpi-row--overview kpi-row--cols-3">
+    {{ kpi_card("Сесії", (k.sessions | fmt_ua) if k.sessions is defined else (k.orders | fmt_ua), d.get('sessions_pct') or d.get('orders_pct'), icon_sessions, 'blue', false, '', kpi_cmp) }}
+    {{ kpi_card("Дохід", k.revenue | fmt_ua_compact ~ " ₴", d.get('revenue_pct'), icon_revenue, 'green', false, '', kpi_cmp, (k.revenue | fmt_ua ~ " ₴")) }}
+    {{ kpi_card("Замовлення", (k.conversions | fmt_ua) if k.conversions is defined else (k.orders | fmt_ua), d.get('orders_pct'), icon_conv, 'teal', false, '', kpi_cmp) }}
+    {{ kpi_card("Коефіцієнт конверсії", k.conversion_rate_pct or "—", d.get('conversion_rate_pct'), icon_conv, 'green', false, '', kpi_cmp) }}
+    {{ kpi_card("Середній чек", (k.avg_check | fmt_ua_compact ~ " ₴") if k.avg_check else "—", d.get('avg_check_pct'), icon_avg, 'orange', false, '', kpi_cmp if k.avg_check else '', ((k.avg_check | fmt_ua ~ " ₴") if k.avg_check else '')) }}
+    {{ kpi_card("Показник відмов", (k.bounce_rate | string ~ "%") if k.bounce_rate else "—", d.get('bounce_rate_pct'), icon_cpa, 'pink', true, '', kpi_cmp) }}
+    {{ kpi_card("Сторінок / сесію", (k.pages_per_session | string) if k.pages_per_session else "—", none, icon_imp, 'indigo', false) }}
+  </div>
+  <p class="mkt-table-note">Прямий трафік — відвідування без UTM і без зовнішнього referer (закладки, введення URL, месенджери без міток). Дохід і замовлення — з CRM Cosmy за правилами атрибуції direct.</p>
+
+  <div class="mkt-two-col">
+    <div class="mkt-card mkt-card--chart">
+      {{ ad_chart_granularity_head("Динаміка", "Сесії та дохід") }}
+      <div class="mkt-chart-wrap">
+        <canvas id="mktMainChart"
+          data-chart='{{ report.chart | tojson }}'
+          data-mode="direct"></canvas>
+      </div>
+    </div>
+    <div class="mkt-card">
+      <div class="mkt-card__head"><h2 class="mkt-card__title">Сесії за пристроями</h2></div>
+      <div class="mkt-chart-wrap">
+        <canvas id="typeDonut"
+          data-mode="devices"
+          data-devices='{{ report.extra.devices | tojson }}'
+          data-bar="true"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {% if report.extra.landing_pages %}
+  <div class="mkt-card">
+    {{ ad_table_head("Топ посадкових сторінок (прямий трафік)") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("Сторінка") }}
+          {{ ad_th("Сесії", sort='num') }}
+          {{ ad_th("Замовлення", sort='num') }}
+          {{ ad_th("Дохід", sort='num') }}
+          {{ ad_th("Показник відмов", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for page in report.extra.landing_pages %}
+          <tr>
+            <td class="td-url">{{ page.page }}</td>
+            <td data-value="{{ page.sessions }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ page.sessions | fmt_ua }}</span>
+                {{ ad_delta_pct(page.delta_sessions_pct) }}
+              </div>
+            </td>
+            {{ ad_metric_with_delta(page.conversions | fmt_ua, page.conversions, page.delta_orders_pct) }}
+            <td data-value="{{ page.revenue }}">
+              <div class="mkt-metric-with-delta">
+                <span>{{ page.revenue | fmt_ua }} ₴</span>
+                {{ ad_delta_pct(page.delta_revenue_pct) }}
+              </div>
+            </td>
+            <td>{% if page.bounce_rate %}{{ page.bounce_rate }}%{% else %}—{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if report.top_brands %}
+  {{ ad_crm_brands_table("Топ брендів (CRM, Direct)", report.top_brands, report.period.compare_label) }}
+  {% endif %}
+
+  {# ════════════════════════════════════════════════════════════
+     OTHER
+  ════════════════════════════════════════════════════════════ #}
+  {% elif s == 'other' %}
+
+  <div class="kpi-row kpi-row--overview kpi-row--cols-3">
+    {{ kpi_card("Сесії", (k.sessions | fmt_ua) if k.sessions is defined else (k.orders | fmt_ua), d.get('sessions_pct'), icon_sessions, 'blue', false, '', kpi_cmp) }}
+    {{ kpi_card("Дохід", k.revenue | fmt_ua_compact ~ " ₴", d.get('revenue_pct'), icon_revenue, 'green', false, '', kpi_cmp, (k.revenue | fmt_ua ~ " ₴")) }}
+    {{ kpi_card("Замовлення", k.orders | fmt_ua, d.get('orders_pct'), icon_conv, 'teal', false, '', kpi_cmp) }}
+    {{ kpi_card("Коефіцієнт конверсії", k.conversion_rate_pct or "—", d.get('conversion_rate_pct'), icon_conv, 'green', false, '', kpi_cmp) }}
+    {{ kpi_card("Частка в доході", (k.revenue_share_pct | string ~ "%") if k.revenue_share_pct is defined and k.revenue_share_pct is not none else "—", none, icon_roas, 'purple', false) }}
+    {{ kpi_card("К-сть джерел", k.n_sources | string if k.n_sources is defined else "—", none, icon_sessions, 'orange', false) }}
+    {{ kpi_card("Середній чек", (k.avg_check | fmt_ua_compact ~ " ₴") if k.avg_check else "—", none, icon_avg, 'pink', false, '', '', ((k.avg_check | fmt_ua ~ " ₴") if k.avg_check else '')) }}
+  </div>
+  <p class="mkt-table-note">Інші джерела — email-розсилки, реферальні сайти, платний трафік без Google/Meta (наприклад, utm_medium=cpc без google у source), а також замовлення з нестандартними UTM. На огляді email і referral зведені в один рядок «Інші джерела».</p>
+
+  <div class="mkt-two-col">
+    <div class="mkt-card">
+      {{ ad_chart_granularity_head("Динаміка", "Дохід і замовлення CRM") }}
+      <div class="mkt-chart-wrap">
+        <canvas id="mktMainChart"
+          data-chart='{{ report.chart | tojson }}'
+          data-mode="direct"></canvas>
+      </div>
+    </div>
+    {% if report.donut and report.donut.labels %}
+    <div class="mkt-card">
+      <div class="mkt-card__head"><h2 class="mkt-card__title">Розподіл за джерелами</h2></div>
+      <div class="mkt-donut-centered">
+        <canvas id="typeDonut" data-donut='{{ report.donut | tojson }}' data-center-label="Джерела"></canvas>
+      </div>
+      <div class="mkt-donut-legend-row">
+        {% for item in report.donut.legend %}
+        <span class="mkt-legend-chip" style="--dot:{{ item.color }}">{{ item.label }} {{ item.pct }}%</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if report.extra.sources %}
+  <div class="mkt-card">
+    {{ ad_table_head("Джерела трафіку") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("Джерело (домен)") }}
+          {{ ad_th("Тип", "source_type", sort='string') }}
+          {{ ad_th("Замовлення", sort='num') }}
+          {{ ad_th("Δ замовлення", sort='num') }}
+          {{ ad_th("Дохід", sort='num') }}
+          {{ ad_th("Δ дохід", sort='num') }}
+          {{ ad_th("Частка в «Інших»", "channel_share", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for src in report.extra.sources %}
+          <tr>
+            <td class="td-url">{{ src.source }}</td>
+            <td>{{ src.type or 'Реферальний' }}</td>
+            <td data-value="{{ src.orders }}">{{ src.orders | fmt_ua }}</td>
+            <td data-value="{{ src.delta_orders_pct if src.delta_orders_pct is not none else '' }}">{{ ad_delta_pct(src.delta_orders_pct) }}</td>
+            <td data-value="{{ src.revenue }}">{{ src.revenue | fmt_ua }} ₴</td>
+            <td data-value="{{ src.delta_revenue_pct if src.delta_revenue_pct is not none else '' }}">{{ ad_delta_pct(src.delta_revenue_pct) }}</td>
+            <td data-value="{{ src.share_pct }}">{{ src.share_pct }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="mkt-table-note">Δ замовлення і Δ дохід — {{ report.period.compare_label }}. «Частка в «Інших»» — % від доходу лише цього розділу (не всього магазину).</p>
+  </div>
+  {% endif %}
+
+  {% if report.top_brands %}
+  {{ ad_crm_brands_table("Топ брендів (CRM, інші джерела)", report.top_brands, report.period.compare_label) }}
+  {% endif %}
+
+  {# ════════════════════════════════════════════════════════════
+     BUSINESS
+  ════════════════════════════════════════════════════════════ #}
+  {% elif s == 'business' %}
+  {% set biz = report.extra.business if report.extra else none %}
+  <div class="kpi-row kpi-row--overview">
+    {{ kpi_card("Дохід", k.revenue | fmt_ua_compact ~ " ₴", d.get('revenue_pct'), icon_revenue, 'green', false, '', kpi_cmp) }}
+    {{ kpi_card("Замовлення", k.orders | fmt_ua, d.get('orders_pct'), icon_orders, 'blue', false, '', kpi_cmp) }}
+    {{ kpi_card("Коефіцієнт конверсії", k.conversion_rate_pct or "—", d.get('conversion_rate_pct'), icon_conv, 'teal', false, '', kpi_cmp) }}
+    {{ kpi_card("ROAS", k.roas_pct if k.roas_pct else "—", d.get('roas_pct'), icon_roas, 'purple', false) }}
+    {% set spend_prefix = '≈ ' if k.spend_approximate else '' %}
+    {{ kpi_card("Витрати", spend_prefix ~ (k.spend | fmt_ua_compact) ~ " ₴", d.get('spend_pct'), icon_spend, 'orange', false, '', kpi_cmp) }}
+  </div>
+  {% if k.spend_fx_note %}
+  <p class="mkt-table-note">{{ k.spend_fx_note }}</p>
+  {% endif %}
+  {% if biz %}
+  <div class="mkt-business-grid mkt-business-grid--full">
+    <div class="mkt-card mkt-card--mini">
+      <h3 class="mkt-card__title">Топ канали (UTM)</h3>
+      <table class="mkt-mini-table" data-sortable>
+        <thead><tr>{{ ad_th("Канал", help_key='marketing_channel') }}{{ ad_th("Дохід", sort='num') }}{{ ad_th("Замовлення", sort='num') }}{{ ad_th("Частка", sort='num') }}</tr></thead>
+        <tbody>
+          {% for row in biz.top_channels or biz.top_categories %}
+          <tr>
+            <td>{{ row.label or row.name }}</td>
+            <td data-value="{{ row.revenue }}">{{ row.revenue | fmt_ua }} ₴</td>
+            <td data-value="{{ row.orders or 0 }}">{{ (row.orders or 0) | fmt_ua }}</td>
+            <td>{{ row.share_pct }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="mkt-table-note">Дохід атрибутовано за UTM замовлення → маркетинговий канал. Збігається з таблицею «Канали» на огляді.</p>
+    </div>
+    {% if biz.top_utm_tags %}
+    <div class="mkt-card mkt-card--wide">
+      <h3 class="mkt-card__title">Топ UTM-мітки → канал</h3>
+      <div class="mkt-table-wrap">
+        <table class="mkt-table mkt-table--compact" data-sortable>
+          <thead><tr>
+            {{ ad_th("utm_source") }}
+            {{ ad_th("utm_medium") }}
+            {{ ad_th("utm_campaign") }}
+            {{ ad_th("Канал") }}
+            {{ ad_th("Дохід", sort='num') }}
+            {{ ad_th("Замовлення", sort='num') }}
+            {{ ad_th("Частка", sort='num') }}
+          </tr></thead>
+          <tbody>
+            {% for row in biz.top_utm_tags %}
+            <tr>
+              <td><code>{{ row.utm_source }}</code></td>
+              <td><code>{{ row.utm_medium }}</code></td>
+              <td>{% if row.utm_campaign %}<code>{{ row.utm_campaign }}</code>{% else %}—{% endif %}</td>
+              <td>{{ row.channel_label }}</td>
+              <td data-value="{{ row.revenue }}">{{ row.revenue | fmt_ua }} ₴</td>
+              <td data-value="{{ row.orders }}">{{ row.orders | fmt_ua }}</td>
+              <td>{{ row.share_pct }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="mkt-table-note">Якщо в замовленні немає UTM — береться перше джерело клієнта з Cosmy (<code>source_utm_*</code>). «—» = порожнє поле.</p>
+    </div>
+    {% endif %}
+    {% if biz.utm_audit %}
+    <div class="mkt-card mkt-card--wide">
+      <h3 class="mkt-card__title">Аудит UTM — що перевірити</h3>
+      <div class="mkt-table-wrap">
+        <table class="mkt-table mkt-table--compact" data-sortable>
+          <thead><tr>
+            {{ ad_th("utm_source") }}
+            {{ ad_th("utm_medium") }}
+            {{ ad_th("utm_campaign") }}
+            {{ ad_th("Канал", help_key='marketing_channel') }}
+            {{ ad_th("Дохід", sort='num') }}
+            {{ ad_th("Замовлення", sort='num') }}
+            {{ ad_th("Коментар") }}
+          </tr></thead>
+          <tbody>
+            {% for row in biz.utm_audit %}
+            <tr>
+              <td><code>{{ row.utm_source }}</code></td>
+              <td><code>{{ row.utm_medium }}</code></td>
+              <td>{% if row.utm_campaign %}<code>{{ row.utm_campaign }}</code>{% else %}—{% endif %}</td>
+              <td>{{ row.channel_label }}</td>
+              <td data-value="{{ row.revenue }}">{{ row.revenue | fmt_ua }} ₴</td>
+              <td data-value="{{ row.orders }}">{{ row.orders | fmt_ua }}</td>
+              <td class="mkt-utm-audit-warn">{{ row.warning }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="mkt-table-note">Рядки з доходом ≥ 500 ₴, де UTM виглядають неоднозначно. Після оновлення правил (Google-кампанії, sms/viber, referer=missing) більшість «зливів» уже виправлено автоматично.</p>
+    </div>
+    {% endif %}
+    {% if biz.utm_rules %}
+    <div class="mkt-card mkt-card--wide">
+      <h3 class="mkt-card__title">Правила: які UTM куди потрапляють</h3>
+      <div class="mkt-table-wrap">
+        <table class="mkt-table mkt-table--compact">
+          <thead><tr>{{ ad_th("Канал") }}{{ ad_th("Умови атрибуції") }}</tr></thead>
+          <tbody>
+            {% for rule in biz.utm_rules %}
+            <tr><td><strong>{{ rule.channel }}</strong></td><td>{{ rule.rules }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+    {% if biz.top_cosmy_categories %}
+    <div class="mkt-card mkt-card--mini">
+      <h3 class="mkt-card__title">Категорії Cosmy feed (довідково)</h3>
+      <table class="mkt-mini-table" data-sortable>
+        <thead><tr>{{ ad_th("source_category") }}{{ ad_th("Дохід", sort='num') }}{{ ad_th("Частка", sort='num') }}</tr></thead>
+        <tbody>
+          {% for row in biz.top_cosmy_categories %}
+          <tr>
+            <td>{{ row.label or row.name }}</td>
+            <td data-value="{{ row.revenue }}">{{ row.revenue | fmt_ua }} ₴</td>
+            <td>{{ row.share_pct }}%</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="mkt-table-note">Поле <code>source_category</code> на рівні клієнта в фіді Cosmy — груба класифікація (ads/organic/unknown). Не збігається 1:1 з UTM-каналами вище.</p>
+    </div>
+    {% endif %}
+    <div class="mkt-card mkt-card--mini">
+      <h3 class="mkt-card__title">Топ бренди</h3>
+      <table class="mkt-mini-table" data-sortable>
+        <thead><tr>{{ ad_th("Бренд") }}{{ ad_th("Замовлення", sort='num') }}{{ ad_th("Дохід", sort='num') }}{{ ad_th("Частка", sort='num') }}</tr></thead>
+        <tbody>{% for b in report.top_brands %}<tr><td>{{ b.brand }}</td>{{ ad_metric_with_delta(b.orders | fmt_ua, b.orders, b.delta_orders_pct) }}<td data-value="{{ b.revenue }}">{{ b.revenue | fmt_ua }} ₴</td><td>{{ b.revenue_share_pct }}%</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    <div class="mkt-card mkt-card--mini">
+      <h3 class="mkt-card__title">Топ міста</h3>
+      <table class="mkt-mini-table" data-sortable>
+        <thead><tr>{{ ad_th("Місто") }}{{ ad_th("Дохід", sort='num') }}{{ ad_th("Частка", sort='num') }}</tr></thead>
+        <tbody>{% for row in biz.top_cities %}<tr><td>{{ row.name }}</td><td data-value="{{ row.revenue }}">{{ row.revenue | fmt_ua }} ₴</td><td>{{ row.share_pct }}%</td></tr>{% endfor %}</tbody>
+      </table>
+      <p class="mkt-table-note">Київ / Киев та інші варіанти назв обʼєднуються в одне місто.</p>
+    </div>
+    <div class="mkt-card mkt-card--mini">
+      <h3 class="mkt-card__title">Пристрої (GA4)</h3>
+      <table class="mkt-mini-table" data-sortable>
+        <thead><tr>{{ ad_th("Пристрій") }}{{ ad_th("Сесії", sort='num') }}</tr></thead>
+        <tbody>
+          {% for dev in report.extra.devices or [] %}
+          <tr><td>{{ dev.device }}</td><td data-value="{{ dev.sessions }}">{{ dev.sessions | fmt_ua }}</td></tr>
+          {% else %}<tr><td colspan="2" class="mkt-empty-cell">Потрібен GA4</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mkt-card mkt-card--mini mkt-card--mix">
+      <h3 class="mkt-card__title">Нові vs повторні покупці</h3>
+      <div class="mkt-customer-mix">
+        <canvas id="customerMixDonut"
+          data-donut='{{ {"labels":["Нові","Повторні"],"values":[biz.customer_mix.new_revenue, biz.customer_mix.returning_revenue],"colors":["#3b82f6","#22c55e"]} | tojson }}'
+          data-center-label="Дохід"></canvas>
+        <div class="mkt-customer-mix__legend">
+          <div><span class="mkt-dot" style="background:#3b82f6"></span>{{ ad_inline_label("Нові покупці", "customer_new") }}: {{ biz.customer_mix.new_pct }}%</div>
+          <div><span class="mkt-dot" style="background:#22c55e"></span>{{ ad_inline_label("Повторні покупці", "customer_returning") }}: {{ biz.customer_mix.returning_pct }}%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ════════════════════════════════════════════════════════════
+     INSIGHTS
+  ════════════════════════════════════════════════════════════ #}
+  {% elif s == 'insights' %}
+  <p class="mkt-table-note" style="margin-top:0">Дані інсайтів станом на <strong>{{ report.generated_at or '—' }}</strong> · період {{ report.period.from_iso[:10] }} — {{ report.period.to_iso[:10] }}</p>
+  <div class="mkt-insight-feed">
+    {% for item in report.insight_feed or [] %}
+    <article class="mkt-insight-card mkt-insight-card--{{ item.trend or 'neutral' }} mkt-insight-card--{{ item.category or 'general' }}">
+      <div class="mkt-insight-card__head">
+        <div class="mkt-insight-card__icon-wrap">
+          <div class="mkt-insight-card__icon mkt-insight-card__icon--{{ item.category or 'general' }}">
+            {{ insight_category_icon(item.category or 'general') }}
+          </div>
+          {{ insight_signal_badge(item) }}
+        </div>
+        <div class="mkt-insight-card__head-text">
+          <span class="mkt-insight-card__cat">{{ item.category_label }}</span>
+          <h3 class="mkt-insight-card__title">{{ item.title }}</h3>
+          {% if item.generated_at or report.generated_at %}
+          <time class="mkt-insight-card__time" datetime="{{ item.generated_at or report.generated_at }}">{{ item.generated_at or report.generated_at }}</time>
+          {% endif %}
+        </div>
+      </div>
+      {% if item.what_happened %}
+      <p class="mkt-insight-card__label">Що сталося</p>
+      <p class="mkt-insight-card__text">{{ item.what_happened }}</p>
+      {% if item.why %}
+      <p class="mkt-insight-card__label">Чому</p>
+      <p class="mkt-insight-card__text">{{ item.why | join('; ') }}</p>
+      {% endif %}
+      {% if item.impact %}
+      <p class="mkt-insight-card__label">Вплив</p>
+      <p class="mkt-insight-card__text">{{ item.impact }}</p>
+      {% endif %}
+      {% if item.action %}
+      <p class="mkt-insight-card__label">Що перевірити</p>
+      <p class="mkt-insight-card__text mkt-insight-card__action">{{ item.action[0]|upper }}{{ item.action[1:] }}</p>
+      {% endif %}
+      {% else %}
+      <p class="mkt-insight-card__text">{{ item.text }}</p>
+      {% endif %}
+    </article>
+    {% else %}
+    <p class="mkt-empty">Недостатньо даних для автоматичних інсайтів за обраний період.</p>
+    {% endfor %}
+  </div>
+
+  {# ════════════════════════════════════════════════════════════
+     DETAILS
+  ════════════════════════════════════════════════════════════ #}
+  {% elif s == 'details' %}
+  <div class="kpi-row kpi-row--overview">
+    {{ kpi_card("У таблиці", ((k.transactions | string) ~ " з " ~ (k.orders | string)) if k.transactions is defined else (k.orders | string), none, icon_orders, 'blue', false) }}
+    {{ kpi_card("Дохід", k.revenue | fmt_ua_compact ~ " ₴", d.get('revenue_pct'), icon_revenue, 'green', false, '', kpi_cmp) }}
+    {{ kpi_card("Замовлення CRM", k.orders | fmt_ua, d.get('orders_pct'), icon_conv, 'teal', false, '', kpi_cmp) }}
+  </div>
+  {% if k.transactions_limited %}
+  <p class="mkt-table-note">У таблиці показано перші {{ k.transactions }} замовлень з {{ k.orders }} за період (ліміт відображення).</p>
+  {% endif %}
+  {% if report.extra.orders %}
+  <div class="mkt-card">
+    {{ ad_table_head("Замовлення / транзакції") }}
+    <div class="mkt-table-wrap">
+      <table class="mkt-table" data-sortable>
+        <thead><tr>
+          {{ ad_th("Дата", sort='string') }}
+          {{ ad_th("№") }}
+          {{ ad_th("Канал") }}
+          {{ ad_th("Джерело") }}
+          {{ ad_th("Кампанія") }}
+          {{ ad_th("Місто") }}
+          {{ ad_th("Дохід", sort='num') }}
+        </tr></thead>
+        <tbody>
+          {% for o in report.extra.orders %}
+          <tr>
+            <td>{{ o.date }}</td>
+            <td>{{ o.order_id }}</td>
+            <td>{{ o.channel }}</td>
+            <td>{{ o.source }}</td>
+            <td>{{ o.campaign }}</td>
+            <td>{{ o.city }}</td>
+            <td data-value="{{ o.revenue }}">{{ o.revenue | fmt_ua }} ₴</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}{# end section switch #}
+
+  {# ── Insights (не дублюємо на сторінці «Інсайти») ── #}
+  {% if s != 'insights' and report.insight_chips %}
+  <div class="mkt-insights mkt-insights--tz">
+    {% for tip in report.insight_chips[:3] %}
+    <div class="mkt-insight-chip mkt-insight-chip--{{ tip.trend }}">
+      <span class="mkt-insight-chip__badge">{% if tip.trend == 'up' %}↑{% else %}↓{% endif %}</span>
+      <span class="mkt-insight-chip__text">{{ tip.text }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% elif report.insights %}
+  <div class="mkt-insights mkt-insights--tz">
+    {% for tip in report.insights[:3] %}
+    <div class="mkt-insight-chip mkt-insight-chip--neutral">
+      <span class="mkt-insight-chip__badge">•</span>
+      <span class="mkt-insight-chip__text">{{ tip }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ── Футер ── #}
+  <div class="mkt-footer-bar mkt-footer-bar--tz">
+    <div class="mkt-footer-bar__left">
+      <span>Оновлено: <strong>{{ report.generated_at or '—' }}</strong></span>
+    </div>
+    {% if report.integrations_panel %}
+    <div class="mkt-footer-integrations">
+      {% for item in report.integrations_panel %}
+      <span class="mkt-int-pill mkt-int-pill--sm {% if item.ok %}mkt-int-pill--ok{% elif item.configured %}mkt-int-pill--warn{% else %}mkt-int-pill--off{% endif %}"
+            title="{% if item.error %}{{ item.error }}{% elif item.updated %}{{ item.updated }}{% endif %}">{{ item.label }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  </div>{# /mkt-page-body #}
+
+  {# ── Модалка налаштувань API ── #}
+  {% if show_integration_settings %}
+  <div id="mktIntegrationDialog" class="mkt-int-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="mktIntegrationDialogTitle">
+    <div class="mkt-int-dialog__backdrop" data-mkt-int-close></div>
+    <div class="mkt-int-dialog__card">
+      <div class="mkt-int-dialog__head">
+        <h2 class="mkt-int-dialog__title" id="mktIntegrationDialogTitle">Налаштування API</h2>
+        <button type="button" class="mkt-int-dialog__close" data-mkt-int-close aria-label="Закрити">×</button>
+      </div>
+      <p class="mkt-int-dialog__lead">Ключі зберігаються в <code>marketing_config.json</code>. Поточні значення показані частково (маскування).</p>
+      <div id="mktIntegrationDialogBody" class="mkt-int-dialog__body"></div>
+      <p id="mktIntegrationDialogError" class="mkt-int-dialog__error" hidden></p>
+      <div class="mkt-int-dialog__actions">
+        <button type="button" class="mkt-period-form__btn" data-mkt-int-close>Скасувати</button>
+        <button type="button" class="mkt-period-form__btn mkt-period-form__btn--apply" id="mktIntegrationSaveBtn" {% if not is_admin %}disabled title="Лише для адміністратора"{% endif %}>Зберегти</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>{# /mkt-wrap #}

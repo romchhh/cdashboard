@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/legal.css">
+</head>
+<body class="legal-page">
+<header class="legal-header">
+    <div class="legal-header__inner">
+        <a href="{{ home_url }}" class="legal-brand">{{ app_name }}</a>
+        <nav class="legal-nav" aria-label="Юридичні сторінки">
+            <a href="{{ home_url }}">Головна</a>
+            <a href="{{ privacy_url }}">Конфіденційність</a>
+            <a href="{{ terms_url }}">Умови</a>
+        </nav>
+    </div>
+</header>
+<main class="legal-main">
+    <div class="legal-container">
+        {% block content %}{% endblock %}
+    </div>
+</main>
+<footer class="legal-footer">
+    <p>&copy; {{ company_name }}. <a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+    <p class="legal-footer__links">
+        <a href="{{ home_url }}">Головна</a> ·
+        <a href="{{ privacy_url }}">Політика конфіденційності</a> ·
+        <a href="{{ terms_url }}">Умови використання</a>
+    </p>
+</footer>
+</body>
+</html>

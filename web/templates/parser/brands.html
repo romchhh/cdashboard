@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% from "procurement/_icons.html" import ui_icon %}
+{% block title %}Парсер — бренди — Cosmy Agent{% endblock %}
+{% block mobile_title %}Парсер{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/css/parser.css?v=20261013n">
+{% endblock %}
+{% block content %}
+{% set enabled_n = brands|selectattr('enabled')|list|length %}
+<div class="parser-shell">
+    <div class="page-header page-header-with-actions">
+        <div>
+            <h1 class="dash-title-with-icon">{{ ui_icon('search', 'dash-title-icon-svg') }}<span>Парсер цін</span></h1>
+            <p class="subtitle">Каталог з фіда Cosmy. Автооновлення лише вночі: за 10 ночей усі увімкнені бренди, щоночі своя частка, по одному.</p>
+        </div>
+        <div class="page-header-actions parser-actions-row">
+            <button type="button" class="btn btn-primary" id="parserFullReportBtn">{{ ui_icon('refresh') }} Парсити весь каталог</button>
+            <a class="btn btn-secondary" id="parserFullDownload" href="/parser/api/report/download" {% if not report_status.has_file %}hidden{% endif %}>Excel усього каталогу</a>
+        </div>
+    </div>
+
+    {% include "parser/_nav.html" %}
+    {% include "parser/_schedule.html" %}
+
+    {% if load_error %}
+    <div class="parser-alert parser-alert--err">{{ ui_icon('warning') }} Не вдалося завантажити каталог: {{ load_error }}</div>
+    {% endif %}
+    {% if notice == 'started' %}
+    <div class="parser-alert parser-alert--ok">{{ ui_icon('info') }} Парсинг запущено у фоні. Статус оновиться автоматично.</div>
+    {% endif %}
+    {% if error == 'not_found' %}
+    <div class="parser-alert parser-alert--err">{{ ui_icon('warning') }} Бренд не знайдено в каталозі.</div>
+    {% endif %}
+
+    <div class="parser-panel">
+        <div class="parser-toolbar" style="justify-content:space-between;align-items:flex-end">
+            <div>
+                <h2 style="margin:0">Бренди для моніторингу</h2>
+                <p class="panel-lead" style="margin:0.25rem 0 0">
+                    <strong id="enabledBrandsCount">{{ enabled_n }}</strong> увімкнено з <strong>{{ brands|length }}</strong> ·
+                    пропаршено <strong>{{ parsed_sum }}</strong> з <strong>{{ catalog_count }}</strong> товарів.
+                    <span class="parser-muted" id="parserReportHint">
+                        {% if report_status.generated_at %}· Останній повний звіт: {{ format_parsed_at(report_status.generated_at) }}{% endif %}
+                    </span>
+                </p>
+            </div>
+            <label class="parser-field" style="min-width:220px;margin:0">
+                <span class="label">Пошук бренду</span>
+                <input type="search" id="brandFilter" placeholder="Назва бренду…" autocomplete="off">
+            </label>
+        </div>
+
+        <div class="table-wrapper">
+            <table class="data-table parser-brands-table" id="brandsTable">
+                <thead>
+                    <tr>
+                        <th style="width:3rem">#</th>
+                        <th style="width:5.5rem">Парсинг</th>
+                        <th>Бренд</th>
+                        <th>Товари</th>
+                        <th>Статус</th>
+                        <th>Ціни vs ринок</th>
+                        <th style="width:11rem"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in brands %}
+                    {% set st = b.stats or {} %}
+                    <tr data-href="{{ b.url }}" data-brand="{{ b.name|lower }}" class="{% if not b.enabled %}is-disabled{% endif %}">
+                        <td class="brand-idx">{{ loop.index }}</td>
+                        <td onclick="event.stopPropagation()">
+                            <label class="parser-switch" title="{% if b.enabled %}Вимкнути з парсингу{% else %}Увімкнути в парсинг{% endif %}">
+                                <input type="checkbox" class="js-brand-toggle" data-slug="{{ b.slug }}" {% if b.enabled %}checked{% endif %}>
+                                <span class="parser-switch-ui"></span>
+                                <span class="parser-switch-label">{% if b.enabled %}увімк.{% else %}вимк.{% endif %}</span>
+                            </label>
+                        </td>
+                        <td><strong>{{ b.name }}</strong></td>
+                        <td>
+                            <div class="brand-coverage">
+                                <strong>{{ b.parsed_count or 0 }}</strong><span class="parser-muted"> / {{ b.catalog_count }}</span>
+                            </div>
+                            <div class="parser-muted brand-coverage-sub">пропаршено / у фіді</div>
+                        </td>
+                        <td>
+                            <div class="brand-status-cell">
+                                {% if not b.enabled %}
+                                <span class="parser-status parser-status--never">вимкнено</span>
+                                {% elif b.state == 'running' %}
+                                <span class="parser-status parser-status--run">триває</span>
+                                {% elif b.state == 'done' %}
+                                <span class="parser-status parser-status--ok">готово</span>
+                                {% elif b.state == 'error' %}
+                                <span class="parser-status parser-status--err" title="{{ b.error or '' }}">помилка</span>
+                                {% else %}
+                                <span class="parser-status parser-status--never">ще не парсився</span>
+                                {% endif %}
+                                <div class="parser-muted brand-status-date">{{ format_parsed_at(b.last_parsed_at) }}</div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if st.with_diff %}
+                            <div class="brand-price-stats">
+                                <span class="bps-avg {% if st.avg_diff_min_pct is not none and st.avg_diff_min_pct < -0.5 %}pm-delta-good{% elif st.avg_diff_min_pct is not none and st.avg_diff_min_pct > 3 %}pm-delta-bad{% else %}pm-delta-ok{% endif %}">
+                                    сер. Δ {% if st.avg_diff_min_pct is not none %}{{ "%+.1f"|format(st.avg_diff_min_pct) }}%{% else %}—{% endif %}
+                                </span>
+                                <div class="bps-bars" title="дешевші / в ринку / дорожчі за мін.">
+                                    <span class="bps-chip bps-good">↓{{ st.cheaper_count or 0 }}</span>
+                                    <span class="bps-chip bps-ok">={{ st.at_market_count or 0 }}</span>
+                                    <span class="bps-chip bps-bad">↑{{ st.dearer_count or 0 }}</span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <span class="parser-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td onclick="event.stopPropagation()">
+                            <div class="parser-actions-row">
+                                {% if b.parsed_count %}
+                                <a class="btn btn-secondary btn-sm" href="/parser/api/report/download?brand={{ b.slug|urlencode }}">Excel</a>
+                                {% endif %}
+                                <a class="btn btn-secondary btn-sm" href="{{ b.url }}">Відкрити</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7">
+                            Каталог порожній. Синхронізуйте товари з фіда в розділі «Товари» (кнопка синхронізації).
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="parser-muted" id="brandFilterEmpty" hidden style="margin:0.75rem 0 0">Нічого не знайдено за запитом.</p>
+    </div>
+</div>
+<input type="hidden" id="parserCsrf" value="{{ request.state.csrf_token }}">
+<style>.btn-sm{padding:.35rem .7rem;font-size:.8rem}</style>
+<script>
+(function () {
+  document.querySelectorAll('.parser-brands-table tr[data-href]').forEach(function (row) {
+    row.addEventListener('click', function () { window.location = row.getAttribute('data-href'); });
+  });
+  var filter = document.getElementById('brandFilter');
+  var empty = document.getElementById('brandFilterEmpty');
+  if (filter) {
+    filter.addEventListener('input', function () {
+      var q = (filter.value || '').trim().toLowerCase();
+      var visible = 0;
+      document.querySelectorAll('#brandsTable tbody tr[data-brand]').forEach(function (row, i) {
+        var ok = !q || (row.getAttribute('data-brand') || '').indexOf(q) !== -1;
+        row.hidden = !ok;
+        if (ok) {
+          visible += 1;
+          var idx = row.querySelector('.brand-idx');
+          if (idx) idx.textContent = String(visible);
+        }
+      });
+      if (empty) empty.hidden = visible > 0 || !q;
+    });
+  }
+  var csrf = document.getElementById('parserCsrf').value;
+  var btn = document.getElementById('parserFullReportBtn');
+  var hint = document.getElementById('parserReportHint');
+  var dl = document.getElementById('parserFullDownload');
+  var enabledCountEl = document.getElementById('enabledBrandsCount');
+  var timer = null;
+
+  function refreshEnabledCount() {
+    if (!enabledCountEl) return;
+    enabledCountEl.textContent = String(document.querySelectorAll('.js-brand-toggle:checked').length);
+  }
+  document.querySelectorAll('.js-brand-toggle').forEach(function (cb) {
+    cb._toggleSeq = 0;
+    cb.addEventListener('change', async function () {
+      var my = ++cb._toggleSeq;
+      var want = cb.checked;
+      var slug = cb.getAttribute('data-slug');
+      var row = cb.closest('tr');
+      var label = row ? row.querySelector('.parser-switch-label') : null;
+      var body = new FormData();
+      body.append('csrf_token', csrf);
+      body.append('enabled', want ? '1' : '0');
+      cb.disabled = true;
+      try {
+        var res = await fetch('/parser/brands/' + encodeURIComponent(slug) + '/toggle', {
+          method: 'POST',
+          body: body,
+          keepalive: true,
+          headers: { 'X-CSRF-Token': csrf, 'X-Requested-With': 'fetch', 'Accept': 'application/json' }
+        });
+        if (my !== cb._toggleSeq) return;
+        var data = null;
+        try { data = await res.json(); } catch (e) { data = null; }
+        if (my !== cb._toggleSeq) return;
+        if (!res.ok || !data || data.enabled !== want) {
+          cb.checked = !want;
+        }
+        if (row) row.classList.toggle('is-disabled', !cb.checked);
+        if (label) label.textContent = cb.checked ? 'увімк.' : 'вимк.';
+        refreshEnabledCount();
+      } catch (e) {
+        if (my === cb._toggleSeq) cb.checked = !want;
+      }
+      if (my === cb._toggleSeq) cb.disabled = false;
+    });
+  });
+
+  async function poll() {
+    var res = await fetch('/parser/api/report/status');
+    var st = await res.json();
+    if (st.state === 'running') {
+      hint.textContent = '· Йде збір: ' + (st.current || 0) + ' / ' + (st.total || '—') + (st.product ? ' · ' + st.product : '');
+      timer = setTimeout(poll, 1600);
+      return;
+    }
+    btn.disabled = false;
+    if (st.state === 'done') {
+      hint.textContent = '· Звіт готовий · ' + (st.total || '') + ' SKU';
+      if (dl) dl.hidden = false;
+      setTimeout(function () { location.reload(); }, 1200);
+    } else if (st.state === 'error') {
+      hint.textContent = '· Помилка: ' + (st.error || '');
+    }
+  }
+  btn.addEventListener('click', async function () {
+    if (!confirm('Парсити ВЕСЬ каталог з фіда? Це може зайняти багато часу. Зазвичай зручніше парсити один бренд.')) return;
+    btn.disabled = true;
+    hint.textContent = '· Запускаємо…';
+    var body = new FormData();
+    body.append('csrf_token', csrf);
+    var res = await fetch('/parser/api/report/run', { method: 'POST', body: body, headers: { 'X-CSRF-Token': csrf } });
+    var st = await res.json();
+    if (!res.ok && res.status !== 409) {
+      hint.textContent = '· ' + (st.error || 'Не вдалося запустити');
+      btn.disabled = false;
+      return;
+    }
+    poll();
+  });
+  if ({{ 'true' if report_status.state == 'running' else 'false' }}) {
+    btn.disabled = true;
+    poll();
+  }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,40 @@
+{# Динаміка: стрілки та % — класи dynamics-trend-up|down|flat (кольори лише в style.css). #}
+{% if item is defined and item is mapping %}
+    {% set s30 = item.sales_30d or 0 %}
+    {% set s60 = item.sales_60d or 0 %}
+    {% set s90 = item.sales_90d or 0 %}
+    {% set s180 = item.sales_180d or 0 %}
+    {% set s360 = item.sales_360d or 0 %}
+{% elif item is defined %}
+    {% set s30 = item.sales_qty_30d or 0 %}
+    {% set s60 = item.sales_qty_60d or 0 %}
+    {% set s90 = item.sales_qty_90d or 0 %}
+    {% set s180 = item.sales_qty_180d or 0 %}
+    {% set s360 = item.sales_qty_360d or 0 %}
+{% else %}
+    {% set s30 = 0 %}
+    {% set s60 = 0 %}
+    {% set s90 = 0 %}
+    {% set s180 = 0 %}
+    {% set s360 = 0 %}
+{% endif %}
+{% set prev30 = s60 - s30 %}
+{% set prev90 = s180 - s90 %}
+{% set prev180 = s360 - s180 %}
+<div class="procurement-dynamics-cell" style="font-size: 11px; line-height: 1.8;"> <div title="Останні 30д vs попередні 30д (s30 vs s60−s30)"> <span class="procurement-dynamics-label">30д:</span> {% if prev30 > 0 %}
+            {% set t30 = (s30 - prev30) / prev30 * 100 %}
+            <span class="dynamics-trend dynamics-trend-{% if t30 > 5 %}up{% elif t30 < -5 %}down{% else %}flat{% endif %}"><span class="dyn-arrow">{% if t30 > 5 %}↑{% elif t30 < -5 %}↓{% else %}→{% endif %}</span>{{ "%+.0f"|format(t30) }}%</span> {% elif s30 > 0 %}
+            <span class="dynamics-trend dynamics-trend-flat"><span class="dyn-arrow">↑</span></span><span class="procurement-dynamics-label">—</span> {% else %}
+            <span class="procurement-dynamics-label">—</span> {% endif %}
+    </div> <div title="Останні 90д vs попередні 90д (s90 vs s180−s90)"> <span class="procurement-dynamics-label">90д:</span> {% if prev90 > 0 %}
+            {% set t90 = (s90 - prev90) / prev90 * 100 %}
+            <span class="dynamics-trend dynamics-trend-{% if t90 > 5 %}up{% elif t90 < -5 %}down{% else %}flat{% endif %}"><span class="dyn-arrow">{% if t90 > 5 %}↑{% elif t90 < -5 %}↓{% else %}→{% endif %}</span>{{ "%+.0f"|format(t90) }}%</span> {% elif s90 > 0 %}
+            <span class="dynamics-trend dynamics-trend-flat"><span class="dyn-arrow">↑</span></span><span class="procurement-dynamics-label">—</span> {% else %}
+            <span class="procurement-dynamics-label">—</span> {% endif %}
+    </div> <div title="Останні 180д vs попередні 180д (s180 vs s360−s180)"> <span class="procurement-dynamics-label">180д:</span> {% if prev180 > 0 %}
+            {% set t180 = (s180 - prev180) / prev180 * 100 %}
+            <span class="dynamics-trend dynamics-trend-{% if t180 > 5 %}up{% elif t180 < -5 %}down{% else %}flat{% endif %}"><span class="dyn-arrow">{% if t180 > 5 %}↑{% elif t180 < -5 %}↓{% else %}→{% endif %}</span>{{ "%+.0f"|format(t180) }}%</span> {% elif s180 > 0 %}
+            <span class="dynamics-trend dynamics-trend-flat"><span class="dyn-arrow">↑</span></span><span class="procurement-dynamics-label">—</span> {% else %}
+            <span class="procurement-dynamics-label">—</span> {% endif %}
+    </div>
+</div>

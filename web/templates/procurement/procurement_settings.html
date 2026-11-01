@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Налаштування закупок{% endblock %}
+{% block mobile_title %}Налаштування{% endblock %}
+
+{% block content %}
+{% from "procurement/_icons.html" import title_with_icon, ui_icon %}
+
+<div class="dashboard-container procurement_dashboard"> <div class="dashboard-header" style="margin-bottom: 24px;"> <h1 class="dashboard-title">{{ title_with_icon('settings', 'Налаштування Procurement Copilot') }}</h1> <p class="dashboard-subtitle">Пороги класифікації товарів і генерації алертів</p> </div> {% include 'procurement_nav.html' %}
+
+{% if saved %}
+<div class="alert-saved"> Налаштування збережено. Вони будуть застосовані при наступному запуску розрахунку аналітики.
+</div>
+{% endif %}
+
+<form method="post" action="/procurement/settings"> <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}"> <!-- Класифікація товарів --> <div class="settings-card"> <h2 class="settings-section-title">{{ ui_icon('trend') }} Класифікація товарів</h2> <p class="settings-section-desc">Пороги для автоматичного визначення статусу товару</p> <div class="settings-grid"> <div class="setting-item"> <label class="setting-label" for="fast_mover_threshold"> Fast Mover — мін. продажів/день
+                    <span class="setting-hint">Товар вважається бестселером якщо продається ≥ X одиниць на день за середнім за 30д. Приклад: 0.25 = 1 продаж кожні 4 дні.</span> </label> <div class="setting-input-wrap"> <input type="number" id="fast_mover_threshold" name="fast_mover_threshold"
+                           value="{{ settings.fast_mover_threshold if settings.fast_mover_threshold is not none else 0.25 }}"
+                           step="0.01" min="0.01" max="100" inputmode="decimal" class="setting-input"> <span class="setting-unit">шт/день</span> </div> </div> <div class="setting-item"> <label class="setting-label" for="medium_mover_threshold"> Medium Mover — мін. продажів/день
+                    <span class="setting-hint">Нижня межа «середнього» класу. Від цього значення до Fast — Medium; нижче — Slow. Приклад: 0.07 ≈ 2 продажі на місяць.</span> </label> <div class="setting-input-wrap"> <input type="number" id="medium_mover_threshold" name="medium_mover_threshold"
+                           value="{{ settings.medium_mover_threshold if settings.medium_mover_threshold is not none else 0.07 }}"
+                           step="0.01" min="0.01" max="100" inputmode="decimal" class="setting-input"> <span class="setting-unit">шт/день</span> </div> </div> <div class="setting-item"> <label class="setting-label" for="slow_mover_days"> Slow Mover — днів без продажів
+                    <span class="setting-hint">Товар стає Slow Mover після X днів підряд без продажів</span> </label> <div class="setting-input-wrap"> <input type="number" id="slow_mover_days" name="slow_mover_days"
+                           value="{{ settings.slow_mover_days or 14 }}"
+                           step="1" min="1" max="365" class="setting-input"> <span class="setting-unit">днів</span> </div> </div> <div class="setting-item"> <label class="setting-label" for="dead_stock_days"> Dead Stock — днів без продажів
+                    <span class="setting-hint">Товар стає неліквідом після X днів без продажів</span> </label> <div class="setting-input-wrap"> <input type="number" id="dead_stock_days" name="dead_stock_days"
+                           value="{{ settings.dead_stock_days or 90 }}"
+                           step="1" min="1" max="365" class="setting-input"> <span class="setting-unit">днів</span> </div> </div> </div> </div> <!-- Рекомендації по закупках --> <div class="settings-card"> <h2 class="settings-section-title">{{ ui_icon('lightbulb') }} Рекомендації по закупках</h2> <p class="settings-section-desc">Пороги для розрахунку рекомендованих обсягів і дій</p> <div class="settings-grid"> <div class="setting-item"> <label class="setting-label" for="safety_stock_days"> Страховий запас (днів)
+                    <span class="setting-hint">Мінімальний буфер у днях при розрахунку рекомендованої закупки</span> </label> <div class="setting-input-wrap"> <input type="number" id="safety_stock_days" name="safety_stock_days"
+                           value="{{ settings.safety_stock_days or 14 }}"
+                           step="1" min="1" max="180" class="setting-input"> <span class="setting-unit">днів</span> </div> </div> <div class="setting-item"> <label class="setting-label" for="critical_stock_days"> Критичний залишок (днів)
+                    <span class="setting-hint">Якщо запасу залишилось менше X днів — статус «Терміново закупити»</span> </label> <div class="setting-input-wrap"> <input type="number" id="critical_stock_days" name="critical_stock_days"
+                           value="{{ settings.critical_stock_days or 7 }}"
+                           step="1" min="1" max="60" class="setting-input"> <span class="setting-unit">днів</span> </div> </div> <div class="setting-item"> <label class="setting-label" for="overstock_days"> Надлишковий запас (днів)
+                    <span class="setting-hint">Якщо запасу більше ніж X днів продажів — статус «Надлишок», дія «Стоп»</span> </label> <div class="setting-input-wrap"> <input type="number" id="overstock_days" name="overstock_days"
+                           value="{{ settings.overstock_days or 60 }}"
+                           step="1" min="30" max="730" class="setting-input"> <span class="setting-unit">днів</span> </div> </div> </div> </div> <!-- Алерти по трендах --> <div class="settings-card"> <h2 class="settings-section-title">{{ ui_icon('bell') }} Алерти по змінах попиту</h2> <p class="settings-section-desc">Поріг для генерації алерту при суттєвій зміні попиту (MoM або 7д vs 30д)</p> <div class="settings-grid"> <div class="setting-item"> <label class="setting-label" for="trend_alert_threshold"> Поріг тренду для алерту
+                    <span class="setting-hint">Алерт генерується якщо зміна попиту більша за X%. Наприклад, 20 = алерт при зміні ±20%</span> </label> <div class="setting-input-wrap"> <input type="number" id="trend_alert_threshold" name="trend_alert_threshold"
+                           value="{{ settings.trend_alert_threshold or 20.0 }}"
+                           step="1" min="5" max="100" class="setting-input"> <span class="setting-unit">%</span> </div> </div> </div> </div> <!-- Кнопки --> <div class="settings-actions"> <button type="submit" class="btn-save">Зберегти налаштування</button> <a href="/procurement/dashboard" class="btn-cancel">Скасувати</a> </div>
+</form> </div> <style>
+.alert-saved {
+    background: #d1fae5;
+    border: 1px solid #10b981;
+    color: #065f46;
+    padding: 14px 20px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-weight: 500;
+}
+
+.settings-card {
+    background: white;
+    border-radius: 12px;
+    padding: 28px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+}
+
+.settings-section-title .ui-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    color: var(--accent, #2563eb);
+    flex-shrink: 0;
+}
+.settings-section-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 6px;
+}
+
+.settings-section-desc {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0 0 24px;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.setting-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.setting-hint {
+    font-size: 12px;
+    font-weight: 400;
+    color: #9ca3af;
+    line-height: 1.4;
+}
+
+.setting-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.setting-input {
+    width: 120px;
+    padding: 10px 14px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    transition: border-color 0.2s;
+    text-align: center;
+}
+
+.setting-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.setting-unit {
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 0 32px;
+}
+
+.btn-save {
+    padding: 12px 28px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-save:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+}
+
+.btn-cancel {
+    padding: 12px 20px;
+    background: #f3f4f6;
+    color: #374151;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+    background: #e5e7eb;
+}
+
+@media (max-width: 768px) {
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+    .setting-input {
+        width: 100px;
+    }
+}
+</style>
+{% endblock %}

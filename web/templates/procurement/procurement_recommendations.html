@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+{% from "procurement/_procurement_sort_th.html" import procurement_sort_th %}
+{% from 'procurement/_procurement_sku_search_haystack.html' import sku_search_haystack_attr %}
+
+{% block title %}Рекомендації по закупках{% endblock %}
+{% block mobile_title %}Рекомендації{% endblock %}
+
+{% block head %}
+<style>
+.search-box {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+}
+
+.search-box:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-actions .search-box {
+    flex: 1;
+    min-width: 200px;
+    max-width: 520px;
+    margin-bottom: 0;
+}
+
+.filter-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.export-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-export {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    text-decoration: none;
+    border: 2px solid #10b981;
+    color: #10b981;
+    background: white;
+    transition: all 0.2s;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-export:hover {
+    background: #10b981;
+    color: white;
+    transform: translateY(-2px);
+}
+
+.filter-btn {
+    padding: 8px 16px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: var(--radius-pill, 999px);
+    text-decoration: none;
+    color: #374151;
+    font-weight: 500;
+    transition: all 0.2s;
+    font-size: 13px;
+}
+
+.filter-btn:hover {
+    background: #e5e7eb;
+}
+
+.filter-btn.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.data-table th,
+.data-table td {
+    padding: 0.7rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+.data-table th:last-child,
+.data-table td:last-child {
+    border-right: none;
+}
+.data-table th {
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+.data-table tbody tr {
+    transition: background 0.15s ease;
+}
+.data-table tbody tr:nth-child(even):not(:hover) {
+    background: #fcfcfd;
+}
+.data-table tbody tr:hover {
+    background: #f8fafc;
+}
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.data-table tbody tr.hidden {
+    display: none;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill, 999px);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.period-chip-active {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border-radius: var(--radius-pill, 999px);
+    padding: 1px 5px;
+    font-weight: 700;
+}
+
+.page-header {
+    margin-bottom: 32px;
+}
+
+.page-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 8px;
+}
+
+.subtitle {
+    font-size: 15px;
+    color: #6b7280;
+    margin: 0;
+}
+
+.card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 24px;
+}
+
+.card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 12px;
+}
+
+.table-wrapper {
+    margin-top: 16px;
+    overflow: auto;
+    border: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+    border-radius: var(--radius-sm, 14px);
+    background: #fff;
+    box-shadow: var(--shadow, 0 1px 2px rgba(24, 24, 27, 0.04));
+}
+
+.product-image {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 6px;
+    margin-right: 12px;
+}
+
+@media (max-width: 768px) {
+    .filter-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .export-buttons {
+        width: 100%;
+        justify-content: stretch;
+    }
+    
+    .btn-export {
+        flex: 1;
+        justify-content: center;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% from "procurement/_icons.html" import title_with_icon, ui_icon %}
+
+<div class="dashboard-container procurement_dashboard" data-procurement-search-root> <!-- Header Section --> <div class="dashboard-header"> <div> <h1 class="dashboard-title">{{ title_with_icon('lightbulb', 'Рекомендації по закупках') }}</h1> <p class="dashboard-subtitle">Рекомендації на основі продажів із успішних замовлень CRM (Виконано, Доставлено, Відправлено, Самовивіз) та залишків на складі</p> </div> </div> <!-- Navigation --> {% include 'procurement_nav.html' %}
+
+<!-- Фільтри -->
+<div class="card"> <h3>Фільтри</h3> <div class="filter-actions" style="margin-top: 4px;"> <div class="export-buttons"> <a href="/procurement/export/recommendations?horizon_days={{ horizon_days }}&amp;purchase_horizon_days={{ purchase_horizon_days }}&amp;action={{ selected_action or '' }}&amp;format=xlsx" class="btn-export"> Excel
+            </a> <a href="/procurement/export/recommendations?horizon_days={{ horizon_days }}&amp;purchase_horizon_days={{ purchase_horizon_days }}&amp;action={{ selected_action or '' }}&amp;format=csv" class="btn-export"> CSV
+            </a> </div> </div> <form method="get" action="/procurement/recommendations" class="js-procurement-product-search" data-procurement-server-search style="margin-top: 12px;"> {% if selected_action %}<input type="hidden" name="action" value="{{ selected_action }}">{% endif %}
+        {% if selected_brand_id %}<input type="hidden" name="brand_id" value="{{ selected_brand_id }}">{% endif %}
+        <input type="hidden" name="horizon_days" value="{{ horizon_days }}"> <input type="hidden" name="purchase_horizon_days" value="{{ purchase_horizon_days }}"> {% if sort_by and sort_by != 'buy' %}<input type="hidden" name="sort_by" value="{{ sort_by }}">{% endif %}
+        {% if sort_dir and (sort_dir != 'desc' or sort_by != 'buy') %}<input type="hidden" name="sort_dir" value="{{ sort_dir }}">{% endif %}
+        <input type="hidden" name="page" value="1"> {% include 'procurement/_procurement_product_search_field.html' %}
+    </form> <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; align-items: center;"> <div> <div style="margin-bottom: 6px; font-weight: 600;">Дія:</div> <div style="display: flex; gap: 8px; flex-wrap: wrap;"> <a href="/procurement/recommendations?horizon_days={{ horizon_days }}&purchase_horizon_days={{ purchase_horizon_days }}{% if selected_brand_id %}&brand_id={{ selected_brand_id }}{% endif %}{% if product_search %}&q={{ product_search|urlencode }}{% endif %}" class="filter-btn {% if not selected_action %}active{% endif %}">Всі</a> <a href="/procurement/recommendations?horizon_days={{ horizon_days }}&purchase_horizon_days={{ purchase_horizon_days }}&action=buy_urgent{% if selected_brand_id %}&brand_id={{ selected_brand_id }}{% endif %}{% if product_search %}&q={{ product_search|urlencode }}{% endif %}" class="filter-btn {% if selected_action == 'buy_urgent' %}active{% endif %}"> Терміново закупити
+                </a> <a href="/procurement/recommendations?horizon_days={{ horizon_days }}&purchase_horizon_days={{ purchase_horizon_days }}&action=buy_normal{% if selected_brand_id %}&brand_id={{ selected_brand_id }}{% endif %}{% if product_search %}&q={{ product_search|urlencode }}{% endif %}" class="filter-btn {% if selected_action == 'buy_normal' %}active{% endif %}"> Закупити (план)
+                </a> <a href="/procurement/recommendations?horizon_days={{ horizon_days }}&purchase_horizon_days={{ purchase_horizon_days }}&action=buy_careful{% if selected_brand_id %}&brand_id={{ selected_brand_id }}{% endif %}{% if product_search %}&q={{ product_search|urlencode }}{% endif %}" class="filter-btn {% if selected_action == 'buy_careful' %}active{% endif %}"> Обережно закуповувати
+                </a> <a href="/procurement/recommendations?horizon_days={{ horizon_days }}&purchase_horizon_days={{ purchase_horizon_days }}&action=reduce{% if selected_brand_id %}&brand_id={{ selected_brand_id }}{% endif %}{% if product_search %}&q={{ product_search|urlencode }}{% endif %}" class="filter-btn {% if selected_action == 'reduce' %}active{% endif %}"> Зменшити закуп
+                </a> <a href="/procurement/recommendations?horizon_days={{ horizon_days }}&purchase_horizon_days={{ purchase_horizon_days }}&action=stop{% if selected_brand_id %}&brand_id={{ selected_brand_id }}{% endif %}{% if product_search %}&q={{ product_search|urlencode }}{% endif %}" class="filter-btn {% if selected_action == 'stop' %}active{% endif %}">  Не закуповувати
+                </a> <a href="/procurement/recommendations?horizon_days={{ horizon_days }}&purchase_horizon_days={{ purchase_horizon_days }}&action=sell_off{% if selected_brand_id %}&brand_id={{ selected_brand_id }}{% endif %}{% if product_search %}&q={{ product_search|urlencode }}{% endif %}" class="filter-btn {% if selected_action == 'sell_off' %}active{% endif %}"> Розпродаж
+                </a> </div> </div> </div> <div style="margin-top: 12px;"> <div style="margin-bottom: 6px; font-weight: 600; display:inline-flex;align-items:center;gap:0.35rem;">{{ ui_icon('tag') }} Бренд:</div> <select onchange="(function(v){ var u='/procurement/recommendations?horizon_days={{ horizon_days }}&amp;purchase_horizon_days={{ purchase_horizon_days }}'; {% if selected_action %}u+='&amp;action={{ selected_action }}';{% endif %}{% if product_search %}u+='&amp;q={{ product_search|urlencode }}';{% endif %} if(v) u+='&amp;brand_id='+v; window.location.href=u; })(this.value)" style="padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 6px;"> <option value="">Всі бренди</option> {% for brand in brands %}
+            <option value="{{ brand.id }}" {% if selected_brand_id == brand.id %}selected{% endif %}> {{ brand.name }}
+                {% if brand.products_count is not none %} ({{ brand.products_count }}){% endif %}
+            </option> {% endfor %}
+        </select> </div>
+</div> <div data-procurement-search-refresh> <!-- Горизонт аналітики (як у ТОП товарів: продаж/день, оборотність, прогноз) -->
+<div class="card" style="margin-bottom: 16px;"> <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;"> <span style="font-weight: 600; color: #374151;">Горизонт аналітики:</span> <div style="display: flex; gap: 6px; flex-wrap: wrap;"> {% for d in [1, 7, 14, 30, 60, 90, 180, 360] %}
+            <a class="horizon-btn {% if horizon_days == d %}active{% endif %}"
+               href="{{ horizon_url(d, purchase_horizon_days) }}"> {{ d }} {% if d == 1 %}день{% else %}днів{% endif %}
+            </a> {% endfor %}
+        </div> <span style="font-size: 13px; color: #9ca3af;">Впливає на продаж/день, оборотність і прогноз</span> </div>
+</div> <!-- Горизонт закупки — колонка «Закупити» -->
+<div class="card" style="margin-bottom: 16px;"> <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;"> <span style="font-weight: 600; color: #374151;">Горизонт закупки:</span> <div style="display: flex; gap: 6px; flex-wrap: wrap;"> {% for d in [1, 7, 14, 30, 60, 90, 180, 360] %}
+            <a class="horizon-btn {% if purchase_horizon_days == d %}active{% endif %}"
+               href="{{ horizon_url(horizon_days, d) }}"> {{ d }} {% if d == 1 %}день{% else %}днів{% endif %}
+            </a> {% endfor %}
+        </div> <span style="font-size: 13px; color: #9ca3af;">Впливає лише на колонку «Закупити»</span> </div>
+</div> <div style="margin: 0 0 8px; color: #6b7280; font-size: 13px;"> Показано {{ recommendations|length }} з {{ total_count }} рекомендацій · Сторінка {{ page }} з {{ total_pages }}
+</div> <!-- Таблиця рекомендацій -->
+<div class="card"> {% if recommendations %}
+    <div class="table-wrapper"> <table class="data-table" id="recommendationsTable" data-procurement-sku-table> <thead> <tr> {{ procurement_sort_th('Товар / Опція', 'name', sort_by, sort_dir, sort_url) }}
+                    {{ procurement_sort_th('Модель', 'model', sort_by, sort_dir, sort_url) }}
+                    {{ procurement_sort_th('Ціна на сайті', 'price', sort_by, sort_dir, sort_url) }}
+                    {{ procurement_sort_th('Закупівельна ціна', 'purchase_price', sort_by, sort_dir, sort_url) }}
+                    {{ procurement_sort_th('Залишок/сума', 'stock', sort_by, sort_dir, sort_url) }}
+                    {{ procurement_sort_th('Оборотність (' ~ horizon_days ~ 'д)', 'turnover', sort_by, sort_dir, sort_url) }}
+                    {{ procurement_sort_th('Продаж/день · Динаміка', 'sales_avg', sort_by, sort_dir, sort_url, 'col-sales-dynamics') }}
+                    {{ procurement_sort_th('Закупити (' ~ purchase_horizon_days ~ 'д)', 'buy', sort_by, sort_dir, sort_url) }}
+                    {{ procurement_sort_th('Прогноз (' ~ horizon_days ~ 'д)', 'forecast', sort_by, sort_dir, sort_url) }}
+                    {{ procurement_sort_th('Статус', 'status', sort_by, sort_dir, sort_url) }}
+                    {{ procurement_sort_th('Дія', 'action', sort_by, sort_dir, sort_url) }}
+                </tr> </thead> <tbody> {% for product, option, analytics, hv in recommendations %}
+                {% set item = option if option else product %}
+                <tr {{ sku_search_haystack_attr(product, option) }}> <td data-label="Товар"> {% set has_dilovod = option and option.dilovod_id %}
+                        <a href="/procurement/product/{{ product.id }}{% if option %}?option_id={{ option.id }}{% endif %}" style="color: inherit; text-decoration: none;"> <div style="display: flex; align-items: center;"> {% if product.image_url %}
+                                <img src="{{ product.image_url }}" alt="" class="product-image"> {% endif %}
+                                <div> <strong>{{ product.name|html_unescape }}</strong><br> {% if option %}
+                                    <small style="color: #4b5563;"> {{ option.option_name|html_unescape }}: {{ option.option_value_name|html_unescape }}
+                                    </small><br> {% endif %}
+                                    <small style="color: #6b7280;">{% if product.brand_id %}<a href="/procurement/brand/{{ product.brand_id }}" style="color: inherit;">{{ (product.brand_name or '—')|html_unescape }}</a>{% else %}{{ (product.brand_name or '—')|html_unescape }}{% endif %}</small> </div> </div> </a> </td> <td data-label="Модель"> {% if option and option.option_model %}
+                            {{ option.option_model }}
+                        {% elif option and option.dilovod_model %}
+                            {{ option.dilovod_model }}
+                        {% elif product.model %}
+                            {{ product.model }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td> <td data-label="Ціна на сайті" style="white-space: nowrap;"> {% set site_price = (option.selling_price_catalog if option and option.selling_price_catalog is not none else product.selling_price_catalog) %}
+                        {% if site_price %}
+                            {{ "{:,.0f}".format(site_price).replace(',', ' ') }} ₴
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td> <td data-label="Закупівельна ціна" style="white-space: nowrap;"> {% include 'procurement/_procurement_purchase_price_cell.html' %}
+                    </td> <td data-label="Залишок/сума"> {% if option and option.stock_qty is not none %}
+                            <strong>{{ option.stock_qty }}</strong> шт
+                        {% else %}
+                            <strong>{{ product.stock_qty or 0 }}</strong> шт
+                        {% endif %}
+                        {% if analytics.frozen_capital %}
+                        <br><small style="color: #6b7280;">{{ "{:,.0f}".format(analytics.frozen_capital).replace(',', ' ') }} ₴</small> {% endif %}
+                    </td> <td data-label="Оборотність"> {% if hv.turnover_days_display is not none %}
+                        <strong>{{ hv.turnover_days_display }}</strong> дн
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td> <td class="col-sales-dynamics" data-label="Продаж/день · Динаміка"> {% set avg_daily_sales = hv.avg_daily_sales %}
+                        {% set show_60d = true %}
+                        {% include 'procurement/_procurement_sales_dynamics_cell.html' %}
+                    </td> <!-- Тренд MoM (одна метрика) замінено на «Динаміка» --> <td data-label="Закупити"
+                        title="Інші горизонти: 1д={{ analytics.recommended_purchase_1d or 0 }}, 7д={{ analytics.recommended_purchase_7d or 0 }}, 30д={{ analytics.recommended_purchase_30d or analytics.recommended_purchase_qty or 0 }}, 60д={{ analytics.recommended_purchase_60d or 0 }}, 90д={{ analytics.recommended_purchase_90d or 0 }}, 180д={{ analytics.recommended_purchase_180d or 0 }}, 360д={{ analytics.recommended_purchase_360d or 0 }}"> {% set p_action = analytics.procurement_action %}
+                        {% if p_action in ('stop', 'sell_off') %}
+                            <span style="color: #6b7280;">—</span> {% elif p_action == 'reduce' %}
+                            {% if hv.surplus_qty > 0 %}
+                            <strong style="color: #dc2626;">-{{ hv.surplus_qty }} шт</strong> {% else %}
+                            <span style="color: #6b7280;">—</span> {% endif %}
+                        {% elif hv.recommended_purchase > 0 %}
+                            <strong style="color: #059669;">{{ hv.recommended_purchase }} шт</strong> {% else %}
+                            <span style="color: #6b7280;">—</span> {% endif %}
+                    </td> <td data-label="Прогноз">{{ "%.1f"|format(hv.forecast_qty or 0) }} шт</td> <td data-label="Статус"> {% set status_map = {
+                            'fast_mover':   ('Fast',   '#10b981'),
+                            'medium_mover': ('Medium', '#3b82f6'),
+                            'slow_mover':   ('Slow',   '#f59e0b'),
+                            'dead_stock': ('Dead', '#ef4444'),
+                            'new': ('🆕 New', '#6b7280'),
+                            'out_of_stock': ('Out', '#dc2626')
+                        } %}
+                        {% set status_info = status_map.get(analytics.status, ('—', '#6b7280')) %}
+                        <span class="badge" style="background: {{ status_info[1] }}; color: white;">{{ status_info[0] }}</span> </td> <td data-label="Дія"> {% set action_map = {
+                            'buy_urgent': ('Терміново', '#dc2626'),
+                            'buy_normal': ('Закупити', '#059669'),
+                            'buy_careful': ('Обережно', '#f59e0b'),
+                            'reduce': ('Зменшити', '#ea580c'),
+                            'stop': (' Стоп', '#991b1b'),
+                            'sell_off': ('Розпродаж', '#7c2d12')
+                        } %}
+                        {% set action_info = action_map.get(analytics.procurement_action, ('—', '#6b7280')) %}
+                        <span class="badge" style="background: {{ action_info[1] }}; color: white;">{{ action_info[0] }}</span> </td> </tr> {% endfor %}
+            </tbody> </table> </div> {% else %}
+    <p style="text-align: center; padding: 48px; color: #6b7280;">Немає рекомендацій для вибраної дії</p> {% endif %}
+</div>
+{% if total_pages > 1 %}
+<nav class="pagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;"> {% if page > 1 %}
+    <a href="{{ pagination_url(page - 1) }}">← Попередня</a> {% else %}
+    <span class="disabled">← Попередня</span> {% endif %}
+
+    <span>Сторінка {{ page }} з {{ total_pages }}</span> {% if page < total_pages %}
+    <a href="{{ pagination_url(page + 1) }}">Наступна →</a> {% else %}
+    <span class="disabled">Наступна →</span> {% endif %}
+</nav>
+{% endif %}
+
+</div><!-- /data-procurement-search-refresh --> </div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.horizon-btn {
+    text-decoration: none;
+    display: inline-block;
+    padding: 6px 14px;
+    border: 2px solid #e5e7eb;
+    border-radius: var(--radius-pill, 999px);
+    background: #f9fafb;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.horizon-btn:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+}
+.horizon-btn.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+</style>
+{% endblock %}

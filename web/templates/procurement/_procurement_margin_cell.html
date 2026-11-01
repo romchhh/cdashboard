@@ -1,0 +1,7 @@
+{% set _margin = sku_margin_pct(product, option) %}
+{% set _buy = sku_purchase_price(product, option) %}
+{% if _margin is not none %}
+<strong title="Закупка: {{ '%.2f'|format(_buy) }} ₴ · (ціна продажу − закупівельна) ÷ ціна продажу × 100">{{ "%.1f"|format(_margin) }}%</strong>
+{% else %}
+<span title="{% if _buy is not none and _buy <= 1 %}Закупівельна у фіді: {{ '%.2f'|format(_buy) }} ₴ (placeholder, не реальна ціна){% else %}Немає ціни продажу або закупівельної{% endif %}">—</span>
+{% endif %}

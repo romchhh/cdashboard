@@ -1,0 +1,1122 @@
+{% extends "base.html" %}
+{% block title %}{{ client.firstname or '' }} {{ client.lastname or '' }} — Клієнт{% endblock %}
+{% block mobile_title %}Клієнт{% endblock %}
+{% block head %}
+<style>
+.client-kv { display: grid; grid-template-columns: minmax(140px, 220px) 1fr; gap: 0.35rem 1rem; align-items: baseline; font-size: 0.95rem; }
+.client-kv dt { color: var(--muted, #6b7280); font-weight: 500; margin: 0; }
+.client-kv dd { margin: 0; }
+
+/* —— Історія замовлень —— */
+.client-orders-wrap .client-orders-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.client-orders-wrap .client-orders-head .card-title { margin: 0; }
+.client-orders-count { font-weight: 600; color: #6b7280; font-size: 0.9em; }
+.client-orders-export { display: flex; flex-wrap: wrap; gap: 8px; }
+.client-orders-content { padding-top: 4px; }
+.client-orders-list-hint {
+    margin: 0 0 12px;
+    font-size: 0.8125rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.client-order-details {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+.client-order-details:last-of-type { margin-bottom: 0; }
+
+.client-order-details > summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+}
+.client-order-details > summary::-webkit-details-marker { display: none; }
+.client-order-details > summary::marker { content: ''; }
+
+.client-order-panel__summary-inner {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 14px;
+    padding: 10px 12px 10px 14px;
+    background: linear-gradient(180deg, #fafafa 0%, #f3f4f6 100%);
+    border-bottom: 1px solid transparent;
+    transition: background 0.15s ease;
+}
+.client-order-details[open] > summary .client-order-panel__summary-inner {
+    border-bottom-color: #e5e7eb;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+.client-order-details > summary:hover .client-order-panel__summary-inner {
+    background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+.client-order-details > summary:focus {
+    outline: none;
+}
+.client-order-details > summary:focus-visible .client-order-panel__summary-inner {
+    box-shadow: inset 0 0 0 2px #93c5fd;
+}
+
+.client-order-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    flex: 1;
+    min-width: 0;
+}
+.client-order-chevron {
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-left: 6px;
+    margin-right: 4px;
+    border-right: 2px solid #64748b;
+    border-bottom: 2px solid #64748b;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease, margin 0.2s ease;
+}
+.client-order-details[open] > summary .client-order-chevron {
+    transform: rotate(-135deg);
+    margin-top: 4px;
+}
+
+.client-order-details__body {
+    border-top: 1px solid #e5e7eb;
+}
+
+.client-order-panel__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    min-width: 0;
+    flex: 1;
+}
+.client-order-panel__title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 10px;
+    min-width: 0;
+}
+.client-order-id {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #111827;
+    letter-spacing: -0.02em;
+}
+.client-order-panel__title time {
+    font-size: 0.875rem;
+    color: #4b5563;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.client-order-total {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #047857;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.client-order-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid transparent;
+}
+.client-order-status-badge--success { background: #dcfce7; color: #166534; border-color: #86efac; }
+.client-order-status-badge--danger { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.client-order-status-badge--warning { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.client-order-status-badge--info { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
+.client-order-status-badge--muted { background: #f3f4f6; color: #4b5563; border-color: #d1d5db; }
+
+.client-order-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 20px;
+    padding: 10px 14px;
+    background: #f9fafb;
+    border-bottom: 1px solid #eef0f3;
+    font-size: 12px;
+    line-height: 1.45;
+}
+@media (max-width: 640px) {
+    .client-order-meta { grid-template-columns: 1fr; }
+}
+.client-order-meta > div { min-width: 0; }
+.client-order-meta-label {
+    margin: 0 0 2px 0;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+}
+.client-order-meta-value {
+    margin: 0;
+    color: #374151;
+    word-break: break-word;
+}
+
+.client-order-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+table.client-order-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+table.client-order-table th,
+table.client-order-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: top;
+}
+table.client-order-table th {
+    background: #fff;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6b7280;
+    white-space: nowrap;
+}
+table.client-order-table tbody tr:last-child td { border-bottom: none; }
+table.client-order-table .col-qty,
+table.client-order-table .col-price {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    width: 1%;
+}
+table.client-order-table .col-brand {
+    width: 22%;
+    max-width: 160px;
+    color: #4b5563;
+    word-break: break-word;
+}
+.client-order-product-name {
+    font-weight: 500;
+    color: #111827;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.client-order-pid {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Нагадування про докупівлю */
+.repurchase-hint-intro {
+    font-size: 0.82rem;
+    color: #64748b;
+    margin-bottom: 10px;
+    line-height: 1.45;
+    max-width: 52rem;
+}
+.repurchase-sub {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin: 10px 0 6px;
+}
+.repurchase-sub:first-child { margin-top: 0; }
+.repurchase-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+.repurchase-row--stale {
+    background: #fafafa;
+    border-color: #e5e7eb;
+}
+.repurchase-row-name {
+    font-weight: 500;
+    color: #111827;
+    flex: 1;
+    min-width: 140px;
+    line-height: 1.35;
+}
+.repurchase-row-meta {
+    font-size: 0.8rem;
+    color: #64748b;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.repurchase-pid {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* —— Менеджерські дані (CRM) —— */
+.client-crm-alerts {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 1.25rem;
+}
+.client-crm-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    border: 1px solid transparent;
+}
+.client-crm-notice::before {
+    flex-shrink: 0;
+    width: 1.35rem;
+    height: 1.35rem;
+    margin-top: 1px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 800;
+    line-height: 1;
+}
+.client-crm-notice--ok {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+.client-crm-notice--ok::before {
+    content: "✓";
+    background: #d1fae5;
+    color: #047857;
+}
+.client-crm-notice--warn {
+    background: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+}
+.client-crm-notice--warn::before {
+    content: "!";
+    background: #fef3c7;
+    color: #b45309;
+    font-weight: 900;
+}
+.client-crm-risk {
+    background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);
+    border: 1px solid #fecaca;
+    color: #7f1d1d;
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin-bottom: 0;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    box-shadow: 0 1px 2px rgba(127, 29, 29, 0.06);
+}
+.client-crm-risk strong { color: #991b1b; }
+.client-crm-panel {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fafbfc;
+    padding: 16px 18px;
+    margin-bottom: 1rem;
+}
+.client-crm-panel:last-of-type { margin-bottom: 0; }
+.client-crm-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 14px;
+    margin-bottom: 6px;
+}
+.client-crm-panel-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+.client-crm-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #e0e7ff;
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+}
+.client-crm-panel-desc {
+    margin: 0 0 14px;
+    font-size: 0.8125rem;
+    color: #64748b;
+    line-height: 1.5;
+    max-width: 52rem;
+}
+.client-crm-textarea {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-height: 88px;
+    padding: 12px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    resize: vertical;
+    background: #fff;
+    color: #0f172a;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.client-crm-textarea:hover { border-color: #cbd5e1; }
+.client-crm-textarea:focus {
+    outline: none;
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+.client-crm-textarea-hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+}
+.client-crm-textarea-hint span {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+.client-comment-form .btn-sm {
+    min-height: 0;
+    flex-shrink: 0;
+}
+.client-notes-log {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    max-height: min(360px, 48vh);
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.client-notes-log li {
+    position: relative;
+    padding: 14px 14px 14px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.9rem;
+}
+.client-notes-log li:last-child { border-bottom: none; }
+.client-notes-log li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 12px;
+    bottom: 12px;
+    width: 3px;
+    border-radius: 0 4px 4px 0;
+    background: linear-gradient(180deg, #818cf8, #a5b4fc);
+}
+.client-notes-log-meta {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-bottom: 8px;
+    line-height: 1.35;
+}
+.client-notes-log-meta strong {
+    color: #334155;
+    font-weight: 600;
+}
+.client-notes-log-body {
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #1e293b;
+    line-height: 1.5;
+}
+.client-notes-empty {
+    margin: 0 0 16px;
+    padding: 20px 16px;
+    text-align: center;
+    font-size: 0.875rem;
+    color: #64748b;
+    background: #fff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    line-height: 1.5;
+}
+.client-crm-divider {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #e2e8f0 12%, #e2e8f0 88%, transparent);
+    margin: 1.35rem 0;
+}
+.client-pickup-seg {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 0 8px;
+    padding: 0;
+    border: none;
+}
+.client-pickup-seg legend {
+    width: 100%;
+    padding: 0;
+    margin-bottom: 10px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #334155;
+    letter-spacing: -0.01em;
+}
+.client-pickup-legend-hint {
+    display: block;
+    font-weight: 500;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-transform: none;
+    letter-spacing: normal;
+    margin-top: 4px;
+    max-width: 40rem;
+    line-height: 1.45;
+}
+.client-pickup-seg label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #334155;
+    user-select: none;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    min-height: 36px;
+}
+.client-pickup-seg label:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+}
+.client-pickup-seg label:has(input:checked) {
+    border-color: #6366f1;
+    background: #eef2ff;
+    color: #312e81;
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.25);
+}
+.client-pickup-seg label:has(input:focus-visible) {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+}
+.client-pickup-seg input {
+    accent-color: #4f46e5;
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+.client-interaction-groups {
+    margin: 0 0 4px;
+    padding: 0;
+    min-width: 0;
+}
+.client-interaction-groups h4,
+.client-interaction-groups .client-crm-col-title {
+    margin-top: 0;
+}
+.client-interaction-sub {
+    margin: 0 0 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
+}
+.client-interaction-sub:first-of-type { margin-top: 0; }
+.client-crm-two-col {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-top: 0.25rem;
+}
+@media (min-width: 900px) {
+    .client-crm-two-col {
+        grid-template-columns: minmax(220px, 320px) 1fr;
+        align-items: start;
+    }
+}
+.client-crm-col--pickup .client-pickup-seg {
+    margin-bottom: 0;
+}
+.client-interaction-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.client-inter-chip {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: #334155;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+    min-height: 0;
+}
+.client-inter-chip:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+}
+.client-inter-chip:has(input:checked) {
+    border-color: #818cf8;
+    background: #f5f7ff;
+    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.35);
+}
+.client-inter-chip:has(input:focus-visible) {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+}
+.client-inter-chip input {
+    margin-top: 2px;
+    flex-shrink: 0;
+    width: 1.05rem;
+    height: 1.05rem;
+    accent-color: #4f46e5;
+}
+.client-inter-chip span { flex: 1; min-width: 0; }
+.client-crm-submit-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px 14px;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e2e8f0;
+}
+.client-crm-submit-row .btn-sm {
+    min-height: 0;
+    font-weight: 600;
+}
+.client-crm-submit-hint {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    line-height: 1.45;
+    flex: 1 1 12rem;
+    min-width: min(100%, 18rem);
+    margin: 0;
+}
+@media (max-width: 640px) {
+    .client-interaction-grid { grid-template-columns: 1fr; }
+    .client-crm-submit-row {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+    .client-crm-submit-row .btn-sm { width: 100%; justify-content: center; }
+    .client-crm-submit-hint { max-width: none; text-align: center; flex: none; }
+}
+.client-crm-overview {
+    margin-bottom: 1rem;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+.client-crm-panel--status {
+    padding: 14px 16px;
+}
+.client-crm-panel-desc--tight {
+    margin-bottom: 0.75rem;
+}
+.client-crm-col-title {
+    margin: 0 0 8px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #475569;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+}
+
+/* Шапка клієнта: контакти одним рядком (з переносом) */
+.client-header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 4px;
+    margin: 0.5rem 0 0;
+    padding: 12px 14px;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #334155;
+}
+.client-header-meta__sep {
+    color: #cbd5e1;
+    font-weight: 300;
+    user-select: none;
+    padding: 0 2px;
+}
+.client-header-meta__k {
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 4px;
+}
+.client-header-meta__v {
+    font-weight: 600;
+    color: #0f172a;
+    word-break: break-word;
+}
+.client-header-meta a.client-header-meta__v {
+    color: #2563eb;
+    text-decoration: none;
+}
+.client-header-meta a.client-header-meta__v:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <p style="margin-bottom: 0.5rem;"><a href="/clients" class="small-text">← До списку клієнтів</a></p>
+    <h1 style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span title="{{ marketing.segment }}" style="font-size:1.35rem;line-height:1;" aria-hidden="true">
+            {% set seg = marketing.segment %}
+            {% if seg == 'VIP' %}👑{% elif 'Лояльний' in seg %}💎{% elif 'Повторюваний' in seg %}🔁{% elif 'Новий' in seg or 'одноразовий' in seg %}🌱{% elif 'Без замовлень' in seg %}⚪{% else %}👤{% endif %}
+        </span>
+        <span>{{ (client.firstname or '') ~ ' ' ~ (client.lastname or '') }}</span>
+    </h1>
+    <div class="client-header-meta" aria-label="Контакт і профіль з фіду">
+        <span><span class="client-header-meta__k">Телефон</span><span class="client-header-meta__v">{{ client.telephone|fmt_phone_ua }}</span></span>
+        <span class="client-header-meta__sep" aria-hidden="true">·</span>
+        <span><span class="client-header-meta__k">Email</span>{% if client.email %}<a class="client-header-meta__v" href="mailto:{{ client.email|e }}">{{ client.email }}</a>{% else %}<span class="client-header-meta__v">—</span>{% endif %}</span>
+        <span class="client-header-meta__sep" aria-hidden="true">·</span>
+        <span><span class="client-header-meta__k">Місто</span><span class="client-header-meta__v">{{ client.geo_city or '—' }}</span></span>
+        <span class="client-header-meta__sep" aria-hidden="true">·</span>
+        <span><span class="client-header-meta__k">IP</span><span class="client-header-meta__v">{{ client.ip or '—' }}</span></span>
+        <span class="client-header-meta__sep" aria-hidden="true">·</span>
+        <span><span class="client-header-meta__k">Мова</span><span class="client-header-meta__v">{{ client.language or '—' }}</span></span>
+        <span class="client-header-meta__sep" aria-hidden="true">·</span>
+        <span><span class="client-header-meta__k">Зареєстрований</span><span class="client-header-meta__v">{% if client.is_registered %}Так{% else %}Ні{% endif %}</span></span>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h2 class="card-title">Менеджерські дані</h2>
+    </div>
+    <div class="card-content">
+        {% if query_notice in ('comment_ok', 'comment_empty', 'crm_ok') %}
+        <div class="client-crm-alerts">
+        {% if query_notice == 'comment_ok' %}
+        <div class="client-crm-notice client-crm-notice--ok" role="status">Коментар збережено й з’явиться в журналі нижче.</div>
+        {% elif query_notice == 'comment_empty' %}
+        <div class="client-crm-notice client-crm-notice--warn" role="alert">Введіть текст коментаря перед відправкою.</div>
+        {% elif query_notice == 'crm_ok' %}
+        <div class="client-crm-notice client-crm-notice--ok" role="status">CRM-дані збережено. Після закриття ліда робочі поля скинуто — історія залишилась нижче.</div>
+        {% endif %}
+        </div>
+        {% endif %}
+
+        <dl class="client-kv client-crm-system-row client-crm-overview">
+            <dt>Останній менеджер</dt>
+            <dd>{% if client.crm_last_touched_by %}{{ client.crm_last_touched_by }}{% if client.crm_last_touched_at %} · {{ client.crm_last_touched_at.strftime('%d.%m.%Y %H:%M') }}{% endif %} <span class="small-text" style="color:#94a3b8;">(автоматично після коментаря або змін CRM)</span>{% else %}— <span class="small-text" style="color:#94a3b8;">оновлюється після коментаря або збереження статусу / взаємодій</span>{% endif %}</dd>
+            <dt>Відповідальний менеджер</dt>
+            <dd>{% if assigned_manager_label %}{{ assigned_manager_label }}{% if client.crm_assigned_username %} <span class="small-text" style="color:#94a3b8;">({{ client.crm_assigned_username }})</span>{% endif %}{% else %}— <span class="small-text" style="color:#94a3b8;">призначається зі списку клієнтів</span>{% endif %}</dd>
+            <dt>Статус опрацювання</dt>
+            <dd><strong>{{ crm_processing_status_label }}</strong></dd>
+            <dt>Канали взаємодії</dt>
+            <dd>{% if crm_interaction_labels %}{{ crm_interaction_labels|join(' · ') }}{% else %}—{% endif %}</dd>
+        </dl>
+
+        <section class="client-crm-panel" aria-labelledby="client-crm-work-title" style="margin-bottom:1rem;">
+            <div class="client-crm-panel-head">
+                <h3 id="client-crm-work-title" class="client-crm-panel-title">Ручне опрацювання ліда</h3>
+            </div>
+            <p class="client-crm-panel-desc">Спочатку лід у нейтральному стані. Оберіть канал і статус. При закритті обов'язково вкажіть результат — після цього робочі поля скидаються, а історія зберігається.</p>
+
+            <form method="post" action="/clients/{{ client.id }}/interactions" class="client-crm-work-form">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <input type="hidden" name="return_detail" value="1">
+                <p class="client-interaction-sub">Прямий контакт</p>
+                <div class="client-interaction-grid">
+                    {% for key, ilabel in interaction_options_direct %}
+                    <label class="client-inter-chip">
+                        <input type="checkbox" name="interaction" value="{{ key }}" {% if key in crm_interaction_keys %}checked{% endif %}>
+                        <span>{{ ilabel }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="client-interaction-sub">Масові</p>
+                <div class="client-interaction-grid">
+                    {% for key, ilabel in interaction_options_mass %}
+                    <label class="client-inter-chip">
+                        <input type="checkbox" name="interaction" value="{{ key }}" {% if key in crm_interaction_keys %}checked{% endif %}>
+                        <span>{{ ilabel }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div class="client-crm-submit-row">
+                    <span class="client-crm-submit-hint">Канали можна змінювати вручну для цього клієнта.</span>
+                    <button type="submit" class="btn btn-primary btn-sm">Зберегти канали</button>
+                </div>
+            </form>
+
+            <form method="post" action="/clients/{{ client.id }}/processing-status" class="client-crm-work-form" id="clientDetailStatusForm" style="margin-top:1rem;padding-top:1rem;border-top:1px solid #e2e8f0;">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <input type="hidden" name="return_detail" value="1">
+                <div class="client-crm-two-col">
+                    <div>
+                        <label for="clientDetailProcessingStatus" class="client-crm-panel-title" style="font-size:0.875rem;display:block;margin-bottom:8px;">Статус опрацювання</label>
+                        <select name="processing_status" id="clientDetailProcessingStatus" class="client-crm-select" style="width:100%;max-width:320px;">
+                            <option value="neutral" disabled {% if crm_processing_status == 'neutral' %}selected{% endif %}>Нейтральний (поточний)</option>
+                            {% for key, label in processing_status_options %}
+                            <option value="{{ key }}" {% if crm_processing_status == key %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div id="clientDetailClosureWrap" style="display:none;">
+                        <label for="clientDetailClosureResult" class="client-crm-panel-title" style="font-size:0.875rem;display:block;margin-bottom:8px;">Результат взаємодії</label>
+                        <select name="closure_result" id="clientDetailClosureResult" class="client-crm-select" style="width:100%;max-width:320px;">
+                            <option value="" selected disabled>— оберіть результат —</option>
+                            {% for key, label in closure_result_options %}
+                            <option value="{{ key }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="client-crm-submit-row">
+                    <span class="client-crm-submit-hint">При «Закрито» оберіть результат. Після закриття статус і канали скинуться до нейтрального.</span>
+                    <button type="submit" class="btn btn-primary btn-sm">Застосувати статус</button>
+                </div>
+            </form>
+        </section>
+
+        {% if crm_history %}
+        <section class="client-crm-panel" aria-labelledby="client-crm-history-title" style="margin-bottom:1rem;">
+            <div class="client-crm-panel-head">
+                <h3 id="client-crm-history-title" class="client-crm-panel-title">Історія взаємодії (CRM)</h3>
+                <span class="client-crm-badge">{{ crm_history|length }}</span>
+            </div>
+            <ul class="client-notes-log" aria-label="Історія CRM-дій">
+                {% for h in crm_history %}
+                <li>
+                    <div class="client-notes-log-meta">
+                        <strong>{{ h.author_display|e }}</strong>
+                        · {% if h.created_at %}{{ h.created_at.strftime('%d.%m.%Y · %H:%M') }}{% else %}—{% endif %}
+                        · {{ h.event_type|e }}
+                    </div>
+                    <div class="client-notes-log-body">
+                        {% if h.processing_status %}Статус: {{ h.processing_status|processing_status_label }}{% endif %}
+                        {% if h.closure_result %} · Результат: {{ h.closure_result|closure_result_label }}{% endif %}
+                        {% if h.assigned_username %} · Менеджер: {{ h.assigned_username }}{% endif %}
+                        {% if h.interaction_keys %} · Канали: {{ h.interaction_keys|crm_interaction_labels_json }}{% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+        <hr class="client-crm-divider" aria-hidden="true">
+
+        <section class="client-crm-panel" aria-labelledby="client-crm-notes-title">
+            <div class="client-crm-panel-head">
+                <h3 id="client-crm-notes-title" class="client-crm-panel-title">Коментарі</h3>
+                {% if manager_notes %}<span class="client-crm-badge">{{ manager_notes|length }} у журналі</span>{% endif %}
+            </div>
+            <p class="client-crm-panel-desc">Внутрішня комунікація між менеджерами. Кожен запис зберігається з автором і часом; історія не перезаписується. <strong>Останні зверху.</strong></p>
+
+            <form method="post" action="/clients/{{ client.id }}/comments" class="client-comment-form">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <label for="clientCommentBody" class="client-crm-panel-title" style="font-size:0.875rem;margin-bottom:8px;display:block;">Новий коментар</label>
+                <textarea id="clientCommentBody" name="comment_body" class="client-crm-textarea" rows="3" maxlength="8000" placeholder="Уточнення ситуації, домовленості, деталі для колег…"></textarea>
+                <div class="client-crm-textarea-hint">
+                    <span>До 8000 символів</span>
+                    <button type="submit" class="btn btn-primary btn-sm">Додати коментар</button>
+                </div>
+            </form>
+
+            {% if manager_notes %}
+            <p class="client-interaction-sub" style="margin-top:18px;margin-bottom:8px;">Журнал</p>
+            <ul class="client-notes-log" aria-label="Історія коментарів">
+                {% for n in manager_notes %}
+                <li>
+                    <div class="client-notes-log-meta"><strong>{{ n.author_display }}</strong> · {% if n.created_at %}{{ n.created_at.strftime('%d.%m.%Y · %H:%M') }}{% else %}—{% endif %}</div>
+                    <div class="client-notes-log-body">{{ n.body }}</div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="client-notes-empty" role="status">Поки що немає записів — додайте перший коментар вище.</p>
+            {% endif %}
+        </section>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h2 class="card-title">Маркетинг і сегментація</h2>
+    </div>
+    <div class="card-content">
+        <dl class="client-kv">
+            <dt>Тип клієнта</dt><dd><strong>{{ marketing.segment }}</strong></dd>
+            <dt>Активність</dt><dd><strong>{{ marketing.activity }}</strong></dd>
+            <dt>Канал (група)</dt><dd>{{ marketing.channel }}</dd>
+            <dt>RFM — Recency</dt><dd>{{ marketing.rfm.recency_text }}</dd>
+            <dt>RFM — Frequency</dt><dd>{{ marketing.rfm.frequency }} замовлень</dd>
+            <dt>RFM — Monetary (LTV)</dt><dd>{% if marketing.rfm.monetary is not none %}{{ "%.2f"|format(marketing.rfm.monetary) }} ₴{% else %}—{% endif %}</dd>
+            <dt>Остання категорія інтересу</dt><dd>{{ last_category }}</dd>
+            <dt>Топ брендів (до 5)</dt>
+            <dd>
+                {% if top_brands %}
+                    {% for name, cnt in top_brands %}{{ name }} ({{ cnt }}){% if not loop.last %} · {% endif %}{% endfor %}
+                {% else %}—{% endif %}
+            </dd>
+            <dt>Нагадування про докупівлю</dt>
+            <dd>
+                {% if repurchase_hints %}
+                    <p class="repurchase-hint-intro">
+                        Остання покупка кожної варіації товару була не менш ніж <strong>30 днів</strong> тому — орієнтир для повторного контакту.
+                        Норма витрати з каталогу не враховується. Спочатку показані <strong>свіжіші</strong> історії (місяці), далі — дуже давні.
+                    </p>
+                    {% if repurchase_show_fresh %}
+                    <div class="repurchase-sub">Ймовірніші для нагадування (30 дн. — 1 р.)</div>
+                    {% for h in repurchase_show_fresh %}
+                    <div class="repurchase-row">
+                        <span class="repurchase-row-name">{{ h.title }}</span>
+                        <span class="repurchase-row-meta">останнє: {{ h.age_label }} тому <span class="repurchase-pid">· id {{ h.product_id }}</span></span>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% if repurchase_show_stale %}
+                    <div class="repurchase-sub">Давні покупки (понад рік без повтору)</div>
+                    {% for h in repurchase_show_stale %}
+                    <div class="repurchase-row repurchase-row--stale">
+                        <span class="repurchase-row-name">{{ h.title }}</span>
+                        <span class="repurchase-row-meta">останнє: {{ h.age_label }} тому <span class="repurchase-pid">· id {{ h.product_id }}</span></span>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% if repurchase_more_count > 0 %}
+                    <p class="small-text" style="margin-top:10px;color:#64748b;">… ще {{ repurchase_more_count }} поз. у списку</p>
+                    {% endif %}
+                {% else %}
+                    <span class="small-text" style="color:#64748b;">Немає варіацій з останньою покупкою старішою за 30 днів — усі куплені позиції виглядають «недавніми» (евристика).</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h2 class="card-title">Контакти та джерело</h2>
+    </div>
+    <div class="card-content">
+        <dl class="client-kv">
+            <dt>Телефон</dt><dd>{{ client.telephone or '—' }}</dd>
+            <dt>Email</dt><dd>{{ client.email or '—' }}</dd>
+            <dt>Місто</dt><dd>{{ client.geo_city or '—' }}</dd>
+            <dt>IP</dt><dd>{{ client.ip or '—' }}</dd>
+            <dt>Мова</dt><dd>{{ client.language or '—' }}</dd>
+            <dt>Зареєстрований</dt><dd>{% if client.is_registered %}Так{% else %}Ні{% endif %}</dd>
+            <dt>Категорія джерела</dt><dd>{{ client.source_category or '—' }}</dd>
+            <dt>Джерело (raw)</dt><dd>{{ client.source_raw or '—' }}</dd>
+            <dt>UTM source</dt><dd>{{ client.source_utm_source or '—' }}</dd>
+            <dt>UTM medium</dt><dd>{{ client.source_utm_medium or '—' }}</dd>
+            <dt>UTM campaign</dt><dd>{{ client.source_utm_campaign or '—' }}</dd>
+            <dt>Referrer</dt><dd>{{ client.source_referrer or '—' }}</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header">
+        <h2 class="card-title">Дати та метрики</h2>
+    </div>
+    <div class="card-content">
+        <dl class="client-kv">
+            <dt>Дата реєстрації</dt><dd>{% if client.date_registered %}{{ client.date_registered.strftime('%d.%m.%Y %H:%M') }}{% else %}—{% endif %}</dd>
+            <dt>Перше замовлення</dt><dd>{% if client.first_order_date %}{{ client.first_order_date.strftime('%d.%m.%Y %H:%M') }}{% else %}—{% endif %}</dd>
+            <dt>Останнє замовлення</dt><dd>{% if client.last_order_date %}{{ client.last_order_date.strftime('%d.%m.%Y %H:%M') }}{% else %}—{% endif %}</dd>
+            <dt>Менеджер останнього замовлення</dt><dd>{{ client.last_order_manager_username or '—' }}</dd>
+            <dt>Кількість замовлень</dt><dd>{{ client.orders_count if client.orders_count is not none else '—' }}</dd>
+            <dt>LTV</dt><dd>{% if client.ltv is not none %}{{ "%.2f"|format(client.ltv) }} ₴{% else %}—{% endif %}</dd>
+            <dt>Середній чек</dt><dd>{% if client.average_order_total is not none %}{{ "%.2f"|format(client.average_order_total) }} ₴{% else %}—{% endif %}</dd>
+            <dt>Фід згенеровано</dt><dd>{% if client.feed_generated_at %}{{ client.feed_generated_at.strftime('%d.%m.%Y %H:%M') }}{% else %}—{% endif %}</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="card client-orders-wrap">
+    <div class="card-header client-orders-head">
+        <h2 class="card-title">Історія замовлень <span class="client-orders-count">{{ orders|length }}</span></h2>
+        <div class="client-orders-export">
+            {% if request.state.access_clients_export %}
+            <a class="btn btn-secondary btn-sm" href="/clients/{{ client.id }}/export-orders.csv">Завантажити CSV</a>
+            <a class="btn btn-secondary btn-sm" href="/clients/{{ client.id }}/export-orders.xlsx">Завантажити Excel</a>
+            {% else %}
+            <span class="muted" style="font-size:13px;">Експорт замовлень доступний лише з правом «Експорт бази клієнтів».</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-content client-orders-content">
+        <p class="client-orders-list-hint">Натисніть на рядок замовлення, щоб переглянути джерело трафіку та склад замовлення.</p>
+        {% for o in orders %}
+        <details class="client-order-details">
+            <summary class="client-order-panel__summary">
+                <div class="client-order-panel__summary-inner">
+                    <div class="client-order-summary-row">
+                        <div class="client-order-panel__top">
+                            <div class="client-order-panel__title">
+                                <span class="client-order-id">#{{ o.order_id }}</span>
+                                {% if o.order_status_label %}
+                                <span class="client-order-status-badge client-order-status-badge--{{ o.order_status_tone }}">{{ o.order_status_label }}</span>
+                                {% endif %}
+                                {% if o.order_date %}
+                                <time datetime="{{ o.order_date.isoformat() }}">{{ o.order_date.strftime('%d.%m.%Y · %H:%M') }}</time>
+                                {% endif %}
+                            </div>
+                            {% if o.order_total is not none %}
+                            <div class="client-order-total">{{ "%.2f"|format(o.order_total) }}&nbsp;₴</div>
+                            {% endif %}
+                        </div>
+                        <span class="client-order-chevron" aria-hidden="true"></span>
+                    </div>
+                </div>
+            </summary>
+            <div class="client-order-details__body">
+                <div class="client-order-meta">
+                    <div>
+                        <div class="client-order-meta-label">Менеджер</div>
+                        <div class="client-order-meta-value">{{ o.manager_username or '—' }}</div>
+                    </div>
+                    <div>
+                        <div class="client-order-meta-label">Referer</div>
+                        <div class="client-order-meta-value">{% if o.referer %}{{ o.referer }}{% else %}—{% endif %}</div>
+                    </div>
+                    <div>
+                        <div class="client-order-meta-label">UTM (source / medium / campaign)</div>
+                        <div class="client-order-meta-value">
+                            <span style="font-variant-numeric: tabular-nums;">{{ o.utm_source or '—' }}</span>
+                            <span style="color:#d1d5db;"> · </span>
+                            {{ o.utm_medium or '—' }}
+                            <span style="color:#d1d5db;"> · </span>
+                            {{ o.utm_campaign or '—' }}
+                        </div>
+                    </div>
+                </div>
+                <div class="client-order-table-wrap">
+                    <table class="client-order-table">
+                        <thead>
+                            <tr>
+                                <th>Товар</th>
+                                <th class="col-brand">Бренд</th>
+                                <th class="col-qty">К-сть</th>
+                                <th class="col-price">Ціна</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in o.lines %}
+                            <tr>
+                                <td>
+                                    {% if line.name %}
+                                    <div class="client-order-product-name">{{ line.name }}</div>
+                                    {% else %}
+                                    <div class="client-order-product-name" style="color:#9ca3af;">—</div>
+                                    {% endif %}
+                                    {% if line.product_id %}<span class="client-order-pid">id {{ line.product_id }}</span>{% endif %}
+                                </td>
+                                <td class="col-brand">{{ line.brand or '—' }}</td>
+                                <td class="col-qty">{{ line.quantity if line.quantity is not none else '—' }}</td>
+                                <td class="col-price">{% if line.price is not none %}{{ "%.2f"|format(line.price) }} ₴{% else %}—{% endif %}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" style="color:#6b7280;padding:14px;">Немає рядків у замовленні</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+        {% else %}
+        <p style="margin:0;color:#6b7280;">Немає замовлень у фіді для цього клієнта.</p>
+        {% endfor %}
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var statusSel = document.getElementById('clientDetailProcessingStatus');
+    var closureWrap = document.getElementById('clientDetailClosureWrap');
+    var closureSel = document.getElementById('clientDetailClosureResult');
+    if (!statusSel || !closureWrap) return;
+    function syncClosure() {
+        var closed = statusSel.value === 'closed';
+        closureWrap.style.display = closed ? '' : 'none';
+        if (closureSel) closureSel.required = closed;
+    }
+    statusSel.addEventListener('change', syncClosure);
+    syncClosure();
+});
+</script>
+{% endblock %}

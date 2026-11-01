@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% from "procurement/_procurement_sort_th.html" import procurement_sort_th %}
+
+{% block title %}ТОП продуктів{% endblock %}
+{% block mobile_title %}ТОП{% endblock %}
+
+{% from 'procurement/_procurement_sku_search_haystack.html' import sku_search_haystack_attr %}
+{% block content %}
+{% from "procurement/_icons.html" import title_with_icon, ui_icon %}
+
+<div class="dashboard-container procurement_dashboard" data-procurement-search-root> <div class="dashboard-header" style="margin-bottom: 24px;"> <h1 class="dashboard-title">{{ title_with_icon('trophy', 'ТОП продуктів') }}</h1> <p class="dashboard-subtitle">Найкращі товари за різними метриками. Показуємо по 50 варіацій на сторінці (всього {{ total_count }}).</p> </div> {% include 'procurement_nav.html' %}
+
+<!-- Фільтри -->
+<div class="card" style="margin-bottom: 24px;"> <form method="get" action="/procurement/top-products" class="js-procurement-product-search" data-procurement-server-search style="display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap;"> {% include 'procurement/_procurement_product_search_field.html' %}
+        <div> <label style="font-weight: 600; margin-bottom: 8px; display: block;">{{ ui_icon('type') }} Сортування:</label> <select name="sort_by" onchange="this.form.submit()" style="padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 6px;"> <option value="revenue" {% if sort_by == 'revenue' %}selected{% endif %}>За виручкою</option> <option value="sales" {% if sort_by == 'sales' %}selected{% endif %}>За продажами</option> <option value="frozen_capital" {% if sort_by == 'frozen_capital' %}selected{% endif %}>За замороженим капіталом</option> <option value="turnover" {% if sort_by == 'turnover' %}selected{% endif %}>За оборотністю (швидше зверху)</option> <option value="turnover_slow" {% if sort_by == 'turnover_slow' %}selected{% endif %}>За оборотністю (повільніше зверху)</option> <option value="stock_low" {% if sort_by == 'stock_low' %}selected{% endif %}>Малий залишок</option> <option value="stock_high" {% if sort_by == 'stock_high' %}selected{% endif %}>Великий залишок</option> <option value="margin" {% if sort_by == 'margin' %}selected{% endif %}>За маржею</option> <option value="name" {% if sort_by == 'name' %}selected{% endif %}>За назвою</option> </select> </div> <div> <label style="font-weight: 600; margin-bottom: 8px; display: block;">{{ ui_icon('tag') }} Бренд:</label> <select name="brand_id" onchange="this.form.submit()" style="padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 6px;"> <option value="">Всі бренди</option> {% for brand in brands %}
+                <option value="{{ brand.external_id }}" {% if selected_brand_id == brand.external_id %}selected{% endif %}>{{ brand.name }}</option> {% endfor %}
+            </select> </div> <div style="display: flex; gap: 8px; align-items: center;"> <a href="/procurement/top-products" class="btn btn-light btn-sm">Скинути фільтри</a> </div> <input type="hidden" name="horizon_days" value="{{ horizon_days }}"> <input type="hidden" name="purchase_horizon_days" value="{{ purchase_horizon_days }}"> {% if sort_by != 'revenue' %}<input type="hidden" name="sort_by" value="{{ sort_by }}">{% endif %}
+        {% if sort_dir != 'desc' or sort_by != 'revenue' %}<input type="hidden" name="sort_dir" value="{{ sort_dir }}">{% endif %}
+        <input type="hidden" name="page" value="{{ page or 1 }}"> </form>
+</div>
+<div data-procurement-search-refresh> <!-- Горизонт аналітики (як раніше — виручка, продажі, оборотність, сортування) -->
+<div class="card" style="margin-bottom: 16px;"> <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;"> <span style="font-weight: 600; color: #374151;">Горизонт аналітики:</span> <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="horizonBtns"> {% for d in [1, 7, 14, 30, 60, 90, 180, 360] %}
+            <a class="horizon-btn {% if horizon_days == d %}active{% endif %}"
+               href="{{ horizon_url(d, purchase_horizon_days) }}"> {{ d }} {% if d == 1 %}день{% else %}днів{% endif %}
+            </a> {% endfor %}
+        </div> <span style="font-size: 13px; color: #9ca3af;">Впливає на виручку, продажі, оборотність та сортування</span> </div>
+</div> <!-- Горизонт закупки — лише колонка «Закупити» -->
+<div class="card" style="margin-bottom: 16px;"> <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;"> <span style="font-weight: 600; color: #374151;">Горизонт закупки:</span> <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="purchaseHorizonBtns"> {% for d in [1, 7, 14, 30, 60, 90, 180, 360] %}
+            <a class="horizon-btn {% if purchase_horizon_days == d %}active{% endif %}"
+               href="{{ horizon_url(horizon_days, d) }}"> {{ d }} {% if d == 1 %}день{% else %}днів{% endif %}
+            </a> {% endfor %}
+        </div> <span style="font-size: 13px; color: #9ca3af;">Впливає лише на колонку «Закупити»</span> </div>
+</div> <!-- Таблиця топ продуктів -->
+<div class="card"> {% if top_products %}
+    <p style="margin: 0 0 10px; font-size: 13px; color: #6b7280;">Сортування по заголовках — по всіх <strong>{{ total_count }}</strong> варіаціях · сторінка {{ page }} з {{ total_pages }}</p> <div class="table-wrapper"> <table class="data-table" data-procurement-sku-table> <thead> <tr> <th class="procurement-sort-th" title="Порядковий номер">#</th> {{ procurement_sort_th('Товар / Опція', 'name', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Бренд', 'brand', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Модель', 'model', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Маржа, %', 'margin', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Продаж/день · Динаміка', 'sales_avg', sort_by, sort_dir, sort_url, 'col-sales-dynamics') }}
+                {{ procurement_sort_th('Продажі (шт)', 'sales', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Виручка (' ~ horizon_days ~ 'д)', 'revenue', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Ціна на сайті', 'price', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Закупівельна ціна', 'purchase_price', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Залишок/сума', 'stock', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Оборотність (' ~ horizon_days ~ 'д)', 'turnover', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Закупити (' ~ purchase_horizon_days ~ 'д)', 'buy', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Заморожено', 'frozen_capital', sort_by, sort_dir, sort_url) }}
+                {{ procurement_sort_th('Статус', 'status', sort_by, sort_dir, sort_url) }}
+            </tr> </thead> <tbody> {% set global_index_start = (page - 1) * per_page %}
+                {% for product, option, analytics in top_products %}
+                {% set item = option if option else product %}
+                {% if option %}
+                    {% set s30_rev = option.sales_qty_30d or 0 %}
+                    {% set s1_rev = option.sales_qty_1d or 0 %}
+                    {% set s7_rev = option.sales_qty_7d or 0 %}
+                    {% set s60_rev = option.sales_qty_60d or 0 %}
+                    {% set s90_rev = option.sales_qty_90d or 0 %}
+                    {% set s180_rev = option.sales_qty_180d or 0 %}
+                    {% set s360_rev = option.sales_qty_360d or 0 %}
+                    {% set a1 = option.sales_avg_per_day_1d or 0 %}
+                    {% set a7 = option.sales_avg_per_day_7d or 0 %}
+                    {% set a30 = option.sales_avg_per_day_30d or 0 %}
+                    {% set a60 = option.sales_avg_per_day_60d or 0 %}
+                    {% set a90 = option.sales_avg_per_day_90d or 0 %}
+                    {% set a180 = option.sales_avg_per_day_180d or 0 %}
+                    {% set a360 = option.sales_avg_per_day_360d or 0 %}
+                    {% set unit_price = option.selling_price_catalog or product.selling_price_catalog or 0 %}
+                {% else %}
+                    {% set s30_rev = product.sales_qty_30d or 0 %}
+                    {% set s1_rev = product.sales_qty_1d or 0 %}
+                    {% set s7_rev = product.sales_qty_7d or 0 %}
+                    {% set s60_rev = product.sales_qty_60d or 0 %}
+                    {% set s90_rev = product.sales_qty_90d or 0 %}
+                    {% set s180_rev = product.sales_qty_180d or 0 %}
+                    {% set s360_rev = product.sales_qty_360d or 0 %}
+                    {% set a1 = product.sales_avg_per_day_1d or 0 %}
+                    {% set a7 = product.sales_avg_per_day_7d or 0 %}
+                    {% set a30 = product.sales_avg_per_day_30d or 0 %}
+                    {% set a60 = product.sales_avg_per_day_60d or 0 %}
+                    {% set a90 = product.sales_avg_per_day_90d or 0 %}
+                    {% set a180 = product.sales_avg_per_day_180d or 0 %}
+                    {% set a360 = product.sales_avg_per_day_360d or 0 %}
+                    {% set unit_price = product.selling_price_catalog or 0 %}
+                {% endif %}
+                {% if horizon_days == 1 %}
+                    {% set selected_sales_qty = s1_rev %}
+                    {% set selected_avg_day = a1 %}
+                    {% set selected_rev_fact = (s1_rev * unit_price) if unit_price else 0 %}
+                {% elif horizon_days == 7 %}
+                    {% set selected_sales_qty = s7_rev %}
+                    {% set selected_avg_day = a7 %}
+                    {% set selected_rev_fact = (s7_rev * unit_price) if unit_price else 0 %}
+                {% elif horizon_days == 14 %}
+                    {# 14д у фіді немає: 2×7д, але не більше ніж sales_qty_30d #}
+                    {% set s14_qty = [s7_rev * 2, s30_rev]|min %}
+                    {% set selected_sales_qty = s14_qty %}
+                    {% set selected_avg_day = (s14_qty / 14.0) if s14_qty else 0 %}
+                    {% set selected_rev_fact = (s14_qty * unit_price) if unit_price else 0 %}
+                {% elif horizon_days == 30 %}
+                    {% set selected_sales_qty = s30_rev %}
+                    {% set selected_avg_day = a30 %}
+                    {% set selected_rev_fact = (s30_rev * unit_price) if unit_price else 0 %}
+                {% elif horizon_days == 60 %}
+                    {% set selected_sales_qty = s60_rev %}
+                    {% set selected_avg_day = a60 %}
+                    {% set selected_rev_fact = (s60_rev * unit_price) if unit_price else 0 %}
+                {% elif horizon_days == 90 %}
+                    {% set selected_sales_qty = s90_rev %}
+                    {% set selected_avg_day = a90 %}
+                    {% set selected_rev_fact = (s90_rev * unit_price) if unit_price else 0 %}
+                {% elif horizon_days == 180 %}
+                    {% set selected_sales_qty = s180_rev %}
+                    {% set selected_avg_day = a180 %}
+                    {% set selected_rev_fact = (s180_rev * unit_price) if unit_price else 0 %}
+                {% else %}
+                    {% set selected_sales_qty = s360_rev %}
+                    {% set selected_avg_day = a360 %}
+                    {% set selected_rev_fact = (s360_rev * unit_price) if unit_price else 0 %}
+                {% endif %}
+                {# Горизонт закупки — окремо від аналітики #}
+                {% if purchase_horizon_days == 1 %}
+                    {% set selected_recommend = analytics.recommended_purchase_1d or 0 %}
+                {% elif purchase_horizon_days == 7 %}
+                    {% set selected_recommend = analytics.recommended_purchase_7d or 0 %}
+                {% elif purchase_horizon_days == 14 %}
+                    {% set r14_raw = (analytics.recommended_purchase_7d or 0) * 2 %}
+                    {% set r30_lim = analytics.recommended_purchase_30d or analytics.recommended_purchase_qty or 0 %}
+                    {% set selected_recommend = [r14_raw, r30_lim]|min %}
+                {% elif purchase_horizon_days == 30 %}
+                    {% set selected_recommend = analytics.recommended_purchase_30d or analytics.recommended_purchase_qty or 0 %}
+                {% elif purchase_horizon_days == 60 %}
+                    {% set selected_recommend = analytics.recommended_purchase_60d or 0 %}
+                {% elif purchase_horizon_days == 90 %}
+                    {% set selected_recommend = analytics.recommended_purchase_90d or 0 %}
+                {% elif purchase_horizon_days == 180 %}
+                    {% set selected_recommend = analytics.recommended_purchase_180d or 0 %}
+                {% else %}
+                    {% set selected_recommend = analytics.recommended_purchase_360d or 0 %}
+                {% endif %}
+                <tr {{ sku_search_haystack_attr(product, option) }}> <td style="font-weight: 700; color: #6b7280;">{{ global_index_start + loop.index }}</td> <td> {% set has_dilovod = option and option.dilovod_id %}
+                        <a href="/procurement/product/{{ product.id }}{% if option %}?option_id={{ option.id }}{% endif %}" style="color: inherit; text-decoration: none;"> {% if product.image_url %}
+                            <img src="{{ product.image_url }}" alt="" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; vertical-align: middle; margin-right: 8px;"> {% endif %}
+                            <div> <strong style="font-size: 13px;">{{ product.name }}</strong> {% if option %}
+                                    <div style="font-size: 13px; color: #4b5563;"> {{ option.option_name }}: {{ option.option_value_name }}
+                                    </div> {% endif %}
+                            </div> </a> </td> <td style="color: #6b7280;">{% if product.brand_id %}<a href="/procurement/brand/{{ product.brand_id }}" style="color: inherit;">{{ product.brand_name or '—' }}</a>{% else %}{{ product.brand_name or '—' }}{% endif %}</td> <td style="color: #6b7280; font-size: 13px;"> {% if option %}{{ option.option_model or product.model or '—' }}{% else %}{{ product.model or '—' }}{% endif %}
+                    </td> <td style="white-space: nowrap;"> {% include 'procurement/_procurement_margin_cell.html' %}
+                    </td> <td class="col-sales-dynamics" data-label="Продаж/день · Динаміка"> {% include 'procurement/_procurement_sales_dynamics_cell.html' %}
+                    </td> <td><strong>{{ selected_sales_qty or 0 }}</strong> шт</td> <!-- Тренд 7д vs 30д (колонка вимкнена; дані: analytics.trend_7d_vs_30d) --> <td style="color: #059669; font-weight: 600;">{{ "{:,.0f}".format(selected_rev_fact).replace(',', ' ') }} грн</td> <td style="white-space: nowrap;"> {% if item.selling_price_catalog %}
+                        <strong>{{ "{:,.0f}".format(item.selling_price_catalog).replace(',', ' ') }} ₴</strong> {% else %}
+                        —
+                        {% endif %}
+                    </td> <td style="white-space: nowrap;"> {% include 'procurement/_procurement_purchase_price_cell.html' %}
+                    </td> <td> {% if option and option.stock_qty is not none %}
+                            {{ option.stock_qty }} шт
+                        {% else %}
+                            {{ product.stock_qty or 0 }} шт
+                        {% endif %}
+                    </td> {% set stock_qty = (option.stock_qty if option and option.stock_qty is not none else product.stock_qty) or 0 %}
+                    <td> {% set avg_day = selected_avg_day %}
+                        {% if avg_day > 0 %}
+                            <strong>{{ (stock_qty / avg_day) | round(1) }}</strong> дн
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td> <td> <strong style="color: #059669;">{{ selected_recommend }} шт</strong> </td> <td>{{ "{:,.0f}".format(analytics.frozen_capital or 0).replace(',', ' ') }} грн</td> <td style="font-size: 12px;"> {% set _stock = (option.stock_qty if option and option.stock_qty is not none else product.stock_qty) or 0 %}
+                        {% set _dws   = analytics.days_without_sales or 0 %}
+                        {% set _avg   = selected_avg_day or 0 %}
+                        {% if _stock == 0 %}
+                            {% set dyn_st = 'out_of_stock' %}
+                        {% elif _avg >= 0.25 %}
+                            {% set dyn_st = 'fast_mover' %}
+                        {% elif _avg >= 0.07 %}
+                            {% set dyn_st = 'medium_mover' %}
+                        {% elif _avg > 0 %}
+                            {% set dyn_st = 'slow_mover' %}
+                        {% elif _dws >= 30 %}
+                            {% set dyn_st = 'dead_stock' %}
+                        {% elif _dws >= 14 %}
+                            {% set dyn_st = 'slow_mover' %}
+                        {% else %}
+                            {% set dyn_st = 'slow_mover' %}
+                        {% endif %}
+                        {% if dyn_st == 'fast_mover' %}<span class="badge" style="background:#d1fae5;color:#065f46;">Fast</span> {% elif dyn_st == 'medium_mover' %}<span class="badge" style="background:#dbeafe;color:#1e40af;">Medium</span> {% elif dyn_st == 'slow_mover' %}<span class="badge" style="background:#fef3c7;color:#92400e;">Slow</span> {% elif dyn_st == 'dead_stock' %}<span class="badge" style="background:#fee2e2;color:#991b1b;">Dead</span> {% elif dyn_st == 'out_of_stock' %}<span class="badge" style="background:#fecaca;color:#7f1d1d;">Немає</span> {% else %}—{% endif %}
+                    </td> </tr> {% endfor %}
+            </tbody> </table> </div> {% else %}
+    <p style="text-align: center; padding: 48px; color: #6b7280;">Немає даних</p> {% endif %}
+</div> {% if total_pages > 1 %}
+<nav class="pagination" style="margin-top: 16px; display: flex; justify-content: center; gap: 8px;"> {% if page > 1 %}
+    <a href="{{ pagination_url(page - 1) }}">← Попередня</a> {% else %}
+    <span class="disabled">← Попередня</span> {% endif %}
+
+    <span>Сторінка {{ page }} з {{ total_pages }}</span> {% if page < total_pages %}
+    <a href="{{ pagination_url(page + 1) }}">Наступна →</a> {% else %}
+    <span class="disabled">Наступна →</span> {% endif %}
+</nav>
+{% endif %}
+
+</div><!-- /data-procurement-search-refresh --> </div> <style>
+.data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.data-table th,
+.data-table td {
+    padding: 0.7rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+.data-table th:last-child,
+.data-table td:last-child {
+    border-right: none;
+}
+.data-table th {
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
+}
+.data-table tbody tr {
+    transition: background 0.15s ease;
+}
+.data-table tbody tr:nth-child(even):not(:hover) {
+    background: #fcfcfd;
+}
+.data-table tbody tr:hover {
+    background: #f8fafc;
+}
+.data-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.data-table tbody tr.hidden {
+    display: none;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill, 999px);
+    font-size: 12px;
+    font-weight: 600;
+    color: white;
+}
+.period-chip-active {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border-radius: var(--radius-pill, 999px);
+    padding: 1px 5px;
+    font-weight: 700;
+}
+
+/* Динаміка: стрілки та % — зел/черв/син (як у спільному фрагменті; локально для надійності в цій таблиці) */
+.data-table .procurement-dynamics-cell .dynamics-trend-up {
+    color: #059669 !important;
+}
+.data-table .procurement-dynamics-cell .dynamics-trend-down {
+    color: #dc2626 !important;
+}
+.data-table .procurement-dynamics-cell .dynamics-trend-flat {
+    color: #2563eb !important;
+}
+.data-table .procurement-dynamics-cell .dynamics-trend .dyn-arrow {
+    color: inherit !important;
+}
+
+.horizon-btn {
+    text-decoration: none;
+    display: inline-block;
+    padding: 6px 14px;
+    border: 2px solid #e5e7eb;
+    border-radius: var(--radius-pill, 999px);
+    background: #f9fafb;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.horizon-btn:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+}
+.horizon-btn.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+</style>
+{% endblock %}

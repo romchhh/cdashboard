@@ -1,0 +1,20 @@
+{% macro procurement_filter_hidden(filters) %}
+{% if filters and filters.q %}<input type="hidden" name="q" value="{{ filters.q }}">{% endif %}
+{% if filters and filters.f_model %}<input type="hidden" name="f_model" value="{{ filters.f_model }}">{% endif %}
+{% if filters and filters.f_brand %}<input type="hidden" name="f_brand" value="{{ filters.f_brand }}">{% endif %}
+{% if filters and filters.f_stock_min is not none %}<input type="hidden" name="f_stock_min" value="{{ filters.f_stock_min }}">{% endif %}
+{% if filters and filters.f_stock_max is not none %}<input type="hidden" name="f_stock_max" value="{{ filters.f_stock_max }}">{% endif %}
+{% if filters and filters.f_price_min is not none %}<input type="hidden" name="f_price_min" value="{{ filters.f_price_min }}">{% endif %}
+{% if filters and filters.f_price_max is not none %}<input type="hidden" name="f_price_max" value="{{ filters.f_price_max }}">{% endif %}
+{% if filters and filters.f_turn_min is not none %}<input type="hidden" name="f_turn_min" value="{{ filters.f_turn_min }}">{% endif %}
+{% if filters and filters.f_turn_max is not none %}<input type="hidden" name="f_turn_max" value="{{ filters.f_turn_max }}">{% endif %}
+{% if filters and filters.f_sales_min is not none %}<input type="hidden" name="f_sales_min" value="{{ filters.f_sales_min }}">{% endif %}
+{% if filters and filters.f_sales_max is not none %}<input type="hidden" name="f_sales_max" value="{{ filters.f_sales_max }}">{% endif %}
+{% if filters and filters.f_buy_min is not none %}<input type="hidden" name="f_buy_min" value="{{ filters.f_buy_min }}">{% endif %}
+{% if filters and filters.f_buy_max is not none %}<input type="hidden" name="f_buy_max" value="{{ filters.f_buy_max }}">{% endif %}
+{% if filters and filters.f_fcst_min is not none %}<input type="hidden" name="f_fcst_min" value="{{ filters.f_fcst_min }}">{% endif %}
+{% if filters and filters.f_fcst_max is not none %}<input type="hidden" name="f_fcst_max" value="{{ filters.f_fcst_max }}">{% endif %}
+{% if filters and filters.f_status %}<input type="hidden" name="f_status" value="{{ filters.f_status }}">{% endif %}
+{% if filters and filters.f_action %}<input type="hidden" name="f_action" value="{{ filters.f_action }}">{% endif %}
+{% if filters and filters.f_dyn %}<input type="hidden" name="f_dyn" value="{{ filters.f_dyn }}">{% endif %}
+{% endmacro %}

@@ -1,0 +1,188 @@
+<link rel="stylesheet" href="/static/css/clients-dash-embed.css">
+{% set dash = result.dash %}
+{% set gran = dash.monthly_chart_meta.granularity|default('month') %}
+{% set gran_cur = request.query_params.get('chart_granularity') or 'auto' %}
+<div class="clients-report-embed clients-dash">
+    <p class="dash-meta" style="margin-bottom:1rem;">Оновлено: <strong>{{ dash.generated_at }}</strong> (Київ)</p>
+    <section class="monthly-hero" aria-labelledby="monthly-chart-title">
+        <div class="monthly-hero-head">
+            <div class="monthly-hero-head-row">
+                <h2 id="monthly-chart-title">Замовлення та виручка{% if gran == 'day' %} по днях{% elif gran == 'week' %} по тижнях{% else %} по місяцях{% endif %}</h2>
+                {% if dash.monthly_chart_filter.is_active %}
+                <p class="monthly-filter-active">
+                    <strong>{{ dash.monthly_chart_filter.label_ua }}</strong>
+                    <a href="/reports?report_type=clients_monthly&amp;monthly_outcome=all&amp;chart_granularity={{ gran_cur|urlencode }}{% if dash.monthly_chart_meta.is_custom %}&amp;monthly_from={{ dash.monthly_chart_meta.from_iso }}&amp;monthly_to={{ dash.monthly_chart_meta.to_iso }}{% endif %}">Усі</a>
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        {% if dash.monthly_chart_meta.period_summary %}
+        {% set ps = dash.monthly_chart_meta.period_summary %}
+        {% set mo = dash.monthly_chart_filter.outcome %}
+        <div class="monthly-hero-stats" aria-label="Підсумок за обраний період">
+            <p class="monthly-hero-stats-period">
+                Обраний період:
+                <strong>{{ dash.monthly_chart_meta.from_display }}</strong> — <strong>{{ dash.monthly_chart_meta.to_display }}</strong>
+                {% if dash.monthly_chart_meta.is_custom %}<span class="monthly-stats-range-hint">(власні дати)</span>{% endif %}
+            </p>
+            {% if dash.monthly %}
+            <div class="monthly-hero-kpi-grid">
+                {% if mo == 'all' %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--total">
+                    <span class="monthly-kpi-tile-label">Усього замовлень</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders|fmt_ua }}</span>
+                </div>
+                <div class="monthly-kpi-tile monthly-kpi-tile--ok">
+                    <span class="monthly-kpi-tile-label">Успішні (кінцеві)</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders_success|fmt_ua }}</span>
+                </div>
+                <div class="monthly-kpi-tile monthly-kpi-tile--bad">
+                    <span class="monthly-kpi-tile-label">Неуспішні (кінцеві)</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders_unsuccessful|fmt_ua }}<span class="monthly-kpi-unit">({{ ps.pct_orders_unsuccessful|default(0) }}%)</span></span>
+                </div>
+                {% if ps.orders_transitional %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--mid">
+                    <span class="monthly-kpi-tile-label">Проміжні</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders_transitional|fmt_ua }}</span>
+                </div>
+                {% endif %}
+                {% elif mo == 'success' %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--ok">
+                    <span class="monthly-kpi-tile-label">Успішних за період</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders|fmt_ua }}</span>
+                </div>
+                {% else %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--bad">
+                    <span class="monthly-kpi-tile-label">Неуспішних за період</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders|fmt_ua }}</span>
+                </div>
+                {% endif %}
+                {% if mo != 'unsuccessful' %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--money">
+                    <span class="monthly-kpi-tile-label">Виручка (успішні)</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.revenue|fmt_ua }}<span class="monthly-kpi-unit">₴</span></span>
+                </div>
+                {% endif %}
+                {% if mo == 'all' %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--bad monthly-kpi-tile--money">
+                    <span class="monthly-kpi-tile-label">Виручка (неуспішні)</span>
+                    <span class="monthly-kpi-tile-val">{{ (ps.revenue_unsuccessful|default(0))|fmt_ua }}<span class="monthly-kpi-unit">₴</span></span>
+                </div>
+                {% elif mo == 'unsuccessful' %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--bad monthly-kpi-tile--money">
+                    <span class="monthly-kpi-tile-label">Виручка (неуспішні)</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.revenue|fmt_ua }}<span class="monthly-kpi-unit">₴</span></span>
+                </div>
+                {% endif %}
+                {% if ps.avg_check_uah is not none and mo != 'unsuccessful' %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--meta">
+                    <span class="monthly-kpi-tile-label">Сер. чек (успішні)</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.avg_check_uah|fmt_ua }}<span class="monthly-kpi-unit">₴</span></span>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <p class="monthly-hero-stats-empty">За цей діапазон немає замовлень — змініть період або натисніть «Період за замовч.».</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        <form method="get" action="/reports" class="monthly-status-form" id="clients-monthly-form">
+            <input type="hidden" name="report_type" value="clients_monthly">
+            <div class="monthly-range-row">
+                <label class="monthly-dt-label">Від
+                    <input type="date" name="monthly_from" lang="en" value="{{ dash.monthly_chart_meta.from_iso }}" max="{{ dash.monthly_chart_meta.max_date_iso }}">
+                </label>
+                <label class="monthly-dt-label">До
+                    <input type="date" name="monthly_to" lang="en" value="{{ dash.monthly_chart_meta.to_iso }}" max="{{ dash.monthly_chart_meta.max_date_iso }}">
+                </label>
+                <button type="submit" class="monthly-status-btn">Застосувати</button>
+                {% if dash.monthly_chart_meta.is_custom %}
+                <a class="monthly-status-reset" href="/reports?report_type=clients_monthly&amp;monthly_outcome={{ dash.monthly_chart_filter.outcome }}&amp;chart_granularity={{ gran_cur|urlencode }}">Період за замовч.</a>
+                {% endif %}
+                <label class="monthly-year-skip-label">Деталізація
+                    <select name="chart_granularity" title="Авто: ≤45 днів — по днях, ≤180 днів — по тижнях, інакше по місяцях">
+                        <option value="auto" {% if gran_cur == 'auto' %}selected{% endif %}>Авто</option>
+                        <option value="day" {% if gran_cur == 'day' %}selected{% endif %}>По днях</option>
+                        <option value="week" {% if gran_cur == 'week' %}selected{% endif %}>По тижнях</option>
+                        <option value="month" {% if gran_cur == 'month' %}selected{% endif %}>По місяцях</option>
+                    </select>
+                </label>
+                {% if dash.monthly_chart_meta.year_presets %}
+                <label class="monthly-year-skip-label">Рік
+                    <select id="dash-monthly-year-preset" title="Заповнить дати з 1 січня по 31 грудня">
+                        <option value="">—</option>
+                        {% for y in dash.monthly_chart_meta.year_presets %}
+                        <option value="{{ y }}">{{ y }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                {% endif %}
+            </div>
+            {% if dash.monthly_chart_meta.notes_ua %}
+            <p class="monthly-range-note">{{ dash.monthly_chart_meta.notes_ua }}</p>
+            {% endif %}
+            <div class="monthly-controls-panel">
+                <div class="monthly-controls-block">
+                    <p class="monthly-controls-block-title" id="monthly-series-label">Ряди на графіку</p>
+                    <div class="monthly-chart-series-toggles" id="monthly-chart-series-toggles" role="group" aria-labelledby="monthly-series-label">
+                        {% if not dash.monthly %}
+                        <span class="monthly-controls-empty">Немає даних — спочатку оберіть період із замовленнями.</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="monthly-controls-divider" aria-hidden="true"></div>
+                <div class="monthly-controls-block monthly-controls-block--narrow">
+                    <p class="monthly-controls-block-title" id="monthly-outcome-label">Тип замовлень</p>
+                    <div class="monthly-status-checkboxes" role="radiogroup" aria-labelledby="monthly-outcome-label">
+                        <label class="monthly-status-item">
+                            <input type="radio" name="monthly_outcome" value="all" {% if dash.monthly_chart_filter.outcome == 'all' %}checked{% endif %} onchange="this.form.submit()">
+                            <span>Усі</span>
+                        </label>
+                        <label class="monthly-status-item">
+                            <input type="radio" name="monthly_outcome" value="success" {% if dash.monthly_chart_filter.outcome == 'success' %}checked{% endif %} onchange="this.form.submit()">
+                            <span>Успішні</span>
+                        </label>
+                        <label class="monthly-status-item">
+                            <input type="radio" name="monthly_outcome" value="unsuccessful" {% if dash.monthly_chart_filter.outcome == 'unsuccessful' %}checked{% endif %} onchange="this.form.submit()">
+                            <span>Неуспішні</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </form>
+        <div class="monthly-hero-chart">
+            <div class="monthly-chart-scroll"{% if dash.monthly %} style="--monthly-bar-count: {{ dash.monthly|length }};"{% endif %}>
+                <div class="chart-canvas-wrap monthly-chart-canvas"><canvas id="chartMonthly" aria-label="Замовлення та виручка{% if gran == 'day' %} по днях{% elif gran == 'week' %} по тижнях{% else %} по місяцях{% endif %}"></canvas></div>
+            </div>
+        </div>
+        {% if dash.monthly %}
+        <div class="monthly-detail-table-wrap">
+            <table class="monthly-detail-table">
+                <thead>
+                    <tr>
+                        <th>{% if gran == 'day' %}День{% elif gran == 'week' %}Тиждень{% else %}Місяць{% endif %}</th>
+                        <th class="num">Замовлень</th>
+                        <th class="num">Виручка (усп.) ₴</th>
+                        <th class="num">Сер. чек ₴</th>
+                        <th class="num">Унік. пок.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in dash.monthly %}
+                    <tr>
+                        <td>{{ m.label_ua }}</td>
+                        <td class="num">{{ m.orders|fmt_ua }}</td>
+                        <td class="num">{{ m.revenue|fmt_ua }}</td>
+                        <td class="num">{% if m.avg_check_uah is not none %}{{ m.avg_check_uah|fmt_ua }}{% else %}—{% endif %}</td>
+                        <td class="num">{{ m.distinct_buyers|fmt_ua }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </section>
+</div>
+<script id="clients-dash-json" type="application/json">{{ dash | tojson }}</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/static/js/clients-monthly-chart.js?v=20260710" defer></script>

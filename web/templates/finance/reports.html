@@ -1,0 +1,647 @@
+{% extends "base.html" %}
+{% block title %}Звіти — Cosmy Agent{% endblock %}
+{% block mobile_title %}Звіти{% endblock %}
+{% block content %}
+{% from "procurement/_icons.html" import ui_icon %}
+
+<div class="page-header">
+    <h1>
+        <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Звіти
+    </h1>
+    <p class="subtitle">Грошовий потік, P&L, розбивка по категоріях, порівняння періодів</p>
+</div>
+
+<div class="form-card">
+    <form method="post" action="/reports" id="reportsFilterForm">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <!-- Тип звіту -->
+        <div class="filter-section">
+            <label class="filter-label">{{ ui_icon('chart') }} Тип звіту</label>
+            <select name="report_type" id="reportTypeSelect" class="filter-select report-type-select">
+                <!-- <option value="cf" {{ 'selected' if report_type|default('cf') == 'cf' else '' }}>Грошовий потік</option> -->
+                <option value="pl" {{ 'selected' if report_type|default('') == 'pl' else '' }}>P&L</option>
+                <option value="bd" {{ 'selected' if report_type|default('') == 'bd' else '' }}>По категоріях</option>
+                <option value="cmp" {{ 'selected' if report_type|default('') == 'cmp' else '' }}>Порівняння періодів</option>
+                <option value="clients_mkt" {{ 'selected' if report_type|default('') == 'clients_mkt' else '' }}>Клієнти — аналітика</option>
+                <option value="clients_monthly" {{ 'selected' if report_type|default('') == 'clients_monthly' else '' }}>Замовлення та виручка</option>
+            </select>
+            <p class="filter-hint filter-hint-cmp" id="cmpHint"{% if report_type|default('') != 'cmp' %} style="display:none"{% endif %}>
+                <strong>Як працює:</strong> Оберіть <strong>обидва періоди</strong> вручну (з — по) нижче. Або заповніть лише період 1 і використайте швидку кнопку — тоді період 2 підставиться автоматично (попередній той самий інтервал). Звіт покаже зміну дохідів, витрат і прибутку в %.
+            </p>
+        </div>
+
+        <!-- Для порівняння: два періоди (видно тільки при типі "Порівняння періодів") -->
+        <div class="filter-section cmp-periods-wrap" id="cmpPeriodsWrap"{% if report_type|default('') != 'cmp' %} style="display:none"{% endif %}>
+            <label class="filter-label">{{ ui_icon('calendar') }} Період 1 (з — по)</label>
+            <div class="date-inputs">
+                <input type="date" name="date_from_str" id="dateFromReports" 
+                       value="{{ date_from_str|default('') }}" placeholder="Від">
+                <span class="date-sep">—</span>
+                <input type="date" name="date_to_str" id="dateToReports" 
+                       value="{{ date_to_str|default('') }}" placeholder="До">
+            </div>
+            <label class="filter-label" style="margin-top: 0.75rem;">{{ ui_icon('calendar') }} Період 2 (з — по)</label>
+            <div class="date-inputs">
+                <input type="date" name="date_from_str_2" id="dateFromReports2" 
+                       value="{{ date_from_str_2|default('') }}" placeholder="Від">
+                <span class="date-sep">—</span>
+                <input type="date" name="date_to_str_2" id="dateToReports2" 
+                       value="{{ date_to_str_2|default('') }}" placeholder="До">
+            </div>
+        </div>
+
+        <!-- Швидкий вибір періоду (приховано для "Порівняння періодів") -->
+        <div class="filter-section" id="singlePeriodSection"{% if report_type|default('') == 'cmp' %} style="display:none"{% endif %}>
+            <label class="filter-label">{{ ui_icon('zap') }} Швидкий період</label>
+            <div class="period-buttons">
+                <button type="button" class="period-btn {{ 'active' if period|default('') == 'today' else '' }}" data-period="today">Сьогодні</button>
+                <button type="button" class="period-btn {{ 'active' if period|default('') == 'yesterday' else '' }}" data-period="yesterday">Вчора</button>
+                <button type="button" class="period-btn {{ 'active' if period|default('') == 'week' else '' }}" data-period="week">Тиждень</button>
+                <button type="button" class="period-btn {{ 'active' if period|default('month') == 'month' else '' }}" data-period="month">Місяць</button>
+                <button type="button" class="period-btn {{ 'active' if period|default('') == 'quarter' else '' }}" data-period="quarter">Квартал</button>
+                <button type="button" class="period-btn {{ 'active' if period|default('') == 'year' else '' }}" data-period="year">Рік (з 01.01)</button>
+            </div>
+            <input type="hidden" name="period" id="periodInputReports" value="{{ period|default('month') }}">
+        </div>
+
+        <!-- Ручний вибір дат (приховано для "Порівняння періодів") -->
+        <div class="filter-section" id="singleRangeSection"{% if report_type|default('') == 'cmp' %} style="display:none"{% endif %}>
+            <label class="filter-label">{{ ui_icon('calendar') }} Діапазон дат</label>
+            <div class="date-inputs">
+                <input type="date" name="date_from_str" id="dateFromReportsAlt" 
+                       value="{{ date_from_str|default('') }}" placeholder="Від">
+                <span class="date-sep">—</span>
+                <input type="date" name="date_to_str" id="dateToReportsAlt" 
+                       value="{{ date_to_str|default('') }}" placeholder="До">
+            </div>
+        </div>
+
+        <!-- Один день (приховано для "Порівняння періодів") -->
+        <div class="filter-section" id="singleDaySection"{% if report_type|default('') == 'cmp' %} style="display:none"{% endif %}>
+            <label class="filter-label">{{ ui_icon('calendar') }} Один день</label>
+            <input type="date" name="date_single_str" id="dateSingleReports" 
+                   value="{{ date_single_str|default('') }}" class="date-input-single">
+        </div>
+
+        <!-- ФОПи та готівка -->
+        <div class="filter-section" id="financeFopSection">
+            <label class="filter-label">{{ ui_icon('building') }} ФОПи та готівка</label>
+            <div class="fop-select-row">
+                <button type="button" class="fop-toggle-btn" onclick="document.querySelectorAll('#reportsFilterForm input[name=fop_ids]').forEach(c=>c.checked=true); var ic=document.getElementById('includeCashReports'); if(ic) ic.checked=true;">Всі</button>
+                <button type="button" class="fop-toggle-btn" onclick="document.querySelectorAll('#reportsFilterForm input[name=fop_ids]').forEach(c=>c.checked=false)">Зняти</button>
+            </div>
+            <p class="filter-hint" style="margin-top: 0.5rem;">Без жодного пункту — усі джерела. Лише «Готівка» — операції з готівки. ФОПи ± готівка за вашим вибором.</p>
+        </div>
+
+        <div class="fop-checkboxes">
+            <label class="fop-checkbox">
+                <input type="checkbox" name="include_cash" value="1" id="includeCashReports"
+                    {% if include_cash|default(false) %}checked{% endif %}>
+                <span class="source-badge cash" title="Готівка">Г</span>
+                <span class="fop-name">Готівка</span>
+            </label>
+            {% for opt in fop_filter_options %}
+            <label class="fop-checkbox{% if opt.is_archived %} fop-checkbox--archived{% endif %}">
+                <input type="checkbox" name="fop_ids" value="{{ opt.value }}"
+                    {% if selected_fop_ids is defined and opt.value in selected_fop_ids %}checked{% endif %}>
+                {% if opt.sources is defined and opt.sources %}
+                    {% if 'novapay' in opt.sources %}<span class="source-badge novapay" title="NovaPay">N</span>{% endif %}
+                    {% if 'monobank' in opt.sources %}<span class="source-badge monobank" title="Monobank">M</span>{% endif %}
+                {% else %}
+                    {% if opt.source == 'novapay' %}<span class="source-badge novapay" title="NovaPay">N</span>{% endif %}
+                    {% if opt.source == 'monobank' %}<span class="source-badge monobank" title="Monobank">M</span>{% endif %}
+                {% endif %}
+                <span class="fop-name">{{ opt.label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+
+        <div class="filter-section" id="plFlowSection">
+            <label class="filter-label">{{ ui_icon('trend') }} Показати на графіку та в P&L</label>
+            <div class="period-buttons pl-flow-buttons">
+                <label class="period-btn pl-flow-option {{ 'active' if pl_flow|default('all') == 'all' else '' }}">
+                    <input type="radio" name="pl_flow" value="all" class="pl-flow-radio" {{ 'checked' if pl_flow|default('all') == 'all' else '' }}> Усі
+                </label>
+                <label class="period-btn pl-flow-option {{ 'active' if pl_flow|default('all') == 'income' else '' }}">
+                    <input type="radio" name="pl_flow" value="income" class="pl-flow-radio" {{ 'checked' if pl_flow|default('all') == 'income' else '' }}> Лише доходи
+                </label>
+                <label class="period-btn pl-flow-option {{ 'active' if pl_flow|default('all') == 'expense' else '' }}">
+                    <input type="radio" name="pl_flow" value="expense" class="pl-flow-radio" {{ 'checked' if pl_flow|default('all') == 'expense' else '' }}> Лише витрати
+                </label>
+            </div>
+            <p class="filter-hint">Окрема крива доходів або витрат; готівка враховується лише якщо позначено «Готівка».</p>
+        </div>
+
+        <!-- Кнопки дій -->
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary btn-lg">{{ ui_icon('chart') }} Побудувати звіт</button>
+            <a href="/reports" class="btn btn-secondary">{{ ui_icon('refresh') }} Скинути фільтри</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function getPeriodRange(period) {
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    function ymd(d) {
+        var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+    var from, to;
+    if (period === 'today') { from = to = today; }
+    else if (period === 'yesterday') {
+        var yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+        from = to = yesterday;
+    } else {
+        to = new Date(today);
+        from = new Date(today);
+        if (period === 'week') from.setDate(from.getDate() - 6);
+        else if (period === 'month') from.setMonth(from.getMonth() - 1);
+        else if (period === 'quarter') from.setMonth(Math.floor(from.getMonth() / 3) * 3, 1);
+        else if (period === 'year') from = new Date(from.getFullYear(), 0, 1);
+        else { from.setDate(1); }
+    }
+    return { from: ymd(from), to: ymd(to) };
+}
+document.addEventListener('DOMContentLoaded', function() {
+    const periodButtons = document.querySelectorAll('#reportsFilterForm .period-btn');
+    const periodInput = document.getElementById('periodInputReports');
+    const dateFrom = document.getElementById('dateFromReportsAlt');
+    const dateTo = document.getElementById('dateToReportsAlt');
+    const dateSingle = document.getElementById('dateSingleReports');
+
+    periodButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            var period = this.dataset.period;
+            periodInput.value = period;
+            var range = getPeriodRange(period);
+            dateFrom.value = range.from;
+            dateTo.value = range.to;
+            dateSingle.value = '';
+        });
+    });
+
+    [dateFrom, dateTo].forEach(input => {
+        input.addEventListener('change', function() {
+            if (dateFrom.value || dateTo.value) {
+                periodButtons.forEach(b => b.classList.remove('active'));
+                periodInput.value = '';
+                dateSingle.value = '';
+            }
+        });
+    });
+
+    dateSingle.addEventListener('change', function() {
+        if (dateSingle.value) {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            periodInput.value = '';
+            dateFrom.value = '';
+            dateTo.value = '';
+        }
+    });
+
+    // Показати/сховати підказку та блоки періодів для "Порівняння періодів"
+    var reportTypeSelect = document.getElementById('reportTypeSelect');
+    var cmpHint = document.getElementById('cmpHint');
+    var cmpPeriodsWrap = document.getElementById('cmpPeriodsWrap');
+    var singlePeriodSection = document.getElementById('singlePeriodSection');
+    var singleRangeSection = document.getElementById('singleRangeSection');
+    var singleDaySection = document.getElementById('singleDaySection');
+    var plFlowSection = document.getElementById('plFlowSection');
+    function toggleCmpSections() {
+        var rt = reportTypeSelect ? reportTypeSelect.value : '';
+        var isClients = rt === 'clients_mkt' || rt === 'clients_monthly';
+        var isCmp = rt === 'cmp';
+        if (cmpHint) cmpHint.style.display = isCmp ? 'block' : 'none';
+        if (cmpPeriodsWrap) {
+            cmpPeriodsWrap.style.display = isCmp ? 'block' : 'none';
+            cmpPeriodsWrap.querySelectorAll('input').forEach(function(inp) { inp.disabled = !isCmp; });
+        }
+        var hideFinancePeriod = isCmp || isClients;
+        if (singlePeriodSection) {
+            singlePeriodSection.style.display = hideFinancePeriod ? 'none' : 'block';
+            singlePeriodSection.querySelectorAll('input').forEach(function(inp) { inp.disabled = hideFinancePeriod; });
+        }
+        if (singleRangeSection) {
+            singleRangeSection.style.display = hideFinancePeriod ? 'none' : 'block';
+            singleRangeSection.querySelectorAll('input').forEach(function(inp) { inp.disabled = hideFinancePeriod; });
+        }
+        if (singleDaySection) {
+            singleDaySection.style.display = hideFinancePeriod ? 'none' : 'block';
+            singleDaySection.querySelectorAll('input').forEach(function(inp) { inp.disabled = hideFinancePeriod; });
+        }
+        var fopSec = document.getElementById('financeFopSection');
+        var fopBoxes = document.querySelector('#reportsFilterForm .fop-checkboxes');
+        if (fopSec) fopSec.style.display = isClients ? 'none' : 'block';
+        if (fopBoxes) fopBoxes.style.display = isClients ? 'none' : 'flex';
+        if (plFlowSection) plFlowSection.style.display = isClients ? 'none' : 'block';
+    }
+    toggleCmpSections();
+    if (reportTypeSelect) {
+        reportTypeSelect.addEventListener('change', toggleCmpSections);
+    }
+
+    document.querySelectorAll('#reportsFilterForm .pl-flow-radio').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            document.querySelectorAll('#reportsFilterForm .pl-flow-option').forEach(function(lbl) {
+                lbl.classList.remove('active');
+            });
+            var parent = radio.closest('.pl-flow-option');
+            if (parent) parent.classList.add('active');
+        });
+    });
+});
+</script>
+
+{% if result %}
+<div class="report-result">
+    <h2 class="report-result-title">{{ result.title }}</h2>
+
+    {% if result.type == 'clients_mkt' %}
+    {% include 'reports/clients_analytics.html' %}
+    {% elif result.type == 'clients_monthly' %}
+    {% include 'reports/clients_monthly_chart.html' %}
+    {% elif chart_daily is defined and chart_daily and chart_daily|length > 0 and result.type != 'cmp' %}
+    <div class="report-detail-card report-chart-card">
+        <h3 class="card-title">Динаміка за період</h3>
+        <div class="report-chart-wrap">
+            <canvas id="reportChart" width="800" height="320" data-chart-data="{{ chart_daily_json|e }}" data-pl-flow="{{ pl_flow|default('all') }}"></canvas>
+        </div>
+        <div class="report-chart-legend" id="reportChartLegend">
+            <span class="report-chart-legend-item income" id="legendIncome"><span class="legend-dot"></span> Доходи</span>
+            <span class="report-chart-legend-item expense" id="legendExpense"><span class="legend-dot"></span> Витрати</span>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+    (function() {
+        var ctx = document.getElementById('reportChart');
+        if (!ctx) {
+            console.error('Chart canvas element not found');
+            return;
+        }
+        var dataStr = ctx.getAttribute('data-chart-data');
+        if (!dataStr || dataStr === '[]' || dataStr === 'null') {
+            console.warn('Chart data is empty:', dataStr);
+            return;
+        }
+        try {
+            var data = JSON.parse(dataStr);
+            if (!data || !Array.isArray(data) || !data.length) {
+                console.warn('Chart data is not a valid array or is empty:', data);
+                return;
+            }
+            console.log('Chart data loaded:', data.length, 'days');
+            var plFlow = ctx.getAttribute('data-pl-flow') || 'all';
+            var incomeData = data.map(function(d) { return d.income || 0; });
+            var expenseData = data.map(function(d) { return d.expense || 0; });
+            var labels = data.map(function(d) { return d.label || d.date; });
+            var datasets = [];
+            if (plFlow !== 'expense') {
+                datasets.push({
+                    label: 'Доходи',
+                    data: incomeData,
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                });
+            }
+            if (plFlow !== 'income') {
+                datasets.push({
+                    label: 'Витрати',
+                    data: expenseData,
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                });
+            }
+            var legInc = document.getElementById('legendIncome');
+            var legExp = document.getElementById('legendExpense');
+            if (legInc) legInc.style.display = plFlow === 'expense' ? 'none' : '';
+            if (legExp) legExp.style.display = plFlow === 'income' ? 'none' : '';
+            new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            ticks: { 
+                                callback: function(v) { 
+                                    return v >= 1000 ? (v/1000).toFixed(1) + 'k' : v.toFixed(0); 
+                                } 
+                            } 
+                        }
+                    }
+                }
+            });
+        } catch (e) {
+            console.error('Error creating chart:', e);
+        }
+    })();
+    </script>
+    {% endif %}
+
+    {% if result.type == 'cmp' and result.chart_daily_p1 and result.chart_daily_p2 %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <div class="report-cmp-charts">
+        <div class="report-detail-card report-chart-card">
+            <h3 class="card-title">Динаміка: Період 1 ({{ result.p1_name }})</h3>
+            <div class="report-chart-wrap">
+                <canvas id="reportChartCmp1" width="800" height="280" data-chart-data="{{ result.chart_daily_p1_json|e }}"></canvas>
+            </div>
+            <div class="report-chart-legend">
+                <span class="report-chart-legend-item income"><span class="legend-dot"></span> Доходи</span>
+                <span class="report-chart-legend-item expense"><span class="legend-dot"></span> Витрати</span>
+            </div>
+        </div>
+        <div class="report-detail-card report-chart-card">
+            <h3 class="card-title">Динаміка: Період 2 ({{ result.p2_name }})</h3>
+            <div class="report-chart-wrap">
+                <canvas id="reportChartCmp2" width="800" height="280" data-chart-data="{{ result.chart_daily_p2_json|e }}"></canvas>
+            </div>
+            <div class="report-chart-legend">
+                <span class="report-chart-legend-item income"><span class="legend-dot"></span> Доходи</span>
+                <span class="report-chart-legend-item expense"><span class="legend-dot"></span> Витрати</span>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function() {
+        var opts = { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return v >= 1000 ? (v/1000) + 'k' : v; } } } } };
+        var c1 = document.getElementById('reportChartCmp1');
+        if (c1) {
+            var p1Str = c1.getAttribute('data-chart-data');
+            if (p1Str) {
+                var p1 = JSON.parse(p1Str);
+                if (p1 && p1.length) {
+                    new Chart(c1.getContext('2d'), { type: 'line', data: { labels: p1.map(function(d){ return d.label; }), datasets: [ { label: 'Доходи', data: p1.map(function(d){ return d.income; }), borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.1)', fill: true, tension: 0.3 }, { label: 'Витрати', data: p1.map(function(d){ return d.expense; }), borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', fill: true, tension: 0.3 } ] }, options: opts });
+                }
+            }
+        }
+        var c2 = document.getElementById('reportChartCmp2');
+        if (c2) {
+            var p2Str = c2.getAttribute('data-chart-data');
+            if (p2Str) {
+                var p2 = JSON.parse(p2Str);
+                if (p2 && p2.length) {
+                    new Chart(c2.getContext('2d'), { type: 'line', data: { labels: p2.map(function(d){ return d.label; }), datasets: [ { label: 'Доходи', data: p2.map(function(d){ return d.income; }), borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.1)', fill: true, tension: 0.3 }, { label: 'Витрати', data: p2.map(function(d){ return d.expense; }), borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', fill: true, tension: 0.3 } ] }, options: opts });
+                }
+            }
+        }
+    })();
+    </script>
+    {% endif %}
+
+    {% if result.type == 'cf' %}
+    <div class="tx-summary-block report-summary">
+        <div class="stats-grid tx-summary-grid">
+            <div class="stat-card income">
+                <div class="label">Надходження</div>
+                <div class="value">+{{ result.income|fmt_ua }} грн</div>
+            </div>
+            <div class="stat-card expense">
+                <div class="label">Витрати</div>
+                <div class="value">−{{ result.expense|fmt_ua }} грн</div>
+            </div>
+            <div class="stat-card total">
+                <div class="label">Чистий потік</div>
+                <div class="value {{ 'income' if result.net >= 0 else 'expense' }}">{{ result.net|fmt_ua(true) }} грн</div>
+            </div>
+        </div>
+    </div>
+    {% elif result.type == 'pl' %}
+    <div class="tx-summary-block report-summary">
+        <div class="stats-grid tx-summary-grid">
+            {% if pl_flow|default('all') != 'expense' %}
+            <div class="stat-card income">
+                <div class="label">Доходи</div>
+                <div class="value">{{ result.income|fmt_ua }} грн</div>
+            </div>
+            {% endif %}
+            {% if pl_flow|default('all') != 'income' %}
+            <div class="stat-card expense">
+                <div class="label">Витрати</div>
+                <div class="value">{{ result.expense|fmt_ua }} грн</div>
+            </div>
+            {% endif %}
+            {% if pl_flow|default('all') == 'all' %}
+            <div class="stat-card total">
+                <div class="label">Прибуток</div>
+                <div class="value {{ 'income' if result.profit >= 0 else 'expense' }}">{{ result.profit|fmt_ua(true) }} грн</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Рентабельність</div>
+                <div class="value">{{ "%.1f"|format(result.margin) }}%</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% if result.income_by_fop and pl_flow|default('all') != 'expense' %}
+    <div class="report-detail-card">
+        <h3 class="card-title">Доходи по ФОПах</h3>
+        <div class="report-fop-grouped">
+            {% for fop in result.income_by_fop %}
+            <div class="fop-surname-group">
+                <div class="fop-group">
+                    <div class="fop-group-header">
+                        <span class="fop-group-name">{{ fop.name }}</span>
+                        <span class="fop-group-total">{{ fop.total|fmt_ua }} грн</span>
+                    </div>
+                    {% if fop.sources %}
+                    <div class="fop-group-sources">
+                        {% if fop.sources.novapay %}
+                        <div class="fop-source-item">
+                            <span class="source-badge novapay" title="NovaPay">N</span>
+                            <span class="fop-source-label">NovaPay:</span>
+                            <span class="fop-source-amount">{{ fop.sources.novapay|fmt_ua }} грн</span>
+                        </div>
+                        {% endif %}
+                        {% if fop.sources.monobank %}
+                        <div class="fop-source-item">
+                            <span class="source-badge monobank" title="Monobank">M</span>
+                            <span class="fop-source-label">Monobank:</span>
+                            <span class="fop-source-amount">{{ fop.sources.monobank|fmt_ua }} грн</span>
+                        </div>
+                        {% endif %}
+                        {% if fop.sources.cash %}
+                        <div class="fop-source-item">
+                            <span class="source-badge cash" title="Готівка">Г</span>
+                            <span class="fop-source-label">Готівка:</span>
+                            <span class="fop-source-amount">{{ fop.sources.cash|fmt_ua }} грн</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="report-list-total">Всього: <strong>{{ result.income|fmt_ua }} грн</strong></p>
+    </div>
+    {% endif %}
+    {% if (result.expense_by_category or result.cash_expense_total) and pl_flow|default('all') != 'income' %}
+    <div class="report-detail-card">
+        <h3 class="card-title">Витрати по категоріях</h3>
+        <ul class="report-list">
+            {% for name, amt in result.expense_by_category.items() %}
+            <li><span class="report-label">{{ name }}</span><span class="report-amount expense">{{ amt|fmt_ua }} грн</span></li>
+            {% endfor %}
+            {% if result.cash_expense_total and result.cash_expense_total > 0 %}
+            <li><span class="report-label"><span class="source-badge cash" title="Готівка">Г</span> Готівка</span><span class="report-amount expense">{{ result.cash_expense_total|fmt_ua }} грн</span></li>
+            {% endif %}
+        </ul>
+        <p class="report-list-total">Всього витрат: <strong>{{ (result.expense|abs)|fmt_ua }} грн</strong></p>
+    </div>
+    {% endif %}
+    
+    {% if result.cash_withdrawal_total or result.bogdan_total %}
+    <div class="report-detail-card" style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2);">
+        <h3 class="card-title">Переміщення та переведення коштів</h3>
+        <p class="muted" style="margin-bottom: 1rem; font-size: 0.9rem;">Ці операції не враховуються в розходах, але відображаються для відстеження</p>
+        <ul class="report-list">
+            {% if result.cash_withdrawal_total and result.cash_withdrawal_total > 0 %}
+            <li>
+                <span class="report-label">
+                    <span class="source-badge cash" title="Готівка">Г</span> Зняття готівки
+                </span>
+                <span class="report-amount" style="color: #3b82f6;">{{ result.cash_withdrawal_total|fmt_ua }} грн</span>
+            </li>
+            {% endif %}
+            {% if result.bogdan_total and result.bogdan_total > 0 %}
+            <li>
+                <span class="report-label">Богдан (переведення на карту)</span>
+                <span class="report-amount" style="color: #f59e0b;">{{ result.bogdan_total|fmt_ua }} грн</span>
+            </li>
+            {% endif %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% elif result.type == 'bd' %}
+    <div class="card" style="margin-bottom: 1rem; padding: 1rem 1.25rem; background: #f8fafc; border: 1px solid #e2e8f0;">
+        <p style="margin: 0 0 0.35rem; font-size: 0.9rem;"><strong>Період звіту:</strong> {{ report_query_from }} – {{ report_query_to }}{% if period_name %} ({{ period_name }}){% endif %}</p>
+        <p style="margin: 0 0 0.35rem; font-size: 0.9rem;"><strong>ФОПи:</strong> {{ report_fop_filter_label }}{% if selected_fop_ids %} <span class="muted">(+ операції без ФОП)</span>{% endif %}</p>
+        <p class="muted" style="margin: 0.5rem 0 0; font-size: 0.8rem;">У звіт входять усі підтверджені операції за період, включно з тими, що ще без привʼязки до ФОП. Клік по категорії відкриє транзакції з тими самими фільтрами.</p>
+    </div>
+    <div class="tx-summary-block report-summary">
+        <div class="stats-grid tx-summary-grid">
+            <div class="stat-card expense">
+                <div class="label">Всього витрат за період</div>
+                <div class="value">{{ result.total_expense|fmt_ua }} грн</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Категорій</div>
+                <div class="value">{{ result.categories|length }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="report-detail-card">
+        <h3 class="card-title">Розбивка за категоріями</h3>
+        <div class="bar-chart">
+            {% for c in result.categories %}
+            <div class="bar-row">
+                {% if c.id and c.name != 'Готівка (витрати)' %}
+                <a href="/transactions?tx_type=expense&amp;category_id={{ c.id }}&amp;date_from_str={{ report_query_from }}&amp;date_to_str={{ report_query_to }}{% for fid in selected_fop_ids %}&amp;fop_ids={{ fid }}{% endfor %}{% if include_cash %}&amp;fop_ids=cash{% endif %}" class="label" style="color: inherit; text-decoration: underline;">{{ c.name }}</a>
+                {% else %}
+                <span class="label">{{ c.name }}</span>
+                {% endif %}
+                <div class="bar-wrap">
+                    <div class="bar" data-width="{{ (c.percentage or 0) }}" style="width: 0%;"></div>
+                </div>
+                <span class="amount">{{ c.amount|fmt_ua }} грн ({{ "%.1f"|format(c.percentage or 0) }}%)</span>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="balance-total" style="margin-top: 1rem;">Всього витрат: <strong>{{ result.total_expense|fmt_ua }} грн</strong></p>
+    </div>
+    <script>
+    (function() {
+        var bars = document.querySelectorAll('.bar-chart .bar[data-width]');
+        bars.forEach(function(bar) {
+            var width = bar.getAttribute('data-width');
+            if (width !== null) {
+                bar.style.width = width + '%';
+            }
+        });
+    })();
+    </script>
+    {% elif result.type == 'cmp' %}
+    <div class="report-cmp-summary">
+        <div class="report-cmp-period-cards">
+            <div class="report-cmp-period-card">
+                <h3 class="report-cmp-period-title">Період 1 <span class="report-cmp-period-dates">({{ result.p1_name }})</span></h3>
+                <div class="report-cmp-period-stats">
+                    <div class="report-cmp-stat"><span class="label">Доходи</span><span class="value income">{{ result.period1.income|fmt_ua }} грн</span></div>
+                    <div class="report-cmp-stat"><span class="label">Витрати</span><span class="value expense">{{ result.period1.expense|fmt_ua }} грн</span></div>
+                    <div class="report-cmp-stat"><span class="label">Прибуток</span><span class="value {{ 'income' if result.period1.profit >= 0 else 'expense' }}">{{ result.period1.profit|fmt_ua(true) }} грн</span></div>
+                </div>
+            </div>
+            <div class="report-cmp-period-card">
+                <h3 class="report-cmp-period-title">Період 2 <span class="report-cmp-period-dates">({{ result.p2_name }})</span></h3>
+                <div class="report-cmp-period-stats">
+                    <div class="report-cmp-stat"><span class="label">Доходи</span><span class="value income">{{ result.period2.income|fmt_ua }} грн</span></div>
+                    <div class="report-cmp-stat"><span class="label">Витрати</span><span class="value expense">{{ result.period2.expense|fmt_ua }} грн</span></div>
+                    <div class="report-cmp-stat"><span class="label">Прибуток</span><span class="value {{ 'income' if result.period2.profit >= 0 else 'expense' }}">{{ result.period2.profit|fmt_ua(true) }} грн</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="report-cmp-changes">
+            <div class="report-cmp-change-item income"><span class="label">Доходи</span><span class="change {{ 'income' if result.income_change >= 0 else 'expense' }}">{{ "%+.1f"|format(result.income_change) }}%</span></div>
+            <div class="report-cmp-change-item expense"><span class="label">Витрати</span><span class="change {{ 'income' if result.expense_change <= 0 else 'expense' }}">{{ "%+.1f"|format(result.expense_change) }}%</span></div>
+            <div class="report-cmp-change-item total"><span class="label">Прибуток</span><span class="change {{ 'income' if result.profit_change >= 0 else 'expense' }}">{{ "%+.1f"|format(result.profit_change) }}%</span></div>
+        </div>
+    </div>
+    <div class="report-detail-card report-cmp-detail">
+        <h3 class="card-title">Порівняння: Період 1 vs Період 2</h3>
+        <div class="cmp-table-wrap">
+            <table class="tx-table">
+                <thead>
+                    <tr>
+                        <th>Показник</th>
+                        <th>Період 1 ({{ result.p1_name }})</th>
+                        <th>Період 2 ({{ result.p2_name }})</th>
+                        <th>Зміна</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Доходи</td>
+                        <td class="income">{{ result.period1.income|fmt_ua }} грн</td>
+                        <td>{{ result.period2.income|fmt_ua }} грн</td>
+                        <td class="{{ 'income' if result.income_change >= 0 else 'expense' }}">{{ "%+.1f"|format(result.income_change) }}%</td>
+                    </tr>
+                    <tr>
+                        <td>Витрати</td>
+                        <td class="expense">{{ result.period1.expense|fmt_ua }} грн</td>
+                        <td>{{ result.period2.expense|fmt_ua }} грн</td>
+                        <td class="{{ 'income' if result.expense_change <= 0 else 'expense' }}">{{ "%+.1f"|format(result.expense_change) }}%</td>
+                    </tr>
+                    <tr>
+                        <td>Прибуток</td>
+                        <td class="{{ 'income' if result.period1.profit >= 0 else 'expense' }}">{{ result.period1.profit|fmt_ua(true) }} грн</td>
+                        <td class="{{ 'income' if result.period2.profit >= 0 else 'expense' }}">{{ result.period2.profit|fmt_ua(true) }} грн</td>
+                        <td class="{{ 'income' if result.profit_change >= 0 else 'expense' }}">{{ "%+.1f"|format(result.profit_change) }}%</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

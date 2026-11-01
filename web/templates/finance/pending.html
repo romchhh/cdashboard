@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Непідтверджені — Cosmy Agent{% endblock %}
+{% block mobile_title %}Непідтверджені{% endblock %}
+{% block content %}
+<div class="page-header page-header-with-actions">
+    <div>
+        <h1>
+            <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Непідтверджені транзакції
+        </h1>
+        <p class="subtitle">Транзакції, що потребують підтвердження категорії</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="/transactions" class="btn-action" title="Повернутися до всіх транзакцій">
+            ← Транзакції
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    {% if not transactions %}
+    <p class="empty-state">✅ Всі транзакції підтверджено.</p>
+    {% else %}
+    <h2 class="card-title">Потребують підтвердження: <strong>{{ total_count }}</strong>{% if total_pages > 1 %} (стор. {{ page }} з {{ total_pages }}){% endif %}</h2>
+    <div class="tx-table-wrap">
+        <table class="tx-table">
+            <thead>
+                <tr>
+                    <th style="width: 56px;">#</th>
+                    <th>Дата</th>
+                    <th>Тип</th>
+                    <th>Сума</th>
+                    <th>ФОП</th>
+                    <th>Категорія</th>
+                    <th>Контрагент</th>
+                    <th>Опис</th>
+                    <th>Коментар</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set global_index_start = (page - 1) * 50 %}
+                {% for tx in transactions %}
+                <tr>
+                    <td style="font-weight: 600; color: #6b7280; text-align: right;">
+                        {{ global_index_start + loop.index }}
+                    </td>
+                    <td>{{ tx.date.strftime("%d.%m.%Y %H:%M") }}</td>
+                    <td>
+                        {% if cash_category_ids and tx.category_id in cash_category_ids %}
+                        <span class="type-badge cash-withdrawal" style="background: #3b82f6; color: white;">
+                            {% if tx.transaction_type.value == 'expense' %}
+                            Зняття готівки
+                            {% else %}
+                            Переміщення в готівку
+                            {% endif %}
+                        </span>
+                        {% elif tx.category_id == bogdan_category_id %}
+                        <span class="type-badge bogdan-transfer" style="background: #f59e0b; color: white;">
+                            Богдан
+                        </span>
+                        {% else %}
+                        <span class="type-badge {{ tx.transaction_type.value }}">
+                            {{ 'Дохід' if tx.transaction_type.value == 'income' else 'Витрата' }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="{{ tx.transaction_type.value }} {% if cash_category_ids and tx.category_id in cash_category_ids %}cash-withdrawal{% elif tx.category_id == bogdan_category_id %}bogdan-transfer{% endif %}">
+                        {% if cash_category_ids and tx.category_id in cash_category_ids %}
+                        {{ (tx.amount|abs)|fmt_ua }} грн
+                        {% elif tx.category_id == bogdan_category_id %}
+                        {{ (tx.amount|abs)|fmt_ua }} грн
+                        {% else %}
+                        {{ tx.amount|fmt_ua(true) if tx.transaction_type.value == 'income' else (-tx.amount)|fmt_ua }} грн
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if tx.source.value == 'cash' %}
+                        <span class="source-badge cash" title="Готівка">Г</span>
+                        <span class="fop-badge">Готівка</span>
+                        {% else %}
+                        {% if tx.source.value == 'novapay' %}<span class="source-badge novapay" title="NovaPay">n</span>
+                        {% elif tx.source.value == 'monobank' %}<span class="source-badge monobank" title="Monobank">m</span>
+                        {% endif %}
+                        <span class="fop-badge">{{ tx.fop.name if tx.fop else '—' }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="post" action="/transactions/{{ tx.id }}/category" class="category-form">
+                            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                            <select name="category_id" class="category-select" title="Змінити категорію"
+                                data-initial="{{ tx.category_id or '' }}"
+                                onchange="var c=confirm('Справді змінити категорію для цієї транзакції?'); if(c) this.form.submit(); else this.value=this.getAttribute('data-initial');">
+                                <option value="" {{ 'selected' if not tx.category_id else '' }}>—</option>
+                                {% for cat in categories %}
+                                <option value="{{ cat.id }}" {{ 'selected' if tx.category_id == cat.id else '' }}>{{ cat.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </td>
+                    <td class="tx-cell-counterparty">{{ (tx.counterparty or '—')[:70] }}</td>
+                    <td class="tx-cell-description">{{ (tx.description or '—')[:100] }}</td>
+                    <td class="tx-cell-comment">{{ (tx.comment or '—')[:100] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% if total_pages > 1 %}
+<nav class="pagination">
+    {% if page > 1 %}
+    <a href="{{ pagination_url(page - 1) }}">←</a>
+    {% else %}
+    <span class="disabled">←</span>
+    {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="current">{{ p }}</span>
+        {% elif p <= 3 or p > total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+        <a href="{{ pagination_url(p) }}">{{ p }}</a>
+        {% elif p == 4 or p == total_pages - 3 %}
+        <span>…</span>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="{{ pagination_url(page + 1) }}">→</a>
+    {% else %}
+    <span class="disabled">→</span>
+    {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,62 @@
+{% from "procurement/_icons.html" import ui_icon %}
+{# Поле пошуку товару (name=q) у формах закупівель #}
+<div class="procurement-product-search-wrap"> <label class="procurement-product-search-label" for="{{ input_id|default('productSearchQ') }}">{{ ui_icon('search') }} Пошук товару</label> <div class="procurement-product-search-row"> <input type="text"
+               id="{{ input_id|default('productSearchQ') }}"
+               name="q"
+               value="{{ product_search or '' }}"
+               class="procurement-product-search-input"
+               autocomplete="off"
+               placeholder="{{ placeholder|default('Назва, модель, артикул, опція…') }}"
+               title="Пошук по всіх варіаціях розділу (не лише на сторінці)"
+               aria-label="Пошук товару"> {% if show_find_button|default(true) %}
+        <button type="submit" class="btn btn-secondary btn-sm js-procurement-search-apply">Знайти</button> {% endif %}
+    </div> <p class="procurement-product-search-hint">Пошук по <strong>всьому</strong> списку розділу (личильник «всього N» оновлюється). Пауза ~0,5 с після введення або <strong>Enter</strong> / <strong>Знайти</strong></p>
+</div>
+<style>
+.procurement-product-search-wrap { flex: 1 1 220px; min-width: 200px; max-width: 420px; }
+.procurement-product-search-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.procurement-product-search-row .procurement-product-search-input { flex: 1; min-width: 0; }
+.procurement-product-search-label .ui-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+    flex-shrink: 0;
+    color: var(--accent, #2563eb);
+}
+.procurement-product-search-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #374151;
+}
+.procurement-product-search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+.procurement-product-search-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+.procurement-product-search-hint {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.35;
+}
+[data-procurement-search-refresh][aria-busy="true"] {
+    opacity: 0.72;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+</style>

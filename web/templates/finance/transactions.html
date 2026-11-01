@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% from "procurement/_icons.html" import ui_icon %}
+{% block title %}Транзакції — Cosmy Agent{% endblock %}
+{% block mobile_title %}Транзакції{% endblock %}
+{% block content %}
+<div class="page-header page-header-with-actions">
+    <div>
+        <h1>
+            <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+            </svg>
+            Транзакції
+        </h1>
+        <p class="subtitle">Перегляд усіх транзакцій за період з фільтром по ФОПах</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="/pending" class="btn-action pending-badge{% if request.url.path == '/pending' %} active{% endif %}" title="Транзакції без категорії або на підтвердження">
+            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            {% if pending_count > 0 %}
+            {{ pending_count }} непідтверджених
+            {% else %}
+            Непідтверджені
+            {% endif %}
+        </a>
+    </div>
+</div>
+
+<div class="form-card">
+    <form method="post" action="/transactions" id="txFilterForm">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <!-- Швидкий вибір періоду -->
+        <div class="filter-section">
+            <label class="filter-label">{{ ui_icon('zap') }} Швидкий період</label>
+            <div class="period-buttons">
+                <button type="button" class="period-btn" data-period="today">Сьогодні</button>
+                <button type="button" class="period-btn" data-period="yesterday">Вчора</button>
+                <button type="button" class="period-btn" data-period="week">Тиждень</button>
+                <button type="button" class="period-btn active" data-period="month">Місяць</button>
+                <button type="button" class="period-btn" data-period="quarter">Квартал</button>
+                <button type="button" class="period-btn" data-period="year">Рік</button>
+            </div>
+            <input type="hidden" name="period" id="periodInput" value="{{ period if period else 'month' }}">
+        </div>
+
+        <!-- Ручний вибір дат -->
+        <div class="filter-section">
+            <label class="filter-label">{{ ui_icon('calendar') }} Діапазон дат</label>
+            <div class="date-inputs">
+                <input type="date" name="date_from_str" id="dateFrom" 
+                       value="{{ date_from.strftime('%Y-%m-%d') if date_from is defined and date_from and not date_single_str else '' }}" 
+                       placeholder="Від">
+                <span class="date-sep">—</span>
+                <input type="date" name="date_to_str" id="dateTo" 
+                       value="{{ date_to.strftime('%Y-%m-%d') if date_to is defined and date_to and not date_single_str else '' }}" 
+                       placeholder="До">
+            </div>
+        </div>
+
+        <!-- Один день -->
+        <div class="filter-section">
+            <label class="filter-label">{{ ui_icon('calendar') }} Один день</label>
+            <input type="date" name="date_single_str" id="dateSingle" 
+                   value="{{ date_single_str|default('') }}" class="date-input-single">
+        </div>
+
+        <!-- Тип, категорія та ФОПи в одну лінію -->
+        <div class="filter-row">
+            <div class="filter-section compact">
+                <label class="filter-label">{{ ui_icon('type') }} Тип</label>
+                <select name="tx_type" class="filter-select">
+                    <option value="all" {{ 'selected' if tx_type|default('all') == 'all' else '' }}>Всі</option>
+                    <option value="income" {{ 'selected' if tx_type|default('') == 'income' else '' }}>Тільки дохід</option>
+                    <option value="expense" {{ 'selected' if tx_type|default('') == 'expense' else '' }}>Тільки витрати</option>
+                </select>
+            </div>
+
+            <div class="filter-section compact">
+                <label class="filter-label">{{ ui_icon('folder') }} Категорія</label>
+                <select name="category_id" class="filter-select">
+                    <option value="">Всі категорії</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {{ 'selected' if category_id is defined and category_id == cat.id else '' }}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="filter-section compact">
+                <label class="filter-label">{{ ui_icon('building') }} ФОПи</label>
+                <div class="fop-select-row">
+                    <button type="button" class="fop-toggle-btn" onclick="document.querySelectorAll('#txFilterForm input[name=fop_ids]').forEach(c=>c.checked=true)">Всі</button>
+                    <button type="button" class="fop-toggle-btn" onclick="document.querySelectorAll('#txFilterForm input[name=fop_ids]').forEach(c=>c.checked=false)">Зняти</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ФОПи чекбокси: порожній fop_ids у URL = усі ФОПи (показуємо всі відміченими; див. submit у script) -->
+        {% set sel = selected_fop_ids if selected_fop_ids is defined else [] %}
+        {% set fop_all = (sel|length == 0) %}
+        <div class="fop-checkboxes">
+            <label class="fop-checkbox">
+                <input type="checkbox" name="fop_ids" value="cash"
+                    {% if fop_all or ('cash' in sel) %}checked{% endif %}>
+                <span class="source-badge cash" title="Готівка">Г</span>
+                <span class="fop-name">Готівка</span>
+            </label>
+            {% for opt in fop_filter_options %}
+            <label class="fop-checkbox{% if opt.is_archived %} fop-checkbox--archived{% endif %}">
+                <input type="checkbox" name="fop_ids" value="{{ opt.value }}"
+                    {% if fop_all or (opt.value in sel) %}checked{% endif %}>
+                {% if opt.sources is defined and opt.sources %}
+                    {% if 'novapay' in opt.sources %}<span class="source-badge novapay" title="NovaPay">N</span>{% endif %}
+                    {% if 'monobank' in opt.sources %}<span class="source-badge monobank" title="Monobank">M</span>{% endif %}
+                {% else %}
+                    {% if opt.source == 'novapay' %}<span class="source-badge novapay" title="NovaPay">N</span>{% endif %}
+                    {% if opt.source == 'monobank' %}<span class="source-badge monobank" title="Monobank">M</span>{% endif %}
+                {% endif %}
+                <span class="fop-name">{{ opt.label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+
+        <!-- Кнопки дій -->
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary btn-lg">{{ ui_icon('search') }} Показати</button>
+            <a href="/transactions" class="btn btn-secondary">{{ ui_icon('refresh') }} Скинути фільтри</a>
+        </div>
+    </form>
+</div>
+
+<script>
+// Діапазон дат для швидкого періоду (узгоджено з bot/services/period_range.py)
+function getPeriodRange(period) {
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    function ymd(d) {
+        var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+    var from, to;
+    if (period === 'today') {
+        from = to = today;
+    } else if (period === 'yesterday') {
+        var yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        from = to = yesterday;
+    } else {
+        to = new Date(today);
+        from = new Date(today);
+        if (period === 'week') from.setDate(from.getDate() - 6);
+        else if (period === 'month') from.setMonth(from.getMonth() - 1);
+        else if (period === 'quarter') from.setMonth(Math.floor(from.getMonth() / 3) * 3, 1);
+        else if (period === 'year') from = new Date(from.getFullYear(), 0, 1);
+        else { from.setDate(1); }
+    }
+    return { from: ymd(from), to: ymd(to) };
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const periodButtons = document.querySelectorAll('.period-btn');
+    const periodInput = document.getElementById('periodInput');
+    const dateFrom = document.getElementById('dateFrom');
+    const dateTo = document.getElementById('dateTo');
+    const dateSingle = document.getElementById('dateSingle');
+    const txFilterForm = document.getElementById('txFilterForm');
+
+    /* Якщо всі ФОПи відмічені (= режим «усі»), не надсилаємо fop_ids — як при порожньому списку в URL */
+    if (txFilterForm) {
+        txFilterForm.addEventListener('submit', function () {
+            var boxes = txFilterForm.querySelectorAll('input[name="fop_ids"]');
+            if (!boxes.length) return;
+            var allOn = Array.prototype.every.call(boxes, function (cb) { return cb.checked; });
+            if (allOn) {
+                Array.prototype.forEach.call(boxes, function (cb) { cb.checked = false; });
+            }
+        });
+    }
+
+    // Кнопки періоду — автозаповнюємо діапазон дат знизу
+    periodButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            var period = this.dataset.period;
+            periodInput.value = period;
+            var range = getPeriodRange(period);
+            dateFrom.value = range.from;
+            dateTo.value = range.to;
+            dateSingle.value = '';
+        });
+    });
+
+    // При зміні дат вручну — зняти підсвітку швидкого періоду (hidden period лишаємо «month», щоб POST не ламався)
+    [dateFrom, dateTo].forEach(input => {
+        input.addEventListener('change', function() {
+            if (dateFrom.value || dateTo.value) {
+                periodButtons.forEach(b => b.classList.remove('active'));
+                if (periodInput) periodInput.value = 'month';
+                dateSingle.value = '';
+            }
+        });
+    });
+
+    // При виборі одного дня - очистити період і діапазон
+    dateSingle.addEventListener('change', function() {
+        if (dateSingle.value) {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            if (periodInput) periodInput.value = 'month';
+            dateFrom.value = '';
+            dateTo.value = '';
+        }
+    });
+
+    // Зміна категорії транзакції без перезавантаження сторінки
+    document.querySelectorAll('.category-form').forEach(function(form) {
+        var select = form.querySelector('.category-select');
+        if (!select) return;
+        select.addEventListener('change', function() {
+            var newVal = this.value;
+            if (!confirm('Справді змінити категорію для цієї транзакції?')) {
+                this.value = this.getAttribute('data-initial') || '';
+                return;
+            }
+            var row = form.closest('tr');
+            var initial = this.getAttribute('data-initial');
+            var formData = new FormData(form);
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            }).then(function(resp) {
+                if (resp.status === 204) {
+                    select.setAttribute('data-initial', newVal);
+                    row.classList.remove('no-category');
+                    var badge = row.querySelector('.no-category-badge');
+                    if (badge) badge.remove();
+                } else {
+                    select.value = initial || '';
+                }
+            }).catch(function() {
+                select.value = initial || '';
+                alert('Не вдалося змінити категорію. Спробуйте ще раз.');
+            });
+        });
+    });
+});
+</script>
+
+{% if transactions is not none %}
+{% if request.state.role != 'manager' %}
+<div class="tx-summary-block">
+    <h2 class="tx-summary-title">
+        Підсумок за період
+        {% if date_from is defined and date_to is defined %}
+        {{ date_from.strftime("%d.%m.%Y") }} – {{ date_to.strftime("%d.%m.%Y") }}
+        {% endif %}
+    </h2>
+    <div class="stats-grid tx-summary-grid">
+        <div class="stat-card income">
+            <div class="label">Доходи</div>
+            <div class="value">+{{ summary_income|fmt_ua }} грн</div>
+        </div>
+        <div class="stat-card expense">
+            <div class="label">Витрати</div>
+            <div class="value">−{{ summary_expense|fmt_ua }} грн</div>
+        </div>
+        {% if transfer_amount and transfer_amount > 0 %}
+        <div class="stat-card" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3);">
+            <div class="label">Переміщення з картки в готівку</div>
+            <div class="value" style="color: #3b82f6;">−{{ transfer_amount|fmt_ua }} грн</div>
+        </div>
+        {% endif %}
+        {% if bogdan_amount and bogdan_amount > 0 %}
+        <div class="stat-card" style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3);">
+            <div class="label">Богдан (переведення на карту)</div>
+            <div class="value" style="color: #f59e0b;">−{{ bogdan_amount|fmt_ua }} грн</div>
+        </div>
+        {% endif %}
+        <div class="stat-card total">
+            <div class="label">Чистий результат</div>
+            <div class="value {{ 'income' if summary_net >= 0 else 'expense' }}">{{ summary_net|fmt_ua(true) }} грн</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Кількість операцій</div>
+            <div class="value">{{ total_count }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2 class="card-title">
+        Показано {{ transactions|length }} з {{ total_count }} транзакцій
+        {% if date_from is defined and date_to is defined %}
+        ({{ date_from.strftime("%d.%m.%Y") }} – {{ date_to.strftime("%d.%m.%Y") }})
+        {% endif %}
+    </h2>
+    {% if not transactions %}
+    <p class="empty-state">Немає транзакцій за обраний період.</p>
+    {% else %}
+    <div class="tx-table-wrap">
+        <table class="tx-table">
+            <thead>
+                <tr>
+                    <th style="width: 56px;">#</th>
+                    <th>Дата</th>
+                    <th>Тип</th>
+                    <th>Сума</th>
+                    <th>ФОП</th>
+                    <th>Категорія</th>
+                    <th>Контрагент</th>
+                    <th>Опис</th>
+                    <th>Коментар</th>
+                    <th>Оператор</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set global_index_start = (page - 1) * per_page %}
+                {% for tx in transactions %}
+                <tr class="{{ 'no-category' if not tx.category_id else '' }}">
+                    <td style="font-weight: 600; color: #6b7280; text-align: right;">
+                        {{ global_index_start + loop.index }}
+                    </td>
+                    <td>{{ tx.date.strftime("%d.%m.%Y %H:%M") }}</td>
+                    <td>
+                        {% if cash_category_ids and tx.category_id in cash_category_ids %}
+                        <span class="type-badge cash-withdrawal" style="background: #3b82f6; color: white;">
+                            {% if tx.transaction_type.value == 'expense' %}
+                            Зняття готівки
+                            {% else %}
+                            Переміщення в готівку
+                            {% endif %}
+                        </span>
+                        {% elif tx.category_id == bogdan_category_id %}
+                        <span class="type-badge bogdan-transfer" style="background: #f59e0b; color: white;">
+                            Богдан
+                        </span>
+                        {% else %}
+                        <span class="type-badge {{ tx.transaction_type.value }}">
+                            {{ 'Дохід' if tx.transaction_type.value == 'income' else 'Витрата' }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="{{ tx.transaction_type.value }} {% if cash_category_ids and tx.category_id in cash_category_ids %}cash-withdrawal{% elif tx.category_id == bogdan_category_id %}bogdan-transfer{% endif %}">
+                        {% if cash_category_ids and tx.category_id in cash_category_ids %}
+                        {{ (tx.amount|abs)|fmt_ua }} грн
+                        {% elif tx.category_id == bogdan_category_id %}
+                        {{ (tx.amount|abs)|fmt_ua }} грн
+                        {% else %}
+                        {{ tx.amount|fmt_ua(true) if tx.transaction_type.value == 'income' else (-tx.amount)|fmt_ua }} грн
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if tx.source.value == 'cash' %}
+                        <span class="source-badge cash" title="Готівка">Г</span>
+                        <span class="fop-badge">Готівка</span>
+                        {% else %}
+                        {% if tx.source.value == 'novapay' %}<span class="source-badge novapay" title="NovaPay">n</span>
+                        {% elif tx.source.value == 'monobank' %}<span class="source-badge monobank" title="Monobank">m</span>
+                        {% endif %}
+                        <span class="fop-badge">{{ tx.fop.name if tx.fop else '—' }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="tx-cell-category">
+                        {% set cat_full = tx.category.name if tx.category else '' %}
+                        {% if not tx.category_id %}
+                        <span class="no-category-badge" title="Транзакція потребує категорії">
+                            <svg class="no-category-icon" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            Потребує
+                        </span>
+                        {% else %}
+                        <span class="cat-label" title="{{ cat_full }}">{{ cat_full[:14] }}{% if cat_full|length > 14 %}…{% endif %}</span>
+                        {% endif %}
+                        <form method="post" action="/transactions/{{ tx.id }}/category" class="category-form" data-tx-id="{{ tx.id }}">
+                            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                            <select name="category_id" class="category-select" title="{{ cat_full or 'Змінити категорію' }}"
+                                data-initial="{{ tx.category_id or '' }}">
+                                <option value="" {{ 'selected' if not tx.category_id else '' }}>—</option>
+                                {% for cat in categories %}
+                                <option value="{{ cat.id }}" {{ 'selected' if tx.category_id == cat.id else '' }}>{{ cat.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </td>
+                    <td class="tx-cell-counterparty">{{ (tx.counterparty or '—')[:70] }}</td>
+                    <td class="tx-cell-description">{{ (tx.description or '—')[:100] }}</td>
+                    <td class="tx-cell-comment">{{ (tx.comment or '—')[:100] }}</td>
+                    <td class="tx-cell-operator">{{ tx.operator_username or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% if total_pages > 1 %}
+<nav class="pagination">
+    {% if page > 1 %}
+    <a href="{{ pagination_url(page - 1) }}">←</a>
+    {% else %}
+    <span class="disabled">←</span>
+    {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="current">{{ p }}</span>
+        {% elif p <= 3 or p > total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+        <a href="{{ pagination_url(p) }}">{{ p }}</a>
+        {% elif p == 4 or p == total_pages - 3 %}
+        <span>…</span>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="{{ pagination_url(page + 1) }}">→</a>
+    {% else %}
+    <span class="disabled">→</span>
+    {% endif %}
+</nav>
+{% endif %}
+{% endif %}
+{% endblock %}

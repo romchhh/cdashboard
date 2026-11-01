@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Редагувати менеджера' if manager else 'Додати менеджера' }} — Cosmy Agent{% endblock %}
+{% block mobile_title %}{{ 'Редагувати' if manager else 'Додати' }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ 'Редагувати користувача' if manager else 'Додати менеджера' }}</h1>
+</div>
+
+{% if error == 'empty_login' %}
+<p class="error">Введіть логін.</p>
+{% elif error == 'short_password' %}
+<p class="error">Пароль має бути не менше 4 символів.</p>
+{% elif error == 'exists' %}
+<p class="error">Користувач з таким логіном вже існує.</p>
+{% elif error == 'no_scopes' %}
+<p class="error">Оберіть хоча б одну область доступу (фінанси, маркетинг, реклама або склад).</p>
+{% endif %}
+
+<div class="form-card">
+    <form method="post" action="{{ '/managers/' ~ manager.id ~ '/edit' if manager else '/managers/add' }}">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <div class="filter-section">
+            <label class="filter-label">Логін</label>
+            <input type="text" name="username" value="{{ manager.username if manager else '' }}" required
+                   placeholder="логін для входу" class="filter-select" style="max-width: 280px;">
+        </div>
+        <div class="filter-section">
+            <label class="filter-label">Пароль {{ '(залиште порожнім, щоб не змінювати)' if manager else '' }}</label>
+            <input type="password" name="password" {{ '' if manager else 'required' }}
+                   placeholder="{{ 'новий пароль' if manager else 'пароль' }}" class="filter-select" style="max-width: 280px;">
+            <button type="button" class="btn btn-secondary" style="margin-top: 0.5rem;" onclick="var i=document.querySelector('input[name=password]'); i.value=Math.random().toString(36).slice(-10); i.type='text';">
+                Згенерувати пароль
+            </button>
+        </div>
+        <div class="filter-section">
+            <label class="filter-label">Ім'я для звітів (Оператор)</label>
+            <input type="text" name="display_name" value="{{ manager.display_name or '' }}"
+                   placeholder="наприклад Олена, Адмін (Ьогдан)" class="filter-select" style="max-width: 280px;">
+            <span class="muted">Це ім'я буде показуватись у звітах та транзакціях як «хто зробив операцію».</span>
+        </div>
+        <div class="filter-section">
+            <label class="filter-label">Роль</label>
+            <select name="role" id="manager-role-select" class="filter-select" style="max-width: 280px;">
+                <option value="manager" {{ 'selected' if manager and manager.role == 'manager' or not manager else '' }}>Менеджер</option>
+                <option value="admin" {{ 'selected' if manager and manager.role == 'admin' else '' }}>Адмін</option>
+            </select>
+        </div>
+        <div id="scope-checkboxes" class="filter-section">
+            <label class="filter-label">Області доступу</label>
+            <p class="muted" style="margin-bottom: 0.75rem;">Для ролі «Менеджер» можна комбінувати: наприклад лише маркетинг або фінанси + склад.</p>
+            <label class="filter-label" style="font-weight: normal; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                <input type="checkbox" name="access_finance" value="1" class="scope-cb"
+                    {% if not manager or (manager and manager.role == 'admin') or (manager and manager.access_finance) %}checked{% endif %}>
+                Фінанси — каса, гроші, транзакції, звіти, синхронізація банку
+            </label>
+            <label class="filter-label" style="font-weight: normal; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                <input type="checkbox" name="access_marketing" value="1" class="scope-cb"
+                    {% if manager and (manager.role == 'admin' or manager.access_marketing) %}checked{% endif %}>
+                Маркетинг — клієнти Cosmy, розсилки
+            </label>
+            <label class="filter-label" style="font-weight: normal; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                <input type="checkbox" name="access_advertising" value="1" class="scope-cb"
+                    {% if manager and (manager.role == 'admin' or manager.access_advertising) %}checked{% endif %}>
+                Реклама — аналіз реклами (Google Ads, Meta, SEO)
+            </label>
+            <label class="filter-label" style="font-weight: normal; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                <input type="checkbox" name="access_warehouse" value="1" class="scope-cb"
+                    {% if manager and (manager.role == 'admin' or manager.access_warehouse) %}checked{% endif %}>
+                Склад — товари, закупки, аналітика складу
+            </label>
+            <label class="filter-label" style="font-weight: normal; display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" name="access_clients_export" value="1" class="scope-cb export-cb"
+                    {% if manager and (manager.role == 'admin' or manager.access_clients_export) %}checked{% endif %}>
+                Експорт бази клієнтів — завантаження CSV/Excel (журналується)
+            </label>
+        </div>
+        <div class="filter-actions-row">
+            <button type="submit" class="btn btn-primary">Зберегти</button>
+            <a href="/managers" class="btn btn-secondary">Скасувати</a>
+        </div>
+    </form>
+</div>
+<script>
+(function() {
+    var sel = document.getElementById('manager-role-select');
+    var box = document.getElementById('scope-checkboxes');
+    if (!sel || !box) return;
+    function sync() {
+        var isAdmin = sel.value === 'admin';
+        box.querySelectorAll('.scope-cb').forEach(function(cb) {
+            cb.disabled = isAdmin;
+            if (isAdmin) cb.checked = true;
+        });
+        var hint = box.querySelector('.muted');
+        if (hint) hint.style.display = isAdmin ? 'none' : '';
+        var marketingCb = box.querySelector('input[name="access_marketing"]');
+        var exportCb = box.querySelector('input[name="access_clients_export"]');
+        if (!isAdmin && marketingCb && exportCb) {
+            exportCb.disabled = !marketingCb.checked;
+            if (!marketingCb.checked) exportCb.checked = false;
+        }
+    }
+    var marketingCb = box.querySelector('input[name="access_marketing"]');
+    if (marketingCb) {
+        marketingCb.addEventListener('change', sync);
+    }
+    sel.addEventListener('change', sync);
+    sync();
+})();
+</script>
+{% endblock %}

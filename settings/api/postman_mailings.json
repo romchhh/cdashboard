@@ -1,0 +1,119 @@
+{
+  "info": {
+    "name": "Cosmy Mailings API",
+    "_postman_id": "3e183959-77f9-4f89-bcb7-f0b87ea15744",
+    "description": "Тригерні email Cosmy. Дані товарів і UTM-посилання передаються з сайту в items[] та cart_url / wishlist_url / checkout_url. Promo signup — промокод з popup (uk, idempotency через external_request_id).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Welcome",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{api_key}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"cosmy.ua@gmail.com\",\n  \"name\": \"Дарія\"\n}"
+        },
+        "url": "{{base_url}}/api/mailings/welcome"
+      }
+    },
+    {
+      "name": "Order placed",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{api_key}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"cosmy.ua@gmail.com\",\n  \"name\": \"Дарія\",\n  \"order_number\": \"10482\",\n  \"order_total\": 2230,\n  \"discount\": 250,\n  \"payment_method\": \"Оплата карткою онлайн\",\n  \"delivery_address\": \"м. Київ, НП №1\",\n  \"delivery_info\": \"Безкоштовна доставка\",\n  \"items\": [\n    {\n      \"product_id\": 12345,\n      \"name\": \"Сироватка з вітаміном C\",\n      \"image_url\": \"https://cosmy.com.ua/image/catalog/demo/serum.jpg\",\n      \"product_url\": \"https://cosmy.com.ua/index.php?route=product/product&product_id=12345&utm_source=email&utm_campaign=order\",\n      \"price\": 890,\n      \"price_old\": 990,\n      \"quantity\": 1\n    }\n  ]\n}"
+        },
+        "url": "{{base_url}}/api/mailings/order"
+      }
+    },
+    {
+      "name": "Abandoned cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{api_key}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"cosmy.ua@gmail.com\",\n  \"name\": \"Дарія\",\n  \"cart_url\": \"https://cosmy.com.ua/check-ua?utm_source=email&utm_medium=trigger&utm_campaign=abandoned_cart\",\n  \"items\": [\n    {\n      \"name\": \"Тонік для обличчя\",\n      \"image_url\": \"https://cosmy.com.ua/image/catalog/demo/tonic.jpg\",\n      \"product_url\": \"https://cosmy.com.ua/index.php?route=product/product&product_id=67890&utm_campaign=abandoned_cart\",\n      \"price\": 650,\n      \"quantity\": 1\n    }\n  ]\n}"
+        },
+        "url": "{{base_url}}/api/mailings/abandoned-cart"
+      }
+    },
+    {
+      "name": "Abandoned payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{api_key}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"cosmy.ua@gmail.com\",\n  \"name\": \"Дарія\",\n  \"checkout_url\": \"https://cosmy.com.ua/index.php?route=checkout/checkout&utm_source=email&utm_campaign=abandoned_payment\",\n  \"items\": [\n    {\n      \"name\": \"Сироватка з вітаміном C\",\n      \"image_url\": \"https://cosmy.com.ua/image/catalog/demo/serum.jpg\",\n      \"product_url\": \"https://cosmy.com.ua/index.php?route=product/product&product_id=485&utm_campaign=abandoned_payment\",\n      \"price\": 890,\n      \"quantity\": 1\n    },\n    {\n      \"name\": \"Тонік для обличчя\",\n      \"image_url\": \"https://cosmy.com.ua/image/catalog/demo/tonic.jpg\",\n      \"product_url\": \"https://cosmy.com.ua/index.php?route=product/product&product_id=484&utm_campaign=abandoned_payment\",\n      \"price\": 650,\n      \"quantity\": 1\n    }\n  ]\n}"
+        },
+        "url": "{{base_url}}/api/mailings/abandoned-payment"
+      }
+    },
+    {
+      "name": "Price drop — wishlist",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{api_key}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"cosmy.ua@gmail.com\",\n  \"name\": \"Дарія\",\n  \"wishlist_url\": \"https://cosmy.com.ua/index.php?route=account/wishlist&utm_campaign=price_drop_wishlist\",\n  \"items\": [\n    {\n      \"name\": \"Сироватка\",\n      \"image_url\": \"https://cosmy.com.ua/image/catalog/demo/serum.jpg\",\n      \"product_url\": \"https://cosmy.com.ua/index.php?route=product/product&product_id=12345&utm_campaign=price_drop\",\n      \"old_price\": 1490,\n      \"new_price\": 1290\n    }\n  ]\n}"
+        },
+        "url": "{{base_url}}/api/mailings/price-drop-wishlist"
+      }
+    },
+    {
+      "name": "Price drop — cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{api_key}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"cosmy.ua@gmail.com\",\n  \"name\": \"Дарія\",\n  \"cart_url\": \"https://cosmy.com.ua/check-ua?utm_campaign=price_drop_cart\",\n  \"items\": [\n    {\n      \"name\": \"Крем\",\n      \"image_url\": \"https://cosmy.com.ua/image/catalog/demo/cream.jpg\",\n      \"product_url\": \"https://cosmy.com.ua/index.php?route=product/product&product_id=111&utm_campaign=price_drop_cart\",\n      \"old_price\": 990,\n      \"new_price\": 790\n    }\n  ]\n}"
+        },
+        "url": "{{base_url}}/api/mailings/price-drop-cart"
+      }
+    },
+    {
+      "name": "Promo signup (popup)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{api_key}}", "type": "text" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"template\": \"promo_signup\",\n  \"email\": \"cosmy.ua@gmail.com\",\n  \"lang\": \"uk\",\n  \"language\": \"uk-ua\",\n  \"external_request_id\": \"1234\",\n  \"code\": \"CMK7QW2P\",\n  \"discount_percent\": 10,\n  \"valid_hours\": 24,\n  \"expires_at\": \"2026-08-01 15:04:00\",\n  \"expires_at_tz\": \"Europe/Kiev\",\n  \"min_total\": 0,\n  \"store_url\": \"https://cosmy.com.ua/\",\n  \"unsubscribe_url\": \"https://cosmy.com.ua/index.php?route=promo/unsubscribe&t=sample\"\n}"
+        },
+        "url": "{{base_url}}/api/mailings/promo-signup"
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "api_key", "value": "" }
+  ]
+}

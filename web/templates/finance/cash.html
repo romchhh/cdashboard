@@ -1,0 +1,547 @@
+{% extends "base.html" %}
+{% block title %}Готівка — Cosmy Agent{% endblock %}
+{% block mobile_title %}Готівка{% endblock %}
+{% block content %}
+{% from "procurement/_icons.html" import ui_icon %}
+
+<div class="page-header">
+    <h1>
+        <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        Готівка / Каса
+    </h1>
+    <p class="subtitle">Внесення в касу (оплата за товар) та винесення з каси з вибором категорії</p>
+</div>
+
+{% if success == 'in' %}
+<p class="success">✅ Внесення в касу збережено (категорія «Продаж»).</p>
+{% elif success == 'out' %}
+<p class="success">✅ Винесення з каси збережено.</p>
+{% elif success == 'edited' %}
+<p class="success">✅ Операцію оновлено.</p>
+{% elif success == 'deleted' %}
+<p class="success">✅ Операцію видалено.</p>
+{% endif %}
+{% if error == 'amount' %}
+<p class="error">❌ Введіть коректну суму (число більше нуля).</p>
+{% elif error == 'category' %}
+<p class="error">❌ Оберіть категорію витрат.</p>
+{% elif error == 'no_sales_category' %}
+<p class="error">Категорію «Продаж» не знайдено в БД. Додайте її в <a href="/categories">Категоріях</a>.</p>
+{% elif error == 'notfound' %}
+<p class="error">❌ Операцію не знайдено або вона не з готівки.</p>
+{% endif %}
+
+<div class="cash-actions-panel" aria-label="Операції з касою">
+    <div class="cash-actions-grid">
+        <button type="button" class="cash-action-tile cash-action-tile--in js-open-modal" data-modal="modal-cash-in">
+            <span class="cash-action-tile__icon" aria-hidden="true">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            </span>
+            <span class="cash-action-tile__body">
+                <span class="cash-action-tile__title">Внесення в касу</span>
+                <span class="cash-action-tile__hint">Оплата за товар · категорія «Продаж»</span>
+            </span>
+            <span class="cash-action-tile__chevron" aria-hidden="true">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+        </button>
+        <button type="button" class="cash-action-tile cash-action-tile--out js-open-modal" data-modal="modal-cash-out">
+            <span class="cash-action-tile__icon" aria-hidden="true">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+            </span>
+            <span class="cash-action-tile__body">
+                <span class="cash-action-tile__title">Винесення з каси</span>
+                <span class="cash-action-tile__hint">Витрата з каси з вибором категорії</span>
+            </span>
+            <span class="cash-action-tile__chevron" aria-hidden="true">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+        </button>
+        <a href="/manual-expense" class="cash-action-tile cash-action-tile--manual">
+            <span class="cash-action-tile__icon" aria-hidden="true">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+            </span>
+            <span class="cash-action-tile__body">
+                <span class="cash-action-tile__title">Витрата поза картами</span>
+                <span class="cash-action-tile__hint">Окремий облік, не з каси</span>
+            </span>
+            <span class="cash-action-tile__chevron" aria-hidden="true">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </span>
+        </a>
+    </div>
+</div>
+
+<div class="cash-balance-now card">
+    <h2 class="cash-balance-now-title">Залишок готівки в касі</h2>
+    <p class="cash-balance-now-desc">{{ cash_balance_label }}</p>
+    <div class="cash-balance-now-value {{ 'income' if cash_balance_now >= 0 else 'expense' }}">{{ cash_balance_now|fmt_ua(true) }} грн</div>
+</div>
+
+<div id="modal-cash-in" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-labelledby="modal-cash-in-title">
+        <div class="modal-header">
+            <h2 id="modal-cash-in-title" class="modal-title">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-right: 0.5rem; vertical-align: middle;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Внесення в касу
+            </h2>
+            <button type="button" class="modal-close js-close-modal" aria-label="Закрити">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <p class="muted modal-desc">Завжди враховується як <strong>оплата за товар</strong> (категорія «Продаж»).</p>
+        <form method="post" action="/cash/in">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="in_amount">Сума (грн)</label>
+                    <input type="text" id="in_amount" name="amount" placeholder="наприклад 1500" required>
+                </div>
+                <div class="form-group">
+                    <label for="in_datetime">Дата та час</label>
+                    <input type="datetime-local" id="in_datetime" name="datetime_tx" class="input-datetime" title="Якщо порожнє — поточний момент">
+                </div>
+                <div class="form-group">
+                    <label for="in_desc">Коментар (необовʼязково)</label>
+                    <input type="text" id="in_desc" name="description" placeholder="коментар">
+                </div>
+            </div>
+            <div class="form-actions-row">
+                <button type="submit" class="btn btn-primary">Зберегти внесення</button>
+                <button type="button" class="btn btn-secondary js-close-modal">Скасувати</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modal-cash-out" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-labelledby="modal-cash-out-title">
+        <div class="modal-header">
+            <h2 id="modal-cash-out-title" class="modal-title">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-right: 0.5rem; vertical-align: middle;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                </svg>
+                Винесення з каси
+            </h2>
+            <button type="button" class="modal-close js-close-modal" aria-label="Закрити">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <p class="muted modal-desc">Оберіть категорію витрат для операції.</p>
+        <form method="post" action="/cash/out">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="out_amount">Сума (грн)</label>
+                    <input type="text" id="out_amount" name="amount" placeholder="наприклад 500" required>
+                </div>
+                <div class="form-group">
+                    <label for="out_category">Категорія</label>
+                    <select id="out_category" name="category_id" required>
+                        <option value="">— оберіть —</option>
+                        {% for cat in expense_categories %}
+                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="out_datetime">Дата та час</label>
+                    <input type="datetime-local" id="out_datetime" name="datetime_tx" class="input-datetime" title="Якщо порожнє — поточний момент">
+                </div>
+                <div class="form-group">
+                    <label for="out_desc">Коментар (необовʼязково)</label>
+                    <input type="text" id="out_desc" name="description" placeholder="коментар">
+                </div>
+            </div>
+            <div class="form-actions-row">
+                <button type="submit" class="btn btn-danger">Зберегти винесення</button>
+                <button type="button" class="btn btn-secondary js-close-modal">Скасувати</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modal-cash-edit" class="modal-overlay" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-labelledby="modal-cash-edit-title">
+        <div class="modal-header">
+            <h2 id="modal-cash-edit-title" class="modal-title">Редагувати операцію</h2>
+            <button type="button" class="modal-close js-close-modal" aria-label="Закрити">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <form method="post" id="form-cash-edit" action="">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="edit_amount">Сума (грн)</label>
+                    <input type="text" id="edit_amount" name="amount" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_datetime">Дата та час</label>
+                    <input type="datetime-local" id="edit_datetime" name="datetime_tx" class="input-datetime">
+                </div>
+                <div class="form-group" id="edit-category-wrap" style="display:none;">
+                    <label for="edit_category">Категорія</label>
+                    <select id="edit_category" name="category_id">
+                        <option value="">— оберіть —</option>
+                        {% for cat in expense_categories %}
+                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit_description">Коментар</label>
+                    <input type="text" id="edit_description" name="description" placeholder="коментар">
+                </div>
+            </div>
+            <div class="form-actions-row">
+                <button type="submit" class="btn btn-primary">Зберегти зміни</button>
+                <button type="button" class="btn btn-secondary js-close-modal">Скасувати</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="form-card">
+    <h2 class="card-title">Історія операцій з готівкою</h2>
+    <form method="post" action="/cash" id="cashFilterForm">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <!-- Швидкий вибір періоду -->
+        <div class="filter-section">
+            <label class="filter-label">{{ ui_icon('zap') }} Швидкий період</label>
+            <div class="period-buttons">
+                <button type="button" class="period-btn" data-period="today">Сьогодні</button>
+                <button type="button" class="period-btn" data-period="yesterday">Вчора</button>
+                <button type="button" class="period-btn" data-period="week">Тиждень</button>
+                <button type="button" class="period-btn active" data-period="month">Місяць</button>
+                <button type="button" class="period-btn" data-period="quarter">Квартал</button>
+                <button type="button" class="period-btn" data-period="year">Рік</button>
+            </div>
+            <input type="hidden" name="period" id="periodInputCash" value="{{ period|default('month') }}">
+        </div>
+
+        <!-- Ручний вибір дат -->
+        <div class="filter-section">
+            <label class="filter-label">{{ ui_icon('calendar') }} Діапазон дат</label>
+            <div class="date-inputs">
+                <input type="date" name="date_from_str" id="dateFromCash" 
+                       value="{{ date_from.strftime('%Y-%m-%d') if date_from is defined and date_from and not date_single_str else '' }}" 
+                       placeholder="Від">
+                <span class="date-sep">—</span>
+                <input type="date" name="date_to_str" id="dateToCash" 
+                       value="{{ date_to.strftime('%Y-%m-%d') if date_to is defined and date_to and not date_single_str else '' }}" 
+                       placeholder="До">
+            </div>
+        </div>
+
+        <!-- Один день -->
+        <div class="filter-section">
+            <label class="filter-label">{{ ui_icon('calendar') }} Один день</label>
+            <input type="date" name="date_single_str" id="dateSingleCash" 
+                   value="{{ date_single_str|default('') }}" class="date-input-single">
+        </div>
+
+        <!-- Кнопки дій -->
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary btn-lg">{{ ui_icon('search') }} Показати</button>
+            <a href="/cash" class="btn btn-secondary">{{ ui_icon('refresh') }} Скинути фільтри</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function getPeriodRange(period) {
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    function ymd(d) {
+        var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+    var from, to;
+    if (period === 'today') { from = to = today; }
+    else if (period === 'yesterday') {
+        var yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+        from = to = yesterday;
+    } else {
+        to = new Date(today);
+        from = new Date(today);
+        if (period === 'week') from.setDate(from.getDate() - 6);
+        else if (period === 'month') from.setMonth(from.getMonth() - 1);
+        else if (period === 'quarter') from.setMonth(Math.floor(from.getMonth() / 3) * 3, 1);
+        else if (period === 'year') from = new Date(from.getFullYear(), 0, 1);
+        else { from.setDate(1); }
+    }
+    return { from: ymd(from), to: ymd(to) };
+}
+document.addEventListener('DOMContentLoaded', function() {
+    const periodButtons = document.querySelectorAll('#cashFilterForm .period-btn');
+    const periodInput = document.getElementById('periodInputCash');
+    const dateFrom = document.getElementById('dateFromCash');
+    const dateTo = document.getElementById('dateToCash');
+    const dateSingle = document.getElementById('dateSingleCash');
+
+    periodButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            var period = this.dataset.period;
+            periodInput.value = period;
+            var range = getPeriodRange(period);
+            dateFrom.value = range.from;
+            dateTo.value = range.to;
+            dateSingle.value = '';
+        });
+    });
+
+    // При зміні дат - очистити період і один день
+    [dateFrom, dateTo].forEach(input => {
+        input.addEventListener('change', function() {
+            if (dateFrom.value || dateTo.value) {
+                periodButtons.forEach(b => b.classList.remove('active'));
+                periodInput.value = '';
+                dateSingle.value = '';
+            }
+        });
+    });
+
+    // При виборі одного дня - очистити період і діапазон
+    dateSingle.addEventListener('change', function() {
+        if (dateSingle.value) {
+            periodButtons.forEach(b => b.classList.remove('active'));
+            periodInput.value = '';
+            dateFrom.value = '';
+            dateTo.value = '';
+        }
+    });
+});
+</script>
+
+<div class="tx-summary-block">
+    <h2 class="tx-summary-title">
+        Підсумок за період
+        {% if date_from is defined and date_to is defined %}
+        {{ date_from.strftime("%d.%m.%Y") }} – {{ date_to.strftime("%d.%m.%Y") }}
+        {% endif %}
+    </h2>
+    <div class="stats-grid tx-summary-grid">
+        <div class="stat-card income">
+            <div class="label">Внесення (доходи)</div>
+            <div class="value">+{{ summary_income|fmt_ua }} грн</div>
+        </div>
+        <div class="stat-card expense">
+            <div class="label">Винесення (витрати)</div>
+            <div class="value">−{{ summary_expense|fmt_ua }} грн</div>
+        </div>
+        {% if request.state.role != 'manager' and cash_withdrawal_total and cash_withdrawal_total > 0 %}
+        <div class="stat-card" style="background: #3b82f6; color: white;">
+            <div class="label">Переміщення з картки в готівку</div>
+            <div class="value">+{{ (cash_withdrawal_total|abs)|fmt_ua }} грн</div>
+        </div>
+        {% endif %}
+        <div class="stat-card total">
+            <div class="label">Чистий результат</div>
+            <div class="value {{ 'income' if summary_net >= 0 else 'expense' }}">{{ summary_net|fmt_ua(true) }} грн</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Кількість операцій</div>
+            <div class="value">{{ total_count }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="card-title">
+        Показано {{ cash_transactions|length }} з {{ total_count }} операцій
+        {% if date_from is defined and date_to is defined %}
+        ({{ date_from.strftime("%d.%m.%Y") }} – {{ date_to.strftime("%d.%m.%Y") }})
+        {% endif %}
+    </h2>
+    {% if not cash_transactions %}
+    <p class="empty-state">Немає операцій з готівкою за обраний період.</p>
+    {% else %}
+    <div class="tx-table-wrap">
+        <table class="tx-table">
+            <thead>
+                <tr>
+                    <th style="width: 56px;">#</th>
+                    <th>Дата</th>
+                    <th>Тип</th>
+                    <th>Сума</th>
+                    <th>Категорія</th>
+                    <th>Коментар</th>
+                    <th>Оператор</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set global_index_start = (page - 1) * per_page %}
+                {% for tx in cash_transactions %}
+                <tr data-tx-id="{{ tx.id }}"
+                    data-amount="{{ tx.amount }}"
+                    data-datetime="{{ tx.date.strftime('%Y-%m-%dT%H:%M') }}"
+                    data-description="{{ (tx.description or tx.comment or '')|e }}"
+                    data-category-id="{{ tx.category_id or '' }}"
+                    data-tx-type="{{ tx.transaction_type.value }}">
+                    <td style="font-weight: 600; color: #6b7280; text-align: right;">
+                        {{ global_index_start + loop.index }}
+                    </td>
+                    <td>{{ tx.date.strftime("%d.%m.%Y %H:%M") }}</td>
+                    <td>
+                        {% if tx.category and tx.category.name in ('Готівка', 'Зняття Готівки') %}
+                        <span class="type-badge cash-withdrawal" style="background: #3b82f6; color: white;">
+                            Переміщення в готівку
+                        </span>
+                        {% else %}
+                        <span class="type-badge {{ tx.transaction_type.value }}">
+                            {{ 'Внесення' if tx.transaction_type.value == 'income' else 'Винесення' }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="{% if tx.category and tx.category.name in ('Готівка', 'Зняття Готівки') %}income cash-withdrawal{% else %}{{ tx.transaction_type.value }}{% endif %}">
+                        {% if tx.category and tx.category.name in ('Готівка', 'Зняття Готівки') %}
+                        +{{ (tx.amount|abs)|fmt_ua }} грн
+                        {% else %}
+                        {{ tx.amount|fmt_ua(true) if tx.transaction_type.value == 'income' else (-tx.amount)|fmt_ua }} грн
+                        {% endif %}
+                    </td>
+                    <td>{{ (tx.category.name if tx.category else '—') }}</td>
+                    <td>
+                        {% if tx.source.value != 'cash' %}
+                        {{ (tx.fop.name if tx.fop else '—') }}
+                        {% else %}
+                        {{ (tx.comment or tx.description or '—')[:50] }}
+                        {% endif %}
+                    </td>
+                    <td class="tx-cell-operator">{{ tx.operator_username or '—' }}</td>
+                    <td class="cash-actions-cell">
+                        {% if tx.source.value == 'cash' %}
+                        <button type="button" class="btn btn-small btn-edit js-cash-edit" title="Редагувати">✎</button>
+                        <form method="post" action="/cash/{{ tx.id }}/delete" class="cash-delete-form" onsubmit="return confirm('Видалити цю операцію з готівки?');">
+                            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                            <button type="submit" class="btn btn-small btn-danger" title="Видалити">✕</button>
+                        </form>
+                        {% else %}
+                        <span class="muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{% if total_pages > 1 %}
+<nav class="pagination">
+    {% if page > 1 %}
+    <a href="{{ pagination_url(page - 1) }}">←</a>
+    {% else %}
+    <span class="disabled">←</span>
+    {% endif %}
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="current">{{ p }}</span>
+        {% elif p <= 3 or p > total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+        <a href="{{ pagination_url(p) }}">{{ p }}</a>
+        {% elif p == 4 or p == total_pages - 3 %}
+        <span>…</span>
+        {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+    <a href="{{ pagination_url(page + 1) }}">→</a>
+    {% else %}
+    <span class="disabled">→</span>
+    {% endif %}
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    function openModal(id) {
+        closeAllModals();
+        var el = document.getElementById(id);
+        if (el) {
+            el.classList.add('modal-open');
+            el.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+    function closeModal(id) {
+        var el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('modal-open');
+            el.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+    }
+    function closeAllModals() {
+        document.querySelectorAll('.modal-overlay').forEach(function (m) {
+            closeModal(m.id);
+        });
+    }
+    document.querySelectorAll('.js-open-modal').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var id = this.getAttribute('data-modal');
+            if (id) openModal(id);
+        });
+    });
+    document.querySelectorAll('.js-close-modal').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var overlay = this.closest('.modal-overlay');
+            if (overlay) closeModal(overlay.id);
+        });
+    });
+    document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) closeModal(overlay.id);
+        });
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeAllModals();
+    });
+
+    document.querySelectorAll('.js-cash-edit').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var row = this.closest('tr');
+            if (!row) return;
+            var id = row.getAttribute('data-tx-id');
+            var amount = row.getAttribute('data-amount') || '';
+            var dt = row.getAttribute('data-datetime') || '';
+            var desc = row.getAttribute('data-description') || '';
+            var catId = row.getAttribute('data-category-id') || '';
+            var txType = row.getAttribute('data-tx-type') || '';
+            var form = document.getElementById('form-cash-edit');
+            var wrap = document.getElementById('edit-category-wrap');
+            var catSelect = document.getElementById('edit_category');
+            if (!form || !wrap || !catSelect) return;
+            form.action = '/cash/' + id + '/edit';
+            document.getElementById('edit_amount').value = amount;
+            document.getElementById('edit_datetime').value = dt;
+            document.getElementById('edit_description').value = desc;
+            if (txType === 'expense') {
+                wrap.style.display = '';
+                catSelect.value = catId;
+                catSelect.removeAttribute('form'); catSelect.setAttribute('name', 'category_id');
+            } else {
+                wrap.style.display = 'none';
+                catSelect.removeAttribute('name'); catSelect.setAttribute('form', 'none');
+            }
+            openModal('modal-cash-edit');
+        });
+    });
+})();
+</script>
+{% endblock %}

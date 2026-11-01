@@ -1,0 +1,3606 @@
+{% extends "base.html" %}
+{% block title %}Клієнти — маркетинг — Cosmy Agent{% endblock %}
+{% block mobile_title %}Клієнти{% endblock %}
+
+{% block head %}
+<style>
+.clients-page .data-table { font-size: 13px; }
+/* Фіксовані ширини колонок (colgroup + table-layout: fixed) */
+.clients-page .data-table.clients-table-fixed {
+    table-layout: fixed;
+    width: 100%;
+    min-width: 1420px;
+}
+.clients-page .data-table.clients-table-fixed col.col-w-check { width: 40px; }
+.clients-page .data-table.clients-table-fixed col.col-w-num { width: 48px; }
+.clients-page .data-table.clients-table-fixed col.col-w-client { width: 228px; }
+.clients-page .data-table.clients-table-fixed col.col-w-mgr { width: 128px; }
+.clients-page .data-table.clients-table-fixed col.col-w-crm-status { width: 104px; }
+.clients-page .data-table.clients-table-fixed col.col-w-crm-ch { width: 84px; }
+.clients-page .data-table.clients-table-fixed col.col-w-phone { width: 124px; }
+.clients-page .data-table.clients-table-fixed col.col-w-city { width: 120px; }
+.clients-page .data-table.clients-table-fixed col.col-w-activity { width: 104px; }
+.clients-page .data-table.clients-table-fixed col.col-w-rfm { width: 96px; }
+.clients-page .data-table.clients-table-fixed col.col-w-channel { width: 148px; }
+.clients-page .data-table.clients-table-fixed col.col-w-orders { width: 72px; }
+.clients-page .data-table.clients-table-fixed col.col-w-ltv { width: 88px; }
+.clients-page .data-table.clients-table-fixed col.col-w-last { width: 116px; }
+.clients-page .clients-flash {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+.clients-page .clients-flash--ok { background: #ecfdf5; border: 1px solid #6ee7b7; color: #065f46; }
+.clients-page .clients-flash--warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+.clients-page .clients-mgr-anchor-wrap {
+    margin: 14px 0 16px;
+    padding: 0;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: linear-gradient(165deg, #f8fafc 0%, #ffffff 55%);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+}
+.clients-page .clients-mgr-anchor-wrap:has(.cff-basket-details[open]) {
+    overflow: visible;
+}
+.clients-page .clients-filter-card.clients-filters-compact:has(.cff-basket-details[open]) {
+    position: relative;
+    z-index: 200;
+    overflow: visible;
+}
+.clients-page .clients-mgr-anchor-wrap .clients-mgr-section {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
+.clients-page .clients-mgr-anchor-wrap .clients-mgr-bulk-continuation {
+    margin: 0;
+    padding: 0 16px 16px;
+    border-top: 1px solid #e8ecf1;
+    background: transparent;
+}
+.clients-page .clients-mgr-bulk-details.clients-mgr-bulk-continuation {
+    padding-top: 0;
+}
+.clients-page .clients-mgr-bulk-summary-left {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+    text-align: left;
+}
+.clients-page .clients-mgr-bulk-summary-hint {
+    font-weight: 500;
+    font-size: 0.75rem;
+    color: #64748b;
+    line-height: 1.35;
+}
+.clients-page .clients-mgr-bulk-details > summary.clients-mgr-bulk-summary-btn {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 10px 14px;
+    margin: 12px 0 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0f172a;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.clients-page .clients-mgr-bulk-details > summary.clients-mgr-bulk-summary-btn:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #0f172a;
+}
+.clients-page .clients-mgr-bulk-details > summary.clients-mgr-bulk-summary-btn:focus {
+    outline: none;
+}
+.clients-page .clients-mgr-bulk-details > summary.clients-mgr-bulk-summary-btn:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
+}
+.clients-page .clients-mgr-bulk-details > summary.clients-mgr-bulk-summary-btn::after {
+    content: '';
+    flex-shrink: 0;
+    width: 0.55rem;
+    height: 0.55rem;
+    margin-left: 8px;
+    border-right: 2px solid #64748b;
+    border-bottom: 2px solid #64748b;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+}
+.clients-page .clients-mgr-bulk-details[open] > summary.clients-mgr-bulk-summary-btn::after {
+    transform: rotate(-135deg);
+    margin-top: 4px;
+}
+.clients-page .clients-mgr-bulk-details > summary::-webkit-details-marker {
+    display: none;
+}
+.clients-page .clients-mgr-bulk-details > summary::marker {
+    content: '';
+}
+.clients-page .clients-mgr-bulk-details-inner {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #e8ecf1;
+}
+.clients-page .clients-mgr-bulk-details[open] > summary.clients-mgr-bulk-summary-btn {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e3a8a;
+}
+.clients-page .clients-mgr-bulk-details[open] > summary.clients-mgr-bulk-summary-btn:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+}
+.clients-page .clients-mgr-bulk-details[open] .clients-mgr-bulk-summary-hint {
+    color: #475569;
+}
+.clients-page .clients-mgr-section {
+    margin: 14px 0 16px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: linear-gradient(165deg, #f8fafc 0%, #ffffff 55%);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.clients-page .clients-mgr-section__title {
+    margin: 0 0 12px;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+.clients-page .clients-mgr-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px 16px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e8ecf1;
+}
+.clients-page .clients-mgr-filter-row .cff-field { margin: 0; }
+.clients-page .clients-mgr-filter-row select {
+    min-width: min(100%, 280px);
+    max-width: 100%;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    font-size: 0.875rem;
+}
+.clients-page .clients-mgr-filter-hint {
+    flex: 1;
+    min-width: 200px;
+    margin: 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+/* Блок менеджера в групі «Пошук у рядках замовлень» */
+.clients-page .clients-mgr-section.clients-mgr-section--in-basket {
+    margin: 0 0 14px;
+    padding: 0 0 14px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    border-bottom: 1px solid #e2e8f0;
+}
+.clients-page .clients-mgr-section--in-basket .clients-mgr-section__title {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+}
+.clients-page .clients-mgr-section--in-basket .clients-mgr-filter-row {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+    align-items: flex-end;
+}
+.clients-page .clients-mgr-section--in-basket .clients-mgr-filter-hint {
+    font-size: 0.75rem;
+}
+.clients-page .clients-mgr-bulk-title {
+    margin: 0 0 6px;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #475569;
+}
+.clients-page .clients-mgr-bulk-lead {
+    margin: 0 0 12px;
+    font-size: 0.8125rem;
+    color: #64748b;
+    line-height: 1.5;
+    max-width: 52rem;
+}
+.clients-page .clients-bulk-assign-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px 16px;
+}
+.clients-page .clients-bulk-assign-controls input[type="number"] {
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    min-width: 5.5rem;
+}
+.clients-page .clients-bulk-assign-controls select {
+    min-width: 220px;
+    max-width: 100%;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    font-size: 0.875rem;
+}
+.clients-page .clients-bulk-assign-controls .btn-primary {
+    min-height: 42px;
+    padding-left: 1.15rem;
+    padding-right: 1.15rem;
+    font-weight: 600;
+}
+.clients-page .table-card-head.clients-table-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+}
+.clients-page .clients-table-head__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+.clients-page .clients-assign-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 14px;
+    padding: 10px 12px;
+    margin: 0 0 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+.clients-page .clients-assign-toolbar__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    flex: 1;
+    min-width: 0;
+}
+.clients-page .clients-assign-toolbar__count {
+    font-size: 0.8125rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+.clients-page .clients-assign-toolbar__lbl {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #334155;
+}
+.clients-page .clients-assign-toolbar__lbl select {
+    min-width: 11rem;
+    max-width: 100%;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    font-size: 0.8125rem;
+    background: #fff;
+}
+.clients-page .clients-th-check {
+    text-align: center;
+    vertical-align: middle;
+    width: 40px;
+    padding: 6px 4px !important;
+}
+.clients-page .clients-th-check input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: #2563eb;
+    cursor: pointer;
+}
+.clients-page .clients-td-check {
+    text-align: center;
+    vertical-align: middle;
+    padding: 6px 4px !important;
+}
+.clients-page .clients-td-check input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: #2563eb;
+    cursor: pointer;
+}
+.clients-page .clients-inline-mgr-form {
+    margin: 0;
+    min-width: 0;
+}
+.clients-page .clients-inline-mgr-select {
+    width: 100%;
+    max-width: 11rem;
+    padding: 4px 8px;
+    font-size: 11px;
+    line-height: 1.35;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #0f172a;
+}
+.clients-page .clients-inline-mgr-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.clients-page .clients-mgr-cell--edit {
+    max-width: 12rem;
+    vertical-align: middle;
+}
+.clients-page .clients-mgr-cell {
+    font-size: 12px;
+    color: #334155;
+    line-height: 1.35;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.clients-page .data-table th,
+.clients-page .data-table td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+    vertical-align: middle;
+}
+.clients-page .data-table.clients-table-fixed th,
+.clients-page .data-table.clients-table-fixed td {
+    overflow: hidden;
+}
+.clients-page .data-table.clients-table-fixed tbody td:first-child,
+.clients-page .data-table.clients-table-fixed thead th:first-child {
+    overflow: visible;
+}
+.clients-page .data-table.clients-table-fixed tbody td.clients-mgr-cell {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+.clients-page .data-table.clients-table-fixed thead th.clients-th-crm-status,
+.clients-page .data-table.clients-table-fixed tbody td.clients-crm-status-cell {
+    white-space: normal;
+    overflow: hidden;
+    vertical-align: middle;
+}
+.clients-page .data-table.clients-table-fixed thead th.clients-th-crm-ch,
+.clients-page .data-table.clients-table-fixed tbody td.clients-crm-channels-cell {
+    overflow: hidden;
+    vertical-align: middle;
+    text-align: center;
+}
+.clients-page .data-table.clients-table-fixed tbody td.clients-phone-cell {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.clients-page .data-table.clients-table-fixed .clients-name-cell {
+    white-space: normal;
+    overflow: visible;
+    vertical-align: top;
+}
+.clients-page .data-table.clients-table-fixed .clients-name-cell .name-cell-inner {
+    min-width: 0;
+}
+.clients-page .data-table th:last-child,
+.clients-page .data-table td:last-child { border-right: none; }
+.clients-page .data-table th {
+    background: #f9fafb;
+    font-weight: 600;
+    color: #374151;
+    font-size: 12px;
+}
+/* Як у топ товарів: нативний title при наведенні; курсор «довідка» */
+.clients-page .data-table thead th[title] {
+    cursor: help;
+}
+.clients-page .data-table .col-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.clients-page .data-table.clients-table-fixed .col-narrow {
+    white-space: nowrap;
+    max-width: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.clients-page .data-table .col-client { min-width: 0; }
+.clients-page .clients-name-link {
+    display: inline;
+    text-decoration: none;
+    color: #1d4ed8;
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.35;
+}
+.clients-page .clients-name-link:hover { text-decoration: underline; color: #1e40af; }
+.clients-page .data-table tbody tr.clients-row-flagged > td {
+    background: #fff1f2;
+}
+.clients-page .data-table tbody tr.clients-row-flagged .clients-name-link {
+    color: #b91c1c;
+}
+.clients-page .data-table tbody tr.clients-row-flagged .clients-name-link:hover {
+    color: #991b1b;
+}
+.clients-page .clients-name-link .clients-email-sub {
+    display: block;
+    font-weight: 400;
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 2px;
+}
+.clients-page .clients-name-link .clients-characteristics-sub {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #991b1b;
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+    padding: 2px 6px;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.clients-page .client-interaction-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+}
+.clients-page .client-inter-chip {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #334155;
+}
+.clients-page .client-inter-chip input {
+    margin-top: 2px;
+    width: 0.85rem;
+    height: 0.85rem;
+}
+.clients-page .clients-interaction-filter {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+    padding: 6px 8px;
+}
+.clients-page .clients-interaction-filter > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    padding: 2px 4px;
+}
+.clients-page .clients-interaction-filter > summary::-webkit-details-marker { display: none; }
+.clients-page .clients-interaction-filter > summary::after {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 2px solid #64748b;
+    border-bottom: 2px solid #64748b;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+    margin-left: 6px;
+    flex-shrink: 0;
+}
+.clients-page .clients-interaction-filter[open] > summary::after {
+    transform: rotate(-135deg);
+    margin-top: 4px;
+}
+.clients-page .clients-crm-status-select,
+.clients-page .clients-crm-closure-select {
+    width: 100%;
+    max-width: 100%;
+    font-size: 10px;
+    padding: 4px 5px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+.clients-page .clients-crm-status-cell {
+    width: 104px;
+    max-width: 104px;
+    vertical-align: middle;
+    padding: 6px 4px;
+    overflow: hidden;
+}
+.clients-page .clients-crm-channels-cell {
+    position: relative;
+    width: 84px;
+    max-width: 84px;
+    vertical-align: middle;
+    padding: 6px 4px;
+    overflow: hidden;
+}
+.clients-page .clients-crm-channels-details {
+    position: relative;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+}
+.clients-page .clients-crm-channels-details > summary {
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 700;
+    color: #4f46e5;
+    list-style: none;
+    padding: 5px 6px;
+    border-radius: 6px;
+    border: 1px solid #e0e7ff;
+    background: #f5f7ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+.clients-page .clients-crm-channels-details > summary:hover {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+}
+.clients-page .clients-crm-channels-details[open] > summary {
+    background: #eef2ff;
+    border-color: #818cf8;
+    color: #3730a3;
+}
+.clients-page .clients-crm-channels-details > summary::-webkit-details-marker { display: none; }
+.clients-page .clients-crm-channels-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 350;
+    min-width: 300px;
+    width: 300px;
+    max-width: min(320px, calc(100vw - 16px));
+    margin-top: 0;
+    padding: 0;
+    border: 1px solid #c7d2fe;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+    overflow: hidden;
+    box-sizing: border-box;
+}
+.clients-page .clients-crm-channels-pop.is-floating {
+    position: fixed;
+    z-index: 5000;
+}
+.clients-page .clients-interaction-group + .clients-interaction-group {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eef2f7;
+}
+.clients-page .clients-interaction-group__title {
+    margin: 0 0 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+.clients-page .clients-interaction-options {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.clients-page .clients-interaction-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.35;
+    color: #334155;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+.clients-page .clients-interaction-option:hover {
+    background: #f8fafc;
+}
+.clients-page .clients-interaction-option input {
+    margin-top: 3px;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+.clients-page .clients-interaction-option span {
+    flex: 1;
+    min-width: 0;
+}
+.clients-page .clients-crm-channels-pop__body {
+    padding: 10px 12px;
+    max-height: min(52vh, 320px);
+    overflow-y: auto;
+}
+.clients-page .clients-crm-channels-pop__foot {
+    padding: 10px 12px;
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+.clients-page .clients-crm-channels-pop__foot .btn {
+    width: 100%;
+}
+.clients-page .clients-interaction-panel--bulk {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+}
+.clients-page .clients-interaction-panel--bulk .clients-interaction-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 4px;
+}
+.clients-page .clients-crm-status-badge {
+    margin-top: 4px;
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.clients-page .clients-crm-tag {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 99px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.clients-page .clients-crm-tag--neutral { background: #f1f5f9; color: #64748b; }
+.clients-page .clients-crm-tag--in_progress { background: #dbeafe; color: #1d4ed8; }
+.clients-page .clients-crm-tag--communicated { background: #fef3c7; color: #b45309; }
+.clients-page .clients-crm-tag--closed { background: #dcfce7; color: #15803d; }
+.clients-page .clients-interaction-filter__hint {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 500;
+}
+.clients-page .clients-interaction-filter__body {
+    margin-top: 8px;
+    border-top: 1px solid #eef2f7;
+    padding-top: 8px;
+}
+.clients-page .cff-grid-inner--basket {
+    gap: 12px;
+}
+.clients-page .cff-filter-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+    padding: 10px;
+}
+.clients-page .cff-filter-card .cff-label-text {
+    font-size: 11px;
+    color: #334155;
+    font-weight: 700;
+}
+.clients-page .cff-filter-card details > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: #475569;
+    font-weight: 600;
+}
+.clients-page .cff-filter-card details > summary::-webkit-details-marker { display: none; }
+.clients-page .cff-filter-card details > summary::after {
+    content: "";
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 2px solid #64748b;
+    border-bottom: 2px solid #64748b;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+.clients-page .cff-filter-card details[open] > summary::after {
+    transform: rotate(-135deg);
+    margin-top: 4px;
+}
+.clients-page .cff-filter-card details > .cff-filter-card-body {
+    margin-top: 8px;
+    border-top: 1px solid #eef2f7;
+    padding-top: 8px;
+}
+.clients-page .status-pill {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border: 1px solid transparent;
+}
+.clients-page .status-pill--success { background: #dcfce7; color: #166534; border-color: #86efac; }
+.clients-page .status-pill--danger { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.clients-page .status-pill--warning { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.clients-page .status-pill--info { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
+.clients-page .status-pill--muted { background: #f3f4f6; color: #4b5563; border-color: #d1d5db; }
+.clients-page .pagination .disabled { color: #9ca3af; cursor: not-allowed; }
+
+.clients-page .clients-filter-card { margin-bottom: 12px; }
+.clients-page .clients-filters-compact {
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.clients-page .clients-filter-card .card-header {
+    padding: 9px 12px;
+    margin: 0;
+    border-bottom: 1px solid #e8ecf1;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+.clients-page .clients-filter-card .card-title {
+    font-size: 0.95rem;
+    margin: 0;
+    color: #0f172a;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+.clients-page .clients-filters-compact .card-content {
+    padding: 10px 12px 12px;
+    overflow: visible;
+}
+.clients-page .clients-filter-card .card-content { overflow: visible; }
+
+.clients-page .cff-label-text {
+    font-weight: 600;
+    font-size: 10px;
+    color: #475569;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Герой заголовка — ті самі візуальні правила, що «Клієнти — дашборд» */
+.clients-page .clients-marketing-dash-hero.dash-hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 1.35rem;
+}
+.clients-page .clients-marketing-dash-hero__text {
+    min-width: 0;
+}
+.clients-page .clients-marketing-dash-hero .dashboard-title {
+    margin: 0;
+    font-size: 1.6rem;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+.clients-page .clients-marketing-dash-hero .dashboard-title.dash-title-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.clients-page .clients-marketing-dash-hero .dash-title-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #6366f1;
+    line-height: 0;
+}
+.clients-page .clients-marketing-dash-hero .dash-title-icon svg {
+    width: 1.35em;
+    height: 1.35em;
+}
+.clients-page .clients-marketing-dash-hero .dashboard-subtitle {
+    margin: 6px 0 0;
+    font-size: 0.95rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+.clients-page .clients-marketing-dash-hero .clients-marketing-filter-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.35rem 0.65rem;
+}
+.clients-page .clients-marketing-dash-hero .clients-marketing-filter-summary__num {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+/* Довідка — непомітна кнопка праворуч; розгорнута панель на всю ширину */
+.clients-page .clients-marketing-dash-hero .clients-help-panel {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+.clients-page .clients-base-totals {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    margin: 0 0 1.1rem;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+    font-size: 13px;
+    line-height: 1.35;
+}
+.clients-page .clients-base-totals__item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    white-space: nowrap;
+}
+.clients-page .clients-base-totals__label {
+    color: #64748b;
+    font-weight: 600;
+}
+.clients-page .clients-base-totals__val {
+    color: #0f172a;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+.clients-page .clients-base-totals__sep {
+    width: 1px;
+    height: 18px;
+    background: #e2e8f0;
+    flex: 0 0 auto;
+}
+.clients-page .clients-base-totals__bar {
+    display: flex;
+    height: 6px;
+    width: 72px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: #e2e8f0;
+    vertical-align: middle;
+}
+.clients-page .clients-base-totals__bar-seg--reg { background: #3b82f6; }
+.clients-page .clients-base-totals__bar-seg--guest { background: #94a3b8; }
+.clients-page .clients-help-panel {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+.clients-page .clients-help-panel:not([open]) {
+    border-color: transparent;
+    background: transparent;
+}
+.clients-page .clients-help-panel[open] {
+    flex-basis: 100%;
+    width: 100%;
+    margin-left: 0;
+    border-radius: 10px;
+    background: #fff;
+    border-color: #e2e8f0;
+}
+.clients-page .clients-help-summary {
+    list-style: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: transparent;
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 11px;
+    line-height: 1;
+    user-select: none;
+    border: 1px solid transparent;
+    opacity: 0.65;
+    transition: opacity 0.15s, color 0.15s, background 0.15s, border-color 0.15s;
+}
+.clients-page .clients-help-summary::-webkit-details-marker { display: none; }
+.clients-page .clients-help-summary:hover {
+    opacity: 1;
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    color: #64748b;
+}
+.clients-page .clients-help-body {
+    padding: 12px 14px 14px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 12px;
+    line-height: 1.55;
+    color: #334155;
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+    text-align: left;
+}
+.clients-page .clients-help-body h3 {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    margin: 14px 0 6px;
+}
+.clients-page .clients-help-body h3:first-child { margin-top: 0; }
+.clients-page .clients-help-body p { margin: 0 0 8px; }
+.clients-page .clients-help-body ul { margin: 0 0 8px; padding-left: 1.1rem; }
+.clients-page .clients-help-body li { margin-bottom: 4px; }
+
+/* Верхня зона: пошук + чіпи в одному блоці */
+.clients-page .cff-filters-top {
+    border: 1px solid #e0e7ef;
+    border-radius: 10px;
+    background: linear-gradient(165deg, #f8fafc 0%, #ffffff 42%);
+    padding: 10px 12px 12px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 6px rgba(15, 23, 42, 0.05);
+}
+.clients-page .cff-filters-top .cff-zone-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: flex-end;
+    margin-bottom: 0;
+    padding: 0 0 10px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    border-bottom: 1px solid #e2e8f0;
+}
+.clients-page .cff-zone-toolbar .cff-f-search { flex: 1 1 240px; min-width: 180px; max-width: 100%; }
+.clients-page .cff-f-search .cff-label-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 4px;
+}
+.clients-page .cff-f-search .cff-input-search {
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 10px 7px 32px;
+    font-size: 13px;
+    line-height: 1.35;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.656a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 9px 50%;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) inset;
+}
+.clients-page .cff-f-search .cff-input-search:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Чіпи — 2 рядки */
+.clients-page .cff-filters-top .cff-chips-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 0;
+    margin-top: 10px;
+}
+.clients-page .cff-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: stretch;
+}
+.clients-page .cff-chips-row--meta {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+}
+.clients-page .cff-chips-row--meta .cff-chip-block {
+    flex: 0 0 auto;
+}
+@media (max-width: 900px) {
+    .clients-page .cff-chips-row--meta { flex-wrap: wrap; }
+}
+.clients-page .cff-chip-block {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 5px 7px;
+    align-items: center;
+    padding: 7px 10px 8px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.clients-page .cff-chip-block--segment { border-left: 3px solid #3b82f6; }
+.clients-page .cff-chip-block--activity { border-left: 3px solid #10b981; }
+.clients-page .cff-chip-block--account { border-left: 3px solid #8b5cf6; }
+.clients-page .cff-chip-block--email { border-left: 3px solid #0ea5e9; }
+.clients-page .cff-chip-block--characteristics { border-left: 3px solid #f59e0b; }
+.clients-page .cff-chip-block--gender { border-left: 3px solid #ec4899; }
+.clients-page .cff-chip-block--tags { border-left: 3px solid #6366f1; }
+.clients-page .cff-chip-count {
+    margin-left: 0.25rem;
+    font-size: 0.72rem;
+    opacity: 0.72;
+}
+.clients-page .cff-field-group--geo-compact {
+    padding: 6px 10px 8px;
+    margin-bottom: 8px;
+}
+.clients-page .cff-field-group--geo-compact .cff-group-title { margin-bottom: 6px; padding-bottom: 4px; }
+.clients-page .cff-field-group--geo-compact .cff-filter-card { padding: 6px 8px; }
+.clients-page .cff-filter-card--compact { padding: 6px 10px; }
+.clients-page .cff-filter-card--compact .cff-label-text { margin-bottom: 4px; }
+.clients-page .cff-filter-card--compact details > summary {
+    min-height: 36px;
+    padding: 6px 0;
+    font-size: 13px;
+}
+.clients-page .cff-field-group--basket {
+    padding: 8px 10px 10px;
+    overflow: visible;
+}
+.clients-page .cff-basket-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: flex-start;
+    overflow: visible;
+}
+.clients-page .cff-basket-cell {
+    flex: 1 1 140px;
+    min-width: 130px;
+    max-width: 220px;
+    position: relative;
+}
+.clients-page .cff-basket-cell--wide { flex: 1.4 1 160px; max-width: 240px; }
+.clients-page .cff-basket-cell--product { flex: 1.3 1 150px; max-width: 220px; }
+.clients-page .cff-basket-cell .cff-field { margin: 0; min-width: 0; width: 100%; }
+.clients-page .cff-basket-cell select,
+.clients-page .cff-basket-cell input[type="text"] {
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 10px;
+    font-size: 13px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    box-sizing: border-box;
+    color: #0f172a;
+}
+.clients-page .cff-basket-cell .cff-filter-card {
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    width: 100%;
+}
+.clients-page .cff-basket-cell .cff-filter-card details,
+.clients-page .cff-basket-cell .clients-interaction-filter {
+    width: 100%;
+    position: relative;
+}
+.clients-page .cff-basket-cell .cff-filter-card details > summary,
+.clients-page .cff-basket-cell .clients-interaction-filter > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 36px;
+    padding: 7px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #fff;
+    box-sizing: border-box;
+    cursor: pointer;
+    list-style: none;
+}
+.clients-page .cff-basket-cell .cff-filter-card details > summary::-webkit-details-marker,
+.clients-page .cff-basket-cell .clients-interaction-filter > summary::-webkit-details-marker {
+    display: none;
+}
+.clients-page .cff-basket-cell .cff-filter-card details > summary::after,
+.clients-page .cff-basket-cell .clients-interaction-filter > summary::after {
+    content: "";
+    width: 0.45rem;
+    height: 0.45rem;
+    border-right: 2px solid #64748b;
+    border-bottom: 2px solid #64748b;
+    transform: rotate(45deg);
+    flex-shrink: 0;
+    margin-left: auto;
+    transition: transform 0.15s ease;
+}
+.clients-page .cff-basket-cell .cff-filter-card details[open] > summary,
+.clients-page .cff-basket-cell .clients-interaction-filter[open] > summary {
+    border-color: #818cf8;
+    background: #f5f7ff;
+    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.2);
+}
+.clients-page .cff-basket-cell .cff-filter-card details[open] > summary::after,
+.clients-page .cff-basket-cell .clients-interaction-filter[open] > summary::after {
+    transform: rotate(-135deg);
+    margin-top: 3px;
+}
+.clients-page .cff-basket-cell details[open] {
+    z-index: 210;
+}
+.clients-page .cff-basket-cell .cff-filter-card-body,
+.clients-page .cff-basket-cell .clients-interaction-filter__body {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    margin-top: 0;
+    padding: 10px;
+    min-width: 100%;
+    width: max(100%, 280px);
+    max-width: min(360px, calc(100vw - 32px));
+    z-index: 220;
+    background: #fff;
+    border: 1px solid #c7d2fe;
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+    max-height: 320px;
+    overflow: auto;
+    box-sizing: border-box;
+}
+.clients-page .cff-basket-cell--channels {
+    flex: 1 1 160px;
+    max-width: 240px;
+}
+.clients-page .cff-basket-cell--channels .clients-interaction-filter__body {
+    left: 0;
+    right: auto;
+    width: 320px;
+    min-width: 300px;
+    max-width: min(340px, calc(100vw - 24px));
+}
+.clients-page .cff-basket-cell--channels .cff-check-item {
+    align-items: flex-start;
+    padding: 6px 8px;
+    font-size: 13px;
+    line-height: 1.35;
+    gap: 8px;
+    border-radius: 8px;
+}
+.clients-page .cff-basket-cell--channels .cff-check-item:hover {
+    background: #f8fafc;
+}
+.clients-page .cff-basket-cell--channels .cff-check-item input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin-top: 2px;
+}
+.clients-page .cff-basket-channel-group + .cff-basket-channel-group {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #eef2f7;
+}
+.clients-page .cff-basket-channel-title {
+    margin: 0 0 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+}
+.clients-page .cff-basket-channel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.clients-page .cff-basket-cell--channels .cff-check-item span {
+    white-space: normal;
+}
+.clients-page .cff-basket-trigger-count {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+}
+.clients-page .cff-basket-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    margin-top: 6px;
+    min-height: 0;
+}
+.clients-page .cff-basket-chips-row:not(:has(.cff-selected-chip)) {
+    display: none;
+}
+@media (max-width: 900px) {
+    .clients-page .cff-basket-cell { flex: 1 1 calc(50% - 8px); max-width: none; }
+}
+@media (max-width: 560px) {
+    .clients-page .cff-basket-cell { flex: 1 1 100%; max-width: none; }
+    .clients-page .cff-basket-cell .cff-filter-card-body,
+    .clients-page .cff-basket-cell .clients-interaction-filter__body {
+        width: 100%;
+        max-width: none;
+    }
+}
+.clients-page .cff-mini-label {
+    font-size: 9px;
+    font-weight: 800;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 3px 6px;
+    border-radius: 5px;
+    background: #f1f5f9;
+    margin-right: 2px;
+}
+
+/* Групи полів (метрики, дати, кошик) */
+.clients-page .cff-field-group {
+    margin-bottom: 10px;
+    padding: 10px 12px 12px;
+    background: linear-gradient(165deg, #f8fafc 0%, #ffffff 55%);
+    border: 1px solid #e0e7ef;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    overflow: visible;
+}
+.clients-page .cff-field-group:last-of-type { margin-bottom: 8px; }
+.clients-page .cff-group-title {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #475569;
+    margin-bottom: 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #e2e8f0;
+    line-height: 1.35;
+}
+.clients-page .table-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.clients-page .table-card-head .card-title { margin: 0; }
+.clients-page .cff-grid-inner {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 8px 10px;
+    align-items: end;
+}
+.clients-page .cff-grid-inner--geo { grid-template-columns: 1fr; }
+.clients-page .cff-grid-inner .cff-span-2 { grid-column: span 2; min-width: 0; }
+@media (min-width: 720px) {
+    .clients-page .cff-grid-inner--metrics { grid-template-columns: repeat(3, 1fr); }
+    .clients-page .cff-grid-inner--dates { grid-template-columns: repeat(4, 1fr); }
+    .clients-page .cff-grid-inner--geo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .clients-page .cff-grid-inner--basket {
+        grid-template-columns: minmax(200px, 1.35fr) minmax(180px, 1.1fr) minmax(180px, 1.1fr);
+        align-items: start;
+        gap: 10px 12px;
+    }
+    .clients-page .cff-grid-inner--basket .cff-span-2 { grid-column: span 1; }
+}
+@media (min-width: 1100px) {
+    .clients-page .cff-grid-inner--metrics { grid-template-columns: repeat(6, 1fr); }
+}
+
+.clients-page .cff-field-group .cff-field > label.cff-label-text {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #334155;
+    letter-spacing: -0.01em;
+}
+.clients-page .cff-field > label.cff-label-text {
+    display: block;
+    margin-bottom: 3px;
+}
+.clients-page .cff-field > label:not(.cff-label-text) {
+    font-weight: 600;
+    font-size: 10px;
+    color: #475569;
+    display: block;
+    margin-bottom: 3px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.clients-page .cff-field-group .cff-field input,
+.clients-page .cff-field-group .cff-field select {
+    width: 100%;
+    padding: 6px 9px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 13px;
+    background: #fff;
+    min-height: 34px;
+    box-sizing: border-box;
+    color: #0f172a;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.clients-page .cff-field input,
+.clients-page .cff-field select {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 12px;
+    background: #fff;
+    min-height: 30px;
+    box-sizing: border-box;
+    color: #0f172a;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.clients-page .cff-field input::placeholder { color: #94a3b8; }
+.clients-page .cff-field input:hover,
+.clients-page .cff-field select:hover { border-color: #94a3b8; }
+.clients-page .cff-field select.clients-brand-select {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+}
+.clients-page .data-table thead th.clients-th-sort-wrap {
+    padding: 6px 8px;
+    vertical-align: bottom;
+}
+.clients-page .clients-th-sort {
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    font-size: 12px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 4px;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    max-width: 100%;
+    line-height: 1.25;
+    text-align: left;
+    cursor: pointer;
+}
+.clients-page .clients-th-sort:hover {
+    background: #e0e7ff;
+    color: #1e40af;
+}
+.clients-page .clients-th-sort.is-active {
+    color: #1d4ed8;
+}
+.clients-page .clients-sort-ind {
+    font-size: 0.85em;
+    opacity: 0.9;
+    font-weight: 800;
+}
+/* Дата: текст (без маски в полі) + невидимий type=date лише для календарика. */
+.clients-page .cff-field-group .cff-date-combo {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+}
+.clients-page .cff-date-combo {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+}
+.clients-page .cff-field-group .cff-date-combo .cff-date-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-variant-numeric: tabular-nums;
+    min-height: 34px;
+    padding: 6px 9px;
+    font-size: 13px;
+    border-radius: 8px;
+}
+.clients-page .cff-date-combo .cff-date-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-variant-numeric: tabular-nums;
+}
+.clients-page .cff-field-group .cff-date-cal-wrap {
+    position: relative;
+    flex: 0 0 36px;
+    width: 36px;
+    min-height: 34px;
+    align-self: stretch;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2364748b' stroke-width='2' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 16px 16px;
+    box-sizing: border-box;
+}
+.clients-page .cff-date-cal-wrap {
+    position: relative;
+    flex: 0 0 34px;
+    width: 34px;
+    min-height: 30px;
+    align-self: stretch;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%2364748b' stroke-width='2' viewBox='0 0 24 24'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 17px 17px;
+    box-sizing: border-box;
+}
+.clients-page .cff-date-cal-wrap:hover {
+    border-color: #94a3b8;
+}
+.clients-page .cff-date-cal-native {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0.02;
+    cursor: pointer;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+.clients-page .cff-field input:focus,
+.clients-page .cff-field select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.14);
+}
+
+.clients-page .cff-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 2px;
+    padding: 10px 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid #e0e7ef;
+    border-radius: 10px;
+    font-size: 12px;
+    box-shadow: 0 1px 5px rgba(15, 23, 42, 0.04);
+}
+.clients-page .cff-actions-primary { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.clients-page .cff-actions-primary .btn {
+    min-height: 34px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 8px;
+}
+.clients-page .cff-actions-primary .cff-apply-btn {
+    min-height: 42px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 800;
+    border-radius: 10px;
+    border: 1px solid #2563eb;
+    color: #fff;
+    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.26);
+    letter-spacing: 0.01em;
+}
+.clients-page .cff-actions-primary .cff-apply-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.32);
+    border-color: #1d4ed8;
+}
+.clients-page .cff-actions-primary .cff-apply-btn:focus {
+    outline: none;
+}
+.clients-page .cff-actions-primary .cff-apply-btn:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
+}
+.clients-page .cff-actions-export {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 8px 10px;
+    background: linear-gradient(145deg, #ecfdf5 0%, #f0fdf4 42%, #ecfdf5 100%);
+    border: 1px solid #a7f3d0;
+    border-radius: 10px;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 1px 2px rgba(5, 46, 22, 0.05);
+}
+.clients-page .cff-export-head {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #047857;
+    white-space: nowrap;
+}
+.clients-page .cff-export-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    align-items: stretch;
+}
+.clients-page .cff-export-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 5px 10px 5px 7px;
+    border-radius: 9px;
+    text-decoration: none;
+    color: #064e3b !important;
+    background: #fff;
+    border: 1px solid #d1fae5;
+    box-shadow: 0 1px 2px rgba(6, 78, 59, 0.06);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.clients-page .cff-export-link:hover {
+    border-color: #34d399;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.18);
+    transform: translateY(-1px);
+}
+.clients-page .cff-export-link:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(6, 78, 59, 0.08);
+}
+.clients-page .cff-export-link:focus-visible {
+    outline: 2px solid #10b981;
+    outline-offset: 2px;
+}
+.clients-page .cff-export-link-ico {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    background: linear-gradient(160deg, #d1fae5 0%, #ecfdf5 100%);
+    color: #059669;
+    flex-shrink: 0;
+}
+.clients-page .cff-export-link-ico svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+.clients-page .cff-export-link-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    min-width: 0;
+}
+.clients-page .cff-export-link-title {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: #065f46;
+}
+.clients-page .cff-export-link-desc {
+    font-size: 10px;
+    font-weight: 500;
+    color: #2563eb;
+    opacity: 0.92;
+    line-height: 1.25;
+}
+@media (max-width: 560px) {
+    .clients-page .cff-actions-export {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 6px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .clients-page .cff-export-head {
+        letter-spacing: 0.06em;
+    }
+    .clients-page .cff-export-btns {
+        width: 100%;
+    }
+    .clients-page .cff-export-link {
+        flex: 1 1 auto;
+        min-width: calc(50% - 4px);
+    }
+}
+.clients-page .cff-actions .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+.clients-page .segment-emoji {
+    display: inline-block;
+    min-width: 1.45em;
+    text-align: center;
+    font-size: 1.05rem;
+    line-height: 1;
+    margin-right: 6px;
+    vertical-align: middle;
+    user-select: none;
+}
+.clients-page .name-cell-inner { display: flex; align-items: flex-start; gap: 2px; }
+.clients-page .name-cell-inner .clients-name-link { flex: 1; min-width: 0; }
+
+.clients-page .horizon-btn {
+    text-decoration: none;
+    display: inline-block;
+    padding: 5px 11px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    color: #334155;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s, transform 0.12s;
+    line-height: 1.35;
+    box-shadow: 0 1px 0 rgba(255,255,255,.8) inset, 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.clients-page .horizon-btn:hover {
+    border-color: #60a5fa;
+    background: #eff6ff;
+    color: #1d4ed8;
+    transform: translateY(-1px);
+}
+.clients-page .horizon-btn.active {
+    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+    border-color: #2563eb;
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.35);
+}
+.clients-page .activity-chip-icon {
+    width: 0.78rem;
+    height: 0.78rem;
+    vertical-align: -0.1rem;
+    margin-right: 0.34rem;
+    flex-shrink: 0;
+}
+.clients-page .activity-chip-icon--light circle {
+    fill: #86efac;
+    stroke: #22c55e;
+    stroke-width: 1.2;
+}
+/* Радіо в формі — вигляд як чіп з «галочкою» при виборі */
+.clients-page label.horizon-btn--toggle {
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    margin: 0;
+}
+.clients-page label.horizon-btn--toggle input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    margin: 0;
+}
+.clients-page label.horizon-btn--toggle .horizon-btn__text {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.clients-page label.horizon-btn--toggle .horizon-btn__tick {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    border-radius: 3px;
+    border: 2px solid #94a3b8;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+    color: transparent;
+    flex-shrink: 0;
+    transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.clients-page label.horizon-btn--toggle:hover .horizon-btn__tick {
+    border-color: #3b82f6;
+}
+.clients-page label.horizon-btn--toggle:has(input:checked) {
+    background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+    border-color: #2563eb;
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.35);
+}
+.clients-page label.horizon-btn--toggle:has(input:checked) .horizon-btn__tick {
+    border-color: rgba(255,255,255,0.95);
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+}
+.clients-page label.horizon-btn--toggle:has(input:checked) .horizon-btn__tick::after {
+    content: '✓';
+}
+.clients-page label.horizon-btn--toggle:not(:has(input:checked)) .horizon-btn__tick::after {
+    content: '';
+}
+.clients-page .cff-checkset {
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05) inset;
+    overflow: hidden;
+}
+.clients-page .cff-checkset-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 7px;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+.clients-page .cff-checkset-search {
+    flex: 1 1 120px;
+    min-width: 80px;
+    min-height: 32px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    padding: 5px 8px;
+    font-size: 12px;
+    color: #0f172a;
+}
+.clients-page .cff-checkset-search:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.16);
+}
+.clients-page .cff-checkset-btn {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    border-radius: 7px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #334155;
+    padding: 5px 10px;
+    min-height: 32px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.clients-page .cff-checkset-btn:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+.clients-page .cff-selected-inline {
+    margin-top: 7px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.clients-page .cff-selected-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    color: #1e3a8a;
+    border-radius: 999px;
+    padding: 3px 8px 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+.clients-page .cff-selected-chip span {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.clients-page .cff-selected-remove {
+    border: none;
+    background: transparent;
+    color: #1d4ed8;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+}
+.clients-page .cff-selected-remove:hover {
+    color: #1e40af;
+    background: rgba(37, 99, 235, 0.12);
+}
+.clients-page .cff-checkset-list {
+    max-height: min(34vh, 200px);
+    overflow: auto;
+    padding: 5px 7px 7px;
+    display: grid;
+    gap: 3px;
+    scrollbar-gutter: stable;
+}
+.clients-page .cff-check-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #0f172a;
+    border-radius: 7px;
+    padding: 5px 7px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.12s, border-color 0.12s;
+}
+.clients-page .cff-check-item:hover {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+}
+.clients-page .cff-check-item:has(input:checked) {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+.clients-page .cff-check-item input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: #2563eb;
+    margin: 0;
+    flex-shrink: 0;
+    border-radius: 3px;
+}
+.clients-page .cff-check-item span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+.clients-page .cff-hint {
+    margin-top: 5px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #64748b;
+    line-height: 1.35;
+}
+.clients-page .chip-row { display: flex; flex-wrap: wrap; gap: 4px 5px; align-items: center; }
+
+.clients-page .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #f3f4f6;
+    color: #374151;
+}
+.clients-page .tag-a1-14 { background: #bbf7d0; color: #14532d; }
+.clients-page .tag-a14-20 { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+.clients-page .tag-a20-45 { background: #fef3c7; color: #92400e; }
+.clients-page .tag-a45-90 { background: #ffedd5; color: #9a3412; }
+.clients-page .tag-sleep { background: #ffedd5; color: #9a3412; }
+.clients-page .tag-lost { background: #fee2e2; color: #991b1b; }
+.clients-page .rfm-mini {
+    font-size: 12px;
+    color: #4b5563;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+</style>
+{% endblock %}
+
+{% block content %}
+{% macro segment_emoji(seg) -%}
+{%- if seg == 'VIP' -%}👑
+{%- elif 'Лояльний' in seg -%}💎
+{%- elif 'Повторюваний' in seg -%}🔁
+{%- elif 'Новий' in seg or 'одноразовий' in seg -%}🌱
+{%- elif 'Без замовлень' in seg -%}⚪
+{%- else -%}👤{%- endif -%}
+{%- endmacro %}
+
+{% include 'clients_nav.html' %}
+
+<div class="dashboard-container clients-page">
+    <div class="dash-hero clients-marketing-dash-hero">
+        <div class="clients-marketing-dash-hero__text">
+            <h1 class="dashboard-title dash-title-with-icon">
+                <span class="dash-title-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v3.75a1.125 1.125 0 01-1.125 1.125h-2.25A1.125 1.125 0 013 16.875v-3.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+                </span>
+                <span>Клієнти — маркетинг</span>
+            </h1>
+            <p class="dashboard-subtitle clients-marketing-filter-summary" role="status" title="Скільки записів у таблиці clients відповідає усіма активними фільтрами в адресі (логічне «і»). Клієнти з чорного списку не враховуються. Сортування таблиці цю цифру не змінює.">
+                <span class="clients-marketing-filter-summary__label">Клієнтів за фільтрами</span>
+                <span class="clients-marketing-filter-summary__num">{{ total|fmt_ua }}</span>
+            </p>
+        </div>
+        <details class="clients-help-panel">
+                <summary class="clients-help-summary" title="Повна довідка">?</summary>
+                <div class="clients-help-body">
+                    <h3>Загалом</h3>
+                    <p>Усі умови фільтрів поєднуються логічним «і» (клієнт має відповідати одночасно всім обраним обмеженням). У списку показано до <strong>{{ per_page }}</strong> рядків на сторінку; усього після фільтрів — <strong>{{ total }}</strong> клієнтів.</p>
+                    <h3>Таблиця (сортування)</h3>
+                    <p>Клік по заголовку колонки задає <strong>серверне</strong> сортування всієї вибірки після фільтрів (як «топ товари»), потім показується сторінка. Повторний клік по тій самій колонці змінює напрям (↑/↓). Порядок зберігається при «Застосувати» фільтри та в експорті CSV/Excel.</p>
+                    <h3>Пошук</h3>
+                    <p>Шукає по імені, прізвищу, телефону, email, місту та customer ID з фіду. Після введення — пауза ~0,5 с і автоматичне застосування; сторінка 1.</p>
+                    <h3>Швидкі чіпи</h3>
+                    <p><strong>Тип</strong> — сегмент за кількістю замовлень. <strong>Активність</strong> — за давністю останнього замовлення: 1–14, 14–20, 20–45, 45–90 та 90+ днів. Посилання підставляє один параметр у адресу й зберігає інші вже застосовані фільтри з URL. Незбережені зміни в полях форми до чіпа не потрапляють — спочатку «Застосувати».</p>
+                    <h3>Реєстрація та пошта</h3>
+                    <p>Швидкі перемикачі: <strong>Реєстрація</strong> (усі / зареєстровані / гості) та <strong>Пошта</strong> (усі / з email / без) застосовуються одразу після вибору та зберігають інші значення форми.</p>
+                    <h3>Місто та стать</h3>
+                    <p><strong>Місто</strong> — канонічні назви (як у «Топ міст»). <strong>Стать</strong> — усі слова з поля «Ім'я» (також якщо ім'я після прізвища: «Петренко Анастасія»). <strong>Невизначено</strong> — немає збігу в словниках або суперечливі підказки; доповнюйте <code>client_name_gender.py</code>.</p>
+                    <h3>Кількість замовлень, LTV, сума замовлення</h3>
+                    <ul>
+                        <li><strong>Сегмент і активність</strong> — лише швидкі чіпи «Тип» та «Активність» вище; при «Застосувати» поточні значення з адреси передаються разом із полями нижче.</li>
+                        <li><strong>К-сть від/до (шт)</strong> — кількість замовлень у клієнта, штуки. Не сума в гривнях (наприклад 1000 тут означає «1000 замовлень», а не 1000 ₴).</li>
+                        <li><strong>LTV від/до</strong> — накопичена сума всіх покупок клієнта (lifetime), ₴. Можна вводити з «грн» або пробілами.</li>
+                        <li><strong>Сума замовл. від/до</strong> — є хоча б одне замовлення з сумою чека в цьому діапазоні (₴). Це не LTV і не кількість замовлень.</li>
+                    </ul>
+                    <h3>Дати</h3>
+                    <p>Фільтр за датами першого та/або останнього замовлення з фіду. Можна ввести вручну (<strong>РРРР-ММ-ДД</strong> або <strong>ДД.ММ.РРРР</strong>) або обрати дату через іконку календаря поруч із полем.</p>
+                    <h3>Товар у замовленнях</h3>
+                    <p>У блоці <strong>«Пошук у рядках замовлень»</strong>: спочатку фільтр <strong>«Показати клієнтів за менеджером»</strong> (логічне «і» з іншими умовами), далі — назва товару, бренди та статуси замовлень. Клієнт потрапляє у список, якщо в будь-якому замовленні є рядок з відповідним підрядком у назві товару, у бренді та/або з обраним статусом.</p>
+                    <h3>Кнопки та експорт</h3>
+                    <p><strong>Застосувати</strong> — відправляє форму (GET), сервер повертає нову сторінку з відфільтрованим списком. <strong>Скинути</strong> — очищає фільтри. <strong>Експорт</strong> — CSV/XLSX містять ту саму вибірку, що відповідає поточному адресу сторінки (останнє успішне завантаження після «Застосувати» або чіпа). У файлі: прізвище, ім'я, мобільний телефон; колонка Email лише якщо в фільтрі обрано «З email» (не «Усі» і не «Без email»).</p>
+                    <h3>Призначення в таблиці</h3>
+                    <p>Галочками можна обрати клієнтів на <strong>поточній сторінці</strong>, обрати менеджера (або «Зняти») і натиснути «Призначити обраним». У колонці «Відп.» — випадаючий список: зміна застосовується одразу для одного рядка.</p>
+                </div>
+        </details>
+    </div>
+
+    {% if client_totals and client_totals.clients %}
+    <div class="clients-base-totals" role="status" aria-label="Підсумки бази клієнтів">
+        <div class="clients-base-totals__item">
+            <span class="clients-base-totals__label">Усього</span>
+            <span class="clients-base-totals__val">{{ client_totals.clients|fmt_ua }}</span>
+        </div>
+        <span class="clients-base-totals__sep" aria-hidden="true"></span>
+        <div class="clients-base-totals__item">
+            <span class="clients-base-totals__label">Зареєстр.</span>
+            <span class="clients-base-totals__val">{{ client_totals.registered|fmt_ua }}</span>
+            <span class="clients-base-totals__bar" title="Частка зареєстрованих">
+                <span class="clients-base-totals__bar-seg--reg" style="width:{{ client_totals.pct_registered }}%"></span>
+                <span class="clients-base-totals__bar-seg--guest" style="width:{{ client_totals.pct_guests }}%"></span>
+            </span>
+            <span class="clients-base-totals__label">{{ client_totals.pct_registered }}%</span>
+        </div>
+        <span class="clients-base-totals__sep" aria-hidden="true"></span>
+        <div class="clients-base-totals__item">
+            <span class="clients-base-totals__label">Гості</span>
+            <span class="clients-base-totals__val">{{ client_totals.guests|fmt_ua }}</span>
+            <span class="clients-base-totals__label">({{ client_totals.pct_guests }}%)</span>
+        </div>
+        <span class="clients-base-totals__sep" aria-hidden="true"></span>
+        <div class="clients-base-totals__item">
+            <span class="clients-base-totals__label">Email</span>
+            <span class="clients-base-totals__val">{{ client_totals.with_email|fmt_ua }}</span>
+            <span class="clients-base-totals__label">({{ client_totals.pct_email }}%)</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if clients_notice == 'bulk_ok' %}
+    <div class="clients-flash clients-flash--ok" role="status">Відповідального менеджера оновлено для <strong>{{ clients_notice_n or '0' }}</strong> клієнтів.</div>
+    {% elif clients_notice == 'bulk_err' %}
+    <div class="clients-flash clients-flash--warn" role="alert">Не вдалося застосувати зміни: позначте хоча б одного клієнта або оберіть менеджера / «Зняти відповідального» у списку.</div>
+    {% endif %}
+
+        <div class="card clients-filter-card clients-filters-compact">
+            <div class="card-header">
+                <h2 class="card-title">Фільтри та експорт</h2>
+            </div>
+            <div class="card-content">
+                <div class="clients-mgr-anchor-wrap">
+    <form method="get" action="/clients" id="clientsFilterForm">
+        <input type="hidden" name="page" id="clientsPageInput" value="{{ page or 1 }}">
+        <input type="hidden" name="sort_by" value="{{ sort_by }}">
+        <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+        {% for seg in clients_filter_list(filter_form, 'segment') %}
+        <input type="hidden" name="segment" value="{{ seg }}">
+        {% endfor %}
+        {% for act in clients_filter_list(filter_form, 'activity') %}
+        <input type="hidden" name="activity" value="{{ act }}">
+        {% endfor %}
+        {% for tg in clients_filter_list(filter_form, 'feed_tag') %}
+        <input type="hidden" name="feed_tag" value="{{ tg }}">
+        {% endfor %}
+                <div class="cff-filters-top">
+                <div class="cff-zone-toolbar">
+                    <div class="cff-field cff-f-search">
+                        <label class="cff-label-text" for="clientsSearchInput">Пошук</label>
+                        <input type="text" class="cff-input-search" name="q" id="clientsSearchInput" value="{{ filter_form.get('q', '') }}"
+                               placeholder="Телефон, email, ПІБ…" autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="cff-chips-wrap">
+                    <div class="cff-chips-row cff-chips-row--1">
+                    <div class="cff-chip-block cff-chip-block--segment">
+                        <span class="cff-mini-label">Тип</span>
+                        <a class="horizon-btn clients-filter-chip {% if not clients_filter_list(filter_form, 'segment') %}active{% endif %}" href="/clients?{{ clients_chips.segment.all }}" data-chip-type="segment" data-chip-action="clear">Усі</a>
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'segment', 'new') %}active{% endif %}" href="/clients?{{ clients_chips.segment.new }}" data-chip-type="segment" data-chip-action="toggle" data-chip-value="new">🌱 1</a>
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'segment', 'repeat') %}active{% endif %}" href="/clients?{{ clients_chips.segment.repeat }}" data-chip-type="segment" data-chip-action="toggle" data-chip-value="repeat">🔁 2–4</a>
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'segment', 'loyal') %}active{% endif %}" href="/clients?{{ clients_chips.segment.loyal }}" data-chip-type="segment" data-chip-action="toggle" data-chip-value="loyal">💎 5–9</a>
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'segment', 'vip') %}active{% endif %}" href="/clients?{{ clients_chips.segment.vip }}" data-chip-type="segment" data-chip-action="toggle" data-chip-value="vip">👑 VIP</a>
+                        {% if clients_filter_list(filter_form, 'segment') %}
+                        <a
+                            class="horizon-btn"
+                            href="/clients/mailings?from_clients=1{% for seg in clients_filter_list(filter_form, 'segment') %}&segment={{ seg|urlencode }}{% endfor %}"
+                            title="Створити email-розсилку поточному сегменту"
+                        >✉️ Зробити email-розсилку сегменту</a>
+                        {% endif %}
+                    </div>
+                    <div class="cff-chip-block cff-chip-block--activity">
+                        <span class="cff-mini-label">Активність</span>
+                        <a class="horizon-btn clients-filter-chip {% if not clients_filter_list(filter_form, 'activity') %}active{% endif %}" href="/clients?{{ clients_chips.activity.all }}" data-chip-type="activity" data-chip-action="clear">Усі</a>
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'activity', 'r1_14') %}active{% endif %}" href="/clients?{{ clients_chips.activity.r1_14 }}" data-chip-type="activity" data-chip-action="toggle" data-chip-value="r1_14"><svg class="activity-chip-icon activity-chip-icon--light" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle></svg>1–14д</a>
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'activity', 'r14_20') %}active{% endif %}" href="/clients?{{ clients_chips.activity.r14_20 }}" data-chip-type="activity" data-chip-action="toggle" data-chip-value="r14_20">🟢 14–20д</a>
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'activity', 'r20_45') %}active{% endif %}" href="/clients?{{ clients_chips.activity.r20_45 }}" data-chip-type="activity" data-chip-action="toggle" data-chip-value="r20_45">🟡 20–45д</a>
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'activity', 'r45_90') %}active{% endif %}" href="/clients?{{ clients_chips.activity.r45_90 }}" data-chip-type="activity" data-chip-action="toggle" data-chip-value="r45_90">🟠 45–90д</a>
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'activity', 'r90_plus') %}active{% endif %}" href="/clients?{{ clients_chips.activity.r90_plus }}" data-chip-type="activity" data-chip-action="toggle" data-chip-value="r90_plus">🔴 90+д</a>
+                    </div>
+                    </div>
+                    <div class="cff-chips-row cff-chips-row--meta">
+                    <div class="cff-chip-block cff-chip-block--email">
+                        <span class="cff-mini-label">Пошта</span>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="email_mode" value="" {% if not filter_form.get('email_mode') %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Усі</span>
+                        </label>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="email_mode" value="with" {% if filter_form.get('email_mode') == 'with' %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>З email</span>
+                        </label>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="email_mode" value="without" {% if filter_form.get('email_mode') == 'without' %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Без email</span>
+                        </label>
+                    </div>
+                    <div class="cff-chip-block cff-chip-block--account">
+                        <span class="cff-mini-label" title="Обліковий запис у фіді">Реєстрація</span>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="registered" value="" {% if not filter_form.get('registered') %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Усі</span>
+                        </label>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="registered" value="1" {% if filter_form.get('registered') == '1' %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Так</span>
+                        </label>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="registered" value="0" {% if filter_form.get('registered') == '0' %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Ні</span>
+                        </label>
+                    </div>
+                    <div class="cff-chip-block cff-chip-block--characteristics">
+                        <span class="cff-mini-label">Ризикові клієнти</span>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="bad_clients" value="" {% if not filter_form.get('bad_clients') %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Всі</span>
+                        </label>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="bad_clients" value="with" {% if filter_form.get('bad_clients') == 'with' %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Ризикові</span>
+                        </label>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="bad_clients" value="without" {% if filter_form.get('bad_clients') == 'without' %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Без ризикових</span>
+                        </label>
+                    </div>
+                    </div>
+                    <div class="cff-chips-row cff-chips-row--gender">
+                    <div class="cff-chip-block cff-chip-block--gender">
+                        <span class="cff-mini-label" title="За словником імен у полі «Ім'я»">Стать</span>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="gender" value="" {% if not filter_form.get('gender') %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Усі</span>
+                        </label>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="gender" value="male" {% if filter_form.get('gender') == 'male' %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Чоловіки</span>
+                        </label>
+                        <label class="horizon-btn horizon-btn--toggle">
+                            <input type="radio" name="gender" value="female" {% if filter_form.get('gender') == 'female' %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Жінки</span>
+                        </label>
+                        <label class="horizon-btn horizon-btn--toggle" title="Порожнє ім'я, не в словнику або неоднозначне — для доповнення словників">
+                            <input type="radio" name="gender" value="unknown" {% if filter_form.get('gender') == 'unknown' %}checked{% endif %}>
+                            <span class="horizon-btn__text"><span class="horizon-btn__tick" aria-hidden="true"></span>Невизначено</span>
+                        </label>
+                    </div>
+                    {% if feed_tag_options %}
+                    <div class="cff-chip-block cff-chip-block--tags">
+                        <span class="cff-mini-label" title="Мітки з фіду analytics_customer.xml; «Сайт» — з фіду або замовлення без Instagram/Xlash (див. синк клієнтів)">Мітки</span>
+                        <a class="horizon-btn clients-filter-chip {% if not clients_filter_list(filter_form, 'feed_tag') %}active{% endif %}" href="/clients?{{ clients_chips.feed_tag.all }}" data-chip-type="feed_tag" data-chip-action="clear">Усі</a>
+                        {% for opt in feed_tag_options %}
+                        <a class="horizon-btn clients-filter-chip {% if clients_filter_has(filter_form, 'feed_tag', opt.code) %}active{% endif %}" href="/clients?{{ clients_chips.feed_tag[opt.code] }}" data-chip-type="feed_tag" data-chip-action="toggle" data-chip-value="{{ opt.code }}">{{ opt.label }}<span class="cff-chip-count">{{ opt.clients_count }}</span></a>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    </div>
+                </div>
+                </div>
+
+                <div class="cff-field-group cff-field-group--geo-compact">
+                    <span class="cff-group-title">Місто / область</span>
+                    <div class="cff-grid-inner cff-grid-inner--geo">
+                    <div class="cff-field cff-filter-card">
+                        {% set selected_cities = filter_form.get('geo_city', []) %}
+                        <details>
+                            <summary>Список міст <span class="small-text" style="color:#64748b;">обрано: {{ selected_cities|length }}</span></summary>
+                            <div class="cff-filter-card-body">
+                                <div class="cff-checkset" id="clientsCitySet">
+                                    <div class="cff-checkset-toolbar">
+                                        <input class="cff-checkset-search" id="clientsCitySearch" type="text" placeholder="Пошук міста…">
+                                        <button type="button" class="cff-checkset-btn" data-target="clientsCitySet" data-action="all">Усі</button>
+                                        <button type="button" class="cff-checkset-btn" data-target="clientsCitySet" data-action="none">Скинути</button>
+                                    </div>
+                                    <div class="cff-checkset-list">
+                                        {% for city in client_geo_cities %}
+                                        <label class="cff-check-item" data-filter-text="{{ city|lower }}">
+                                            <input type="checkbox" name="geo_city" value="{{ city }}" {% if city in selected_cities %}checked{% endif %}>
+                                            <span>{{ city }}</span>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                        <div class="cff-selected-inline" id="clientsCitySelected">
+                            {% for city in selected_cities %}
+                            <span class="cff-selected-chip">
+                                <span>{{ city }}</span>
+                                <button type="button" class="cff-selected-remove" data-target-set="clientsCitySet" data-name="geo_city" data-value="{{ city }}" aria-label="Прибрати {{ city }}">×</button>
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="cff-field cff-filter-card">
+                        {% set selected_oblasts = filter_form.get('geo_oblast', []) %}
+                        <details>
+                            <summary>Список областей <span class="small-text" style="color:#64748b;">обрано: {{ selected_oblasts|length }}</span></summary>
+                            <div class="cff-filter-card-body">
+                                <div class="cff-checkset" id="clientsOblastSet">
+                                    <div class="cff-checkset-toolbar">
+                                        <input class="cff-checkset-search" id="clientsOblastSearch" type="text" placeholder="Пошук області…">
+                                        <button type="button" class="cff-checkset-btn" data-target="clientsOblastSet" data-action="all">Усі</button>
+                                        <button type="button" class="cff-checkset-btn" data-target="clientsOblastSet" data-action="none">Скинути</button>
+                                    </div>
+                                    <div class="cff-checkset-list">
+                                        {% for obl in client_geo_oblasts %}
+                                        <label class="cff-check-item" data-filter-text="{{ obl|lower }}">
+                                            <input type="checkbox" name="geo_oblast" value="{{ obl }}" {% if obl in selected_oblasts %}checked{% endif %}>
+                                            <span>{{ obl }}</span>
+                                        </label>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                        <div class="cff-selected-inline" id="clientsOblastSelected">
+                            {% for obl in selected_oblasts %}
+                            <span class="cff-selected-chip">
+                                <span>{{ obl }}</span>
+                                <button type="button" class="cff-selected-remove" data-target-set="clientsOblastSet" data-name="geo_oblast" data-value="{{ obl }}" aria-label="Прибрати {{ obl }}">×</button>
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    </div>
+                </div>
+
+                <div class="cff-field-group">
+                    <span class="cff-group-title">Кількість замовлень, LTV, сума одного замовлення</span>
+                    <div class="cff-grid-inner cff-grid-inner--metrics">
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsOrdersMin">К-сть від (шт)</label>
+                        <input id="clientsOrdersMin" type="number" name="orders_min" min="0" step="1" value="{{ filter_form.get('orders_min', '') }}" placeholder="—">
+                    </div>
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsOrdersMax">К-сть до (шт)</label>
+                        <input id="clientsOrdersMax" type="number" name="orders_max" min="0" step="1" value="{{ filter_form.get('orders_max', '') }}" placeholder="—">
+                    </div>
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsLtvMin">LTV від (₴)</label>
+                        <input id="clientsLtvMin" type="text" name="ltv_min" inputmode="decimal" value="{{ filter_form.get('ltv_min', '') }}" placeholder="0">
+                    </div>
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsLtvMax">LTV до (₴)</label>
+                        <input id="clientsLtvMax" type="text" name="ltv_max" inputmode="decimal" value="{{ filter_form.get('ltv_max', '') }}" placeholder="∞">
+                    </div>
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsOrderTotalMin">Сума замовл. від (₴)</label>
+                        <input id="clientsOrderTotalMin" type="text" name="order_total_min" inputmode="decimal" value="{{ filter_form.get('order_total_min', '') }}" placeholder="1000">
+                    </div>
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsOrderTotalMax">Сума замовл. до (₴)</label>
+                        <input id="clientsOrderTotalMax" type="text" name="order_total_max" inputmode="decimal" value="{{ filter_form.get('order_total_max', '') }}" placeholder="—">
+                    </div>
+                    </div>
+                </div>
+
+                <div class="cff-field-group">
+                    <span class="cff-group-title">Дати першого та останнього замовлення</span>
+                    <div class="cff-grid-inner cff-grid-inner--dates">
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsFirstFrom">1-ше від</label>
+                        <div class="cff-date-combo">
+                            <input id="clientsFirstFrom" class="cff-date-text" type="text" name="first_from" value="{{ filter_form.get('first_from', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" title="Приклад: 2024-09-01 або 01.09.2024">
+                            <div class="cff-date-cal-wrap" title="Відкрити календар">
+                                <input type="date" class="cff-date-cal-native" aria-label="Календар: 1-ше від" tabindex="-1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsFirstTo">1-ше до</label>
+                        <div class="cff-date-combo">
+                            <input id="clientsFirstTo" class="cff-date-text" type="text" name="first_to" value="{{ filter_form.get('first_to', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" title="Приклад: 2024-09-01 або 01.09.2024">
+                            <div class="cff-date-cal-wrap" title="Відкрити календар">
+                                <input type="date" class="cff-date-cal-native" aria-label="Календар: 1-ше до" tabindex="-1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsLastFrom">Останн. від</label>
+                        <div class="cff-date-combo">
+                            <input id="clientsLastFrom" class="cff-date-text" type="text" name="last_from" value="{{ filter_form.get('last_from', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" title="Приклад: 2024-09-01 або 01.09.2024">
+                            <div class="cff-date-cal-wrap" title="Відкрити календар">
+                                <input type="date" class="cff-date-cal-native" aria-label="Календар: останн. від" tabindex="-1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cff-field">
+                        <label class="cff-label-text" for="clientsLastTo">Останн. до</label>
+                        <div class="cff-date-combo">
+                            <input id="clientsLastTo" class="cff-date-text" type="text" name="last_to" value="{{ filter_form.get('last_to', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" title="Приклад: 2024-09-01 або 01.09.2024">
+                            <div class="cff-date-cal-wrap" title="Відкрити календар">
+                                <input type="date" class="cff-date-cal-native" aria-label="Календар: останн. до" tabindex="-1">
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+
+                <div class="cff-field-group cff-field-group--basket">
+                    <span class="cff-group-title">Пошук у рядках замовлень (товар / бренд / статус)</span>
+                    {% set selected_statuses = filter_form.get('order_status', []) %}
+                    {% set selected_brands = filter_form.get('brand_contains', []) %}
+                    {% set selected_interaction_exclude = filter_form.get('interaction_exclude', []) %}
+                    <div class="cff-basket-row">
+                        <div class="cff-basket-cell cff-basket-cell--wide">
+                            <div class="cff-field">
+                                <label class="cff-label-text" for="clientsAssignedFilter">Відповідальний</label>
+                                <select id="clientsAssignedFilter" name="assigned">
+                                    <option value="" {% if not filter_form.get('assigned') %}selected{% endif %}>Усі</option>
+                                    <option value="none" {% if filter_form.get('assigned') == 'none' %}selected{% endif %}>Без відповідального</option>
+                                    {% for m in marketing_managers %}
+                                    <option value="{{ m.username }}" {% if filter_form.get('assigned') == m.username %}selected{% endif %}>{{ (m.display_name or m.username)|e }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="cff-basket-cell cff-basket-cell--wide">
+                            <div class="cff-field">
+                                <label class="cff-label-text" for="clientsLastOrderManagerFilter">Менеджер остан. зам.</label>
+                                <select id="clientsLastOrderManagerFilter" name="last_order_manager">
+                                    <option value="" {% if not filter_form.get('last_order_manager') %}selected{% endif %}>Усі</option>
+                                    <option value="none" {% if filter_form.get('last_order_manager') == 'none' %}selected{% endif %}>Без менеджера</option>
+                                    {% for lom in last_order_managers %}
+                                    <option value="{{ lom }}" {% if filter_form.get('last_order_manager') == lom %}selected{% endif %}>{{ lom|e }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="cff-basket-cell">
+                            <div class="cff-field cff-filter-card">
+                                <label class="cff-label-text">Статуси</label>
+                                <details class="cff-basket-details">
+                                    <summary><span>Обрати статуси</span><span class="cff-basket-trigger-count">обрано: {{ selected_statuses|length }}</span></summary>
+                                    <div class="cff-filter-card-body">
+                                        <div class="cff-checkset" id="clientsStatusSet">
+                                            <div class="cff-checkset-toolbar">
+                                                <button type="button" class="cff-checkset-btn" data-target="clientsStatusSet" data-action="all">Усі</button>
+                                                <button type="button" class="cff-checkset-btn" data-target="clientsStatusSet" data-action="none">Скинути</button>
+                                            </div>
+                                            <div class="cff-checkset-list">
+                                                {% for st in order_status_options %}
+                                                <label class="cff-check-item">
+                                                    <input type="checkbox" name="order_status" value="{{ st.name }}" {% if st.name in selected_statuses %}checked{% endif %}>
+                                                    <span>{{ st.name }}</span>
+                                                </label>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                        <div class="cff-basket-cell cff-basket-cell--product">
+                            <div class="cff-field">
+                                <label class="cff-label-text" for="clientsProductQ">Товар</label>
+                                <input id="clientsProductQ" type="text" name="product_contains" value="{{ filter_form.get('product_contains', '') }}" placeholder="Частина назви…">
+                            </div>
+                        </div>
+                        <div class="cff-basket-cell">
+                            <div class="cff-field cff-filter-card">
+                                <label class="cff-label-text" for="clientsBrandQ">Бренд</label>
+                                <details class="cff-basket-details">
+                                    <summary><span>Обрати бренди</span><span class="cff-basket-trigger-count">обрано: {{ selected_brands|length }}</span></summary>
+                                    <div class="cff-filter-card-body">
+                                        <div class="cff-checkset" id="clientsBrandSet">
+                                            <div class="cff-checkset-toolbar">
+                                                <input class="cff-checkset-search" id="clientsBrandSearch" type="text" placeholder="Пошук бренду…">
+                                                <button type="button" class="cff-checkset-btn" data-target="clientsBrandSet" data-action="all">Усі</button>
+                                                <button type="button" class="cff-checkset-btn" data-target="clientsBrandSet" data-action="none">Скинути</button>
+                                            </div>
+                                            <div class="cff-checkset-list">
+                                                {% for b in catalog_brands %}
+                                                <label class="cff-check-item" data-filter-text="{{ b|lower }}">
+                                                    <input type="checkbox" name="brand_contains" value="{{ b }}" {% if b in selected_brands %}checked{% endif %}>
+                                                    <span>{{ b }}</span>
+                                                </label>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                        <div class="cff-basket-cell cff-basket-cell--channels">
+                            <div class="cff-field cff-filter-card">
+                                <label class="cff-label-text">Виключити канали</label>
+                                <details class="clients-interaction-filter cff-basket-details">
+                                    <summary><span>Обрати канали</span><span class="cff-basket-trigger-count">обрано: {{ selected_interaction_exclude|length }}</span></summary>
+                                    <div class="clients-interaction-filter__body">
+                                        <div class="cff-basket-channel-group">
+                                            <p class="cff-basket-channel-title">Прямий контакт</p>
+                                            <div class="cff-basket-channel-list">
+                                                {% for key, ilabel in interaction_options_direct %}
+                                                <label class="cff-check-item">
+                                                    <input type="checkbox" name="interaction_exclude" value="{{ key }}" {% if key in selected_interaction_exclude %}checked{% endif %}>
+                                                    <span title="{{ ilabel }}">{{ interaction_short_label(key, ilabel) }}</span>
+                                                </label>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        <div class="cff-basket-channel-group">
+                                            <p class="cff-basket-channel-title">Масові</p>
+                                            <div class="cff-basket-channel-list">
+                                                {% for key, ilabel in interaction_options_mass %}
+                                                <label class="cff-check-item">
+                                                    <input type="checkbox" name="interaction_exclude" value="{{ key }}" {% if key in selected_interaction_exclude %}checked{% endif %}>
+                                                    <span title="{{ ilabel }}">{{ interaction_short_label(key, ilabel) }}</span>
+                                                </label>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cff-basket-chips-row" id="clientsBasketChipsRow">
+                        <div class="cff-selected-inline" id="clientsStatusSelected">
+                            {% for st in selected_statuses %}
+                            <span class="cff-selected-chip">
+                                <span>{{ st }}</span>
+                                <button type="button" class="cff-selected-remove" data-target-set="clientsStatusSet" data-name="order_status" data-value="{{ st }}" aria-label="Прибрати {{ st }}">×</button>
+                            </span>
+                            {% endfor %}
+                        </div>
+                        <div class="cff-selected-inline" id="clientsBrandSelected">
+                            {% for b in selected_brands %}
+                            <span class="cff-selected-chip">
+                                <span>{{ b }}</span>
+                                <button type="button" class="cff-selected-remove" data-target-set="clientsBrandSet" data-name="brand_contains" data-value="{{ b }}" aria-label="Прибрати {{ b }}">×</button>
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cff-actions">
+                    <div class="cff-actions-primary">
+                        <button type="submit" class="btn btn-secondary cff-apply-btn">Застосувати фільтр</button>
+                        <a href="/clients" class="btn btn-light">Скинути</a>
+                    </div>
+                    {% if request.state.access_clients_export %}
+                    <div class="cff-actions-export" role="group" aria-label="Експорт даних">
+                        <span class="cff-export-head">Експорт</span>
+                        <div class="cff-export-btns">
+                            <a class="cff-export-link" href="/clients/export.csv?{{ export_qs }}">
+                                <span class="cff-export-link-ico" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+                                </span>
+                                <span class="cff-export-link-text">
+                                    <span class="cff-export-link-title">CSV</span>
+                                    <span class="cff-export-link-desc">Список клієнтів</span>
+                                </span>
+                            </a>
+                            <a class="cff-export-link" href="/clients/export.xlsx?{{ export_qs }}">
+                                <span class="cff-export-link-ico" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                                </span>
+                                <span class="cff-export-link-text">
+                                    <span class="cff-export-link-title">Excel</span>
+                                    <span class="cff-export-link-desc">Список клієнтів</span>
+                                </span>
+                            </a>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="muted" style="margin:0;font-size:12px;max-width:220px;">Експорт CSV/Excel доступний лише користувачам з окремим правом (налаштовує адміністратор).</p>
+                    {% endif %}
+                </div>
+    </form>
+                </div>
+            </div>
+        </div>
+
+    <!-- Таблиця -->
+    <div class="card clients-filter-card">
+        <div class="card-header table-card-head clients-table-head" style="padding: 8px 12px;">
+            <div class="clients-table-head__meta">
+                <h2 class="card-title" style="margin: 0; font-size: 0.95rem;">📋 Клієнти</h2>
+                <span class="small-text" style="color: #6b7280; font-size: 12px;">{{ clients_with_meta|length }}/{{ total }} · стор. {{ page }}/{{ total_pages }}</span>
+            </div>
+        </div>
+        <div class="card-content" style="padding: 0 8px 8px;">
+        {% if clients_with_meta %}
+        <form id="clientsAssignSelectedForm" method="post" action="/clients/assign-selected">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <input type="hidden" name="return_qs" value="{{ export_qs|e }}">
+        </form>
+        <form id="clientsInteractionsSelectedForm" method="post" action="/clients/interactions-selected">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <input type="hidden" name="return_qs" value="{{ export_qs|e }}">
+        </form>
+        <form id="clientsProcessingSelectedForm" method="post" action="/clients/processing-selected">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+            <input type="hidden" name="return_qs" value="{{ export_qs|e }}">
+        </form>
+        <div class="clients-assign-toolbar" role="region" aria-label="Масове призначення за обраними рядками">
+            <div class="clients-assign-toolbar__row">
+                <span class="clients-assign-toolbar__count" id="clientsSelectedLabel">Обрано: <strong id="clientsSelectedCount">0</strong></span>
+                <span id="clientsAjaxMsg" class="small-text" style="min-height: 1.2em; color: #059669;" role="status" aria-live="polite"></span>
+                <label class="clients-assign-toolbar__lbl">
+                    <span>Менеджер для обраних</span>
+                    <select name="assign_username" form="clientsAssignSelectedForm" id="clientsBulkAssignSelect" required>
+                        <option value="" selected disabled>— оберіть —</option>
+                        <option value="__none__">Зняти відповідального</option>
+                        {% for m in marketing_managers %}
+                        <option value="{{ m.username }}">{{ (m.display_name or m.username)|e }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <button type="button" form="clientsAssignSelectedForm" class="btn btn-primary btn-sm" id="clientsBulkAssignSubmit">Призначити обраним</button>
+            </div>
+        </div>
+        <div class="clients-assign-toolbar" role="region" aria-label="Масове виставлення каналів взаємодії" style="margin-top: 8px;">
+            <details class="clients-mgr-bulk-details" style="width:100%; margin:0;">
+                <summary class="clients-mgr-bulk-summary-btn" style="margin:0;">
+                    <span class="clients-mgr-bulk-summary-left">
+                        <span>Канали взаємодії для обраних клієнтів</span>
+                    </span>
+                </summary>
+                <div class="clients-assign-toolbar__row clients-interaction-panel--bulk" style="margin-top:8px;">
+                    <div style="width:100%; display:grid; gap:12px;">
+                        <div class="clients-interaction-group">
+                            <p class="clients-interaction-group__title">Прямий контакт</p>
+                            <div class="clients-interaction-options">
+                                {% for key, ilabel in interaction_options_direct %}
+                                <label class="clients-interaction-option">
+                                    <input type="checkbox" name="interaction" value="{{ key }}" form="clientsInteractionsSelectedForm">
+                                    <span title="{{ ilabel }}">{{ interaction_short_label(key, ilabel) }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="clients-interaction-group">
+                            <p class="clients-interaction-group__title">Масові</p>
+                            <div class="clients-interaction-options">
+                                {% for key, ilabel in interaction_options_mass %}
+                                <label class="clients-interaction-option">
+                                    <input type="checkbox" name="interaction" value="{{ key }}" form="clientsInteractionsSelectedForm">
+                                    <span title="{{ ilabel }}">{{ interaction_short_label(key, ilabel) }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+                        <button type="button" class="btn btn-primary btn-sm" id="clientsBulkInteractionsSubmit">Зберегти канали обраним</button>
+                        <button type="button" class="btn btn-light btn-sm" id="clientsBulkInteractionsClear">Очистити вибір каналів</button>
+                    </div>
+                </div>
+            </details>
+        </div>
+        <div class="clients-assign-toolbar" role="region" aria-label="Масова зміна статусу опрацювання" style="margin-top: 8px;">
+            <div class="clients-assign-toolbar__row" style="flex-wrap:wrap;">
+                <label class="clients-assign-toolbar__lbl">
+                    <span>Статус для обраних</span>
+                    <select name="processing_status" form="clientsProcessingSelectedForm" id="clientsBulkProcessingSelect">
+                        <option value="" selected disabled>— оберіть —</option>
+                        {% for key, label in processing_status_options %}
+                        <option value="{{ key }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="clients-assign-toolbar__lbl" id="clientsBulkClosureLabel" style="display:none;">
+                    <span>Результат закриття</span>
+                    <select name="closure_result" form="clientsProcessingSelectedForm" id="clientsBulkClosureSelect">
+                        <option value="" selected disabled>— оберіть —</option>
+                        {% for key, label in closure_result_options %}
+                        <option value="{{ key }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <button type="button" class="btn btn-primary btn-sm" id="clientsBulkProcessingSubmit">Застосувати статус обраним</button>
+            </div>
+        </div>
+        <div class="table-wrapper" style="overflow-x: auto;">
+            <table class="data-table clients-table-fixed">
+                <colgroup>
+                    <col class="col-w-check" />
+                    <col class="col-w-num" />
+                    <col class="col-w-client" />
+                    <col class="col-w-mgr" />
+                    <col class="col-w-crm-status" />
+                    <col class="col-w-crm-ch" />
+                    <col class="col-w-phone" />
+                    <col class="col-w-city" />
+                    <col class="col-w-activity" />
+                    <col class="col-w-rfm" />
+                    <col class="col-w-channel" />
+                    <col class="col-w-orders" />
+                    <col class="col-w-ltv" />
+                    <col class="col-w-last" />
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th class="clients-th-check" scope="col" title="Обрати усіх на цій сторінці">
+                            <input type="checkbox" id="clientsSelectAll" aria-label="Обрати всіх на сторінці">
+                        </th>
+                        <th class="clients-th-sort-wrap" title="Порядковий номер на сторінці; сортування — за внутрішнім id клієнта в БД (усі сторінки)">
+                            <a href="{{ sort_urls.id }}" class="clients-th-sort {% if sort_by == 'id' %}is-active{% endif %}">#{% if sort_by == 'id' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th class="clients-th-sort-wrap" title="Ім'я та прізвище з фіду; сортування — за ПІБ (усі сторінки)">
+                            <a href="{{ sort_urls.name }}" class="clients-th-sort {% if sort_by == 'name' %}is-active{% endif %}">Клієнт{% if sort_by == 'name' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th class="clients-th-sort-wrap" title="Внутрішнє призначення відповідального (логін web-панелі)">
+                            <a href="{{ sort_urls.assigned }}" class="clients-th-sort {% if sort_by == 'assigned' %}is-active{% endif %}">Відп.{% if sort_by == 'assigned' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th title="Статус ручного опрацювання ліда" class="clients-th-crm-status">Статус</th>
+                        <th title="Канали CRM (авто + ручні)" class="clients-th-crm-ch">CRM</th>
+                        <th class="clients-th-sort-wrap" title="Телефон з фіду; сортування по полю telephone">
+                            <a href="{{ sort_urls.phone }}" class="clients-th-sort {% if sort_by == 'phone' %}is-active{% endif %}">Телефон{% if sort_by == 'phone' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th class="clients-th-sort-wrap" title="Місто (geo_city)">
+                            <a href="{{ sort_urls.city }}" class="clients-th-sort {% if sort_by == 'city' %}is-active{% endif %}">Місто{% if sort_by == 'city' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th class="clients-th-sort-wrap" title="Активність залежить від дати останнього замовлення; сортування — за цією датою (як «останнє замовл.»)">
+                            <a href="{{ sort_urls.activity }}" class="clients-th-sort {% if sort_by == 'activity' %}is-active{% endif %}">Активність{% if sort_by == 'activity' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th class="clients-th-sort-wrap" title="Днів з останнього замовлення (Recency). Кількість замовлень — колонка «Замовлень», сума покупок — «LTV».">
+                            <a href="{{ sort_urls.rfm }}" class="clients-th-sort {% if sort_by == 'rfm' %}is-active{% endif %}">Давність{% if sort_by == 'rfm' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th class="clients-th-sort-wrap" title="За полем source_raw (наближено до групи каналу)">
+                            <a href="{{ sort_urls.channel }}" class="clients-th-sort {% if sort_by == 'channel' %}is-active{% endif %}">Канал{% if sort_by == 'channel' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th class="clients-th-sort-wrap" title="Кількість замовлень (orders_count)">
+                            <a href="{{ sort_urls.orders }}" class="clients-th-sort {% if sort_by == 'orders' %}is-active{% endif %}">Замовлень{% if sort_by == 'orders' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th class="clients-th-sort-wrap" title="LTV з фіду">
+                            <a href="{{ sort_urls.ltv }}" class="clients-th-sort {% if sort_by == 'ltv' %}is-active{% endif %}">LTV{% if sort_by == 'ltv' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                        <th class="clients-th-sort-wrap" title="Дата останнього замовлення (last_order_date)">
+                            <a href="{{ sort_urls.last_order }}" class="clients-th-sort {% if sort_by == 'last_order' %}is-active{% endif %}">Останнє замовлення{% if sort_by == 'last_order' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set global_index_start = (page - 1) * per_page %}
+                    {% for row in clients_with_meta %}
+                    {% set c = row.client %}
+                    {% set m = row.m %}
+                    {% set rfm = m.rfm %}
+                    <tr data-client-id="{{ c.id }}"
+                        {% if c.feed_characteristics %}
+                        class="clients-row-flagged"
+                        title="Характеристика: {{ c.feed_characteristics|e }}"
+                        {% endif %}>
+                        <td class="clients-td-check">
+                            <input type="checkbox" name="client_id" value="{{ c.id }}" form="clientsAssignSelectedForm" class="clients-row-check" aria-label="Обрати клієнта #{{ c.id }}">
+                        </td>
+                        <td class="col-num">{{ global_index_start + loop.index }}</td>
+                        <td class="clients-name-cell col-client">
+                            <div class="name-cell-inner">
+                                <span class="segment-emoji" title="{{ m.segment }}" aria-hidden="true">{{ segment_emoji(m.segment) }}</span>
+                                <a href="/clients/{{ c.id }}" class="clients-name-link">
+                                    {{ (c.firstname or '') ~ ' ' ~ (c.lastname or '') }}
+                                    {% if c.email %}<span class="clients-email-sub">{{ c.email }}</span>{% endif %}
+                                    {% if c.feed_characteristics %}<span class="clients-characteristics-sub" title="{{ c.feed_characteristics|e }}">{{ c.feed_characteristics }}</span>{% endif %}
+                                    {% if row.interaction_labels %}
+                                    <span class="clients-email-sub" title="{{ row.interaction_labels|join(', ')|e }}">Канали: {{ row.interaction_labels|join(' · ') }}</span>
+                                    {% endif %}
+                                </a>
+                            </div>
+                        </td>
+                        <td class="clients-mgr-cell clients-mgr-cell--edit" title="Зміна застосовується одразу після вибору">
+                            <form method="post" action="/clients/{{ c.id }}/assign-manager" class="clients-inline-mgr-form">
+                                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                                <input type="hidden" name="return_qs" value="{{ export_qs|e }}">
+                                <select name="assign_username" class="clients-inline-mgr-select" aria-label="Відповідальний менеджер для {{ (c.firstname or '')|e }} {{ (c.lastname or '')|e }}">
+                                    <option value="__none__" {% if not c.crm_assigned_username %}selected{% endif %}>Немає</option>
+                                    {% for mgr in marketing_managers %}
+                                    <option value="{{ mgr.username }}" {% if c.crm_assigned_username == mgr.username %}selected{% endif %}>{{ (mgr.display_name or mgr.username)|e }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                        </td>
+                        <td class="clients-crm-status-cell">
+                            <form method="post" action="/clients/{{ c.id }}/processing-status" class="clients-inline-status-form">
+                                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                                <input type="hidden" name="return_qs" value="{{ export_qs|e }}">
+                                <select name="processing_status" class="clients-crm-status-select clients-inline-status-select" aria-label="Статус опрацювання">
+                                    <option value="neutral" disabled {% if row.processing_status == 'neutral' %}selected{% endif %}>Нейтральний</option>
+                                    {% for key, label in processing_status_options %}
+                                    <option value="{{ key }}" {% if row.processing_status == key %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                                <select name="closure_result" class="clients-crm-closure-select clients-inline-closure-select" style="display:none;margin-top:4px;" aria-label="Результат закриття">
+                                    <option value="" selected disabled>Результат…</option>
+                                    {% for key, label in closure_result_options %}
+                                    <option value="{{ key }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                            {% if row.processing_status != 'neutral' %}
+                            <span class="clients-crm-tag clients-crm-tag--{{ row.processing_status }} clients-crm-status-badge">{{ row.processing_status_label }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="clients-crm-channels-cell">
+                            <details class="clients-crm-channels-details">
+                                <summary title="{% if row.interaction_labels|length %}{{ row.interaction_labels|join(', ') }}{% else %}Обрати канали CRM{% endif %}">{% if row.interaction_labels|length %}{{ row.interaction_labels|length }} кан{% else %}CRM{% endif %}</summary>
+                                <div class="clients-crm-channels-pop">
+                                    <form method="post" action="/clients/{{ c.id }}/interactions" class="clients-inline-channels-form">
+                                        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                                        <input type="hidden" name="return_qs" value="{{ export_qs|e }}">
+                                        <div class="clients-crm-channels-pop__body">
+                                            <div class="clients-interaction-group">
+                                                <p class="clients-interaction-group__title">Прямий контакт</p>
+                                                <div class="clients-interaction-options">
+                                                    {% for key, ilabel in interaction_options_direct %}
+                                                    <label class="clients-interaction-option">
+                                                        <input type="checkbox" name="interaction" value="{{ key }}" {% if key in row.interaction_keys %}checked{% endif %}>
+                                                        <span title="{{ ilabel }}">{{ interaction_short_label(key, ilabel) }}</span>
+                                                    </label>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                            <div class="clients-interaction-group">
+                                                <p class="clients-interaction-group__title">Масові</p>
+                                                <div class="clients-interaction-options">
+                                                    {% for key, ilabel in interaction_options_mass %}
+                                                    <label class="clients-interaction-option">
+                                                        <input type="checkbox" name="interaction" value="{{ key }}" {% if key in row.interaction_keys %}checked{% endif %}>
+                                                        <span title="{{ ilabel }}">{{ interaction_short_label(key, ilabel) }}</span>
+                                                    </label>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="clients-crm-channels-pop__foot">
+                                            <button type="submit" class="btn btn-primary btn-sm">Зберегти</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </details>
+                        </td>
+                        <td class="col-narrow clients-phone-cell" title="{{ c.telephone or '' }}">{{ c.telephone or '—' }}</td>
+                        <td>{{ c.geo_city or '—' }}</td>
+                        <td>
+                            {% if '90+' in m.activity %}<span class="tag tag-lost">{{ m.activity }}</span>
+                            {% elif '45–90' in m.activity %}<span class="tag tag-sleep">{{ m.activity }}</span>
+                            {% elif '20–45' in m.activity %}<span class="tag tag-a20-45">{{ m.activity }}</span>
+                            {% elif '14–20' in m.activity %}<span class="tag tag-a14-20">{{ m.activity }}</span>
+                            {% elif '1–14' in m.activity %}<span class="tag tag-a1-14">{{ m.activity }}</span>
+                            {% else %}<span class="tag">{{ m.activity }}</span>{% endif %}
+                        </td>
+                        <td class="rfm-mini" title="Днів з останнього замовлення">{{ rfm.recency_text }}</td>
+                        <td class="col-narrow" title="{{ m.channel }}">{{ m.channel }}</td>
+                        <td class="col-num">{{ c.orders_count if c.orders_count is not none else '—' }}</td>
+                        <td class="col-num">
+                            {% if c.ltv is not none %}<strong>{{ c.ltv|fmt_ua }}</strong> ₴{% else %}—{% endif %}
+                        </td>
+                        <td class="col-num col-narrow">
+                            {% if c.last_order_date %}{{ c.last_order_date.strftime('%d.%m.%Y') }}{% else %}—{% endif %}
+                            {% if c.last_order_manager_username %}
+                            <div class="clients-email-sub" title="Менеджер останнього замовлення">{{ c.last_order_manager_username }}</div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="text-align: center; padding: 40px; color: #6b7280;">
+            {% if filter_form %}
+                Немає клієнтів за цими фільтрами. <a href="/clients">Скинути</a>.
+            {% else %}
+                Немає клієнтів. Запустіть синхронізацію на сторінці «Синхронізація».
+            {% endif %}
+        </p>
+        {% endif %}
+        </div>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="card clients-filter-card" style="margin-bottom: 0;">
+        <div class="card-content" style="padding: 8px 12px;">
+            <nav class="pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;">
+                {% if page > 1 %}
+                <a href="/clients?{{ export_qs }}&page=1" title="Перша сторінка">« Перша</a>
+                {% else %}
+                <span class="disabled" title="Ви вже на першій сторінці">« Перша</span>
+                {% endif %}
+                <span aria-hidden="true" style="color: #d1d5db;">|</span>
+                {% if page > 1 %}
+                <a href="/clients?{{ export_qs }}&page={{ page - 1 }}">← Попередня</a>
+                {% else %}
+                <span class="disabled">← Попередня</span>
+                {% endif %}
+                <span style="font-weight: 600;">Сторінка {{ page }} з {{ total_pages }}</span>
+                {% if page < total_pages %}
+                <a href="/clients?{{ export_qs }}&page={{ page + 1 }}">Наступна →</a>
+                {% else %}
+                <span class="disabled">Наступна →</span>
+                {% endif %}
+                <span aria-hidden="true" style="color: #d1d5db;">|</span>
+                {% if page < total_pages %}
+                <a href="/clients?{{ export_qs }}&page={{ total_pages }}" title="Остання сторінка">Остання »</a>
+                {% else %}
+                <span class="disabled" title="Ви вже на останній сторінці">Остання »</span>
+                {% endif %}
+            </nav>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    (function () {
+        var selAll = document.getElementById('clientsSelectAll');
+        var checks = document.querySelectorAll('input.clients-row-check');
+        var countEl = document.getElementById('clientsSelectedCount');
+        if (!selAll || !checks.length) return;
+        function updateCount() {
+            var n = 0;
+            checks.forEach(function (cb) { if (cb.checked) n++; });
+            if (countEl) countEl.textContent = String(n);
+            selAll.checked = n === checks.length;
+            selAll.indeterminate = n > 0 && n < checks.length;
+        }
+        selAll.addEventListener('change', function () {
+            checks.forEach(function (cb) { cb.checked = selAll.checked; });
+            updateCount();
+        });
+        checks.forEach(function (cb) { cb.addEventListener('change', updateCount); });
+        updateCount();
+    })();
+
+    var clientsAjaxHeaders = { Accept: 'application/json', 'X-Clients-List-Ajax': '1' };
+    var clientsAjaxMsg = document.getElementById('clientsAjaxMsg');
+    var clientsAjaxMsgTimer = null;
+    function clientsSetAjaxMsg(text, isErr) {
+        if (clientsAjaxMsgTimer) {
+            clearTimeout(clientsAjaxMsgTimer);
+            clientsAjaxMsgTimer = null;
+        }
+        if (!clientsAjaxMsg) return;
+        clientsAjaxMsg.textContent = text || '';
+        clientsAjaxMsg.style.color = isErr ? '#b91c1c' : '#059669';
+        if (text && !isErr) {
+            clientsAjaxMsgTimer = setTimeout(function () {
+                if (clientsAjaxMsg) clientsAjaxMsg.textContent = '';
+                clientsAjaxMsgTimer = null;
+            }, 3500);
+        }
+    }
+
+    function clientsApplyManagerUpdates(updates) {
+        (updates || []).forEach(function (u) {
+            var tr = document.querySelector('tr[data-client-id="' + u.id + '"]');
+            if (!tr) return;
+            var s = tr.querySelector('.clients-inline-mgr-select');
+            if (s && u.value !== undefined) s.value = u.value;
+        });
+    }
+
+    function clientsRefreshBulkSelectionUI() {
+        document.querySelectorAll('input.clients-row-check').forEach(function (cb) {
+            cb.checked = false;
+        });
+        var selAll = document.getElementById('clientsSelectAll');
+        var countEl = document.getElementById('clientsSelectedCount');
+        if (countEl) countEl.textContent = '0';
+        if (selAll) {
+            selAll.checked = false;
+            selAll.indeterminate = false;
+        }
+        var bulkSel = document.getElementById('clientsBulkAssignSelect');
+        if (bulkSel) bulkSel.selectedIndex = 0;
+    }
+
+    var clientsAssignSelectedForm = document.getElementById('clientsAssignSelectedForm');
+    var clientsBulkAssignBtn = document.getElementById('clientsBulkAssignSubmit');
+    if (clientsAssignSelectedForm && clientsBulkAssignBtn) {
+        clientsAssignSelectedForm.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+        });
+        clientsBulkAssignBtn.addEventListener('click', function () {
+            var fd = new FormData(clientsAssignSelectedForm);
+            var assign = String(fd.get('assign_username') || '').trim();
+            if (!assign) {
+                clientsSetAjaxMsg('Оберіть менеджера для обраних.', true);
+                return;
+            }
+            if (!fd.getAll('client_id').length) {
+                clientsSetAjaxMsg('Немає обраних рядків.', true);
+                return;
+            }
+            clientsSetAjaxMsg('Застосовую…', false);
+            fetch(clientsAssignSelectedForm.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: clientsAjaxHeaders
+            })
+                .then(function (r) {
+                    return r.json().then(function (j) {
+                        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || 'bulk_err');
+                        return j;
+                    });
+                })
+                .then(function (j) {
+                    clientsApplyManagerUpdates(j.updates);
+                    clientsRefreshBulkSelectionUI();
+                    var n = typeof j.applied === 'number' ? j.applied : (j.updates && j.updates.length) || 0;
+                    clientsSetAjaxMsg('Зміни застосовано (' + n + ').', false);
+                })
+                .catch(function () {
+                    clientsSetAjaxMsg('Не вдалося застосувати зміни.', true);
+                });
+        });
+    }
+
+    var clientsInteractionsForm = document.getElementById('clientsInteractionsSelectedForm');
+    var clientsBulkInteractionsBtn = document.getElementById('clientsBulkInteractionsSubmit');
+    var clientsBulkInteractionsClearBtn = document.getElementById('clientsBulkInteractionsClear');
+    if (clientsInteractionsForm && clientsBulkInteractionsBtn) {
+        clientsBulkInteractionsBtn.addEventListener('click', function () {
+            var fd = new FormData(clientsInteractionsForm);
+            var checkedRows = document.querySelectorAll('input.clients-row-check:checked');
+            if (!checkedRows.length) {
+                clientsSetAjaxMsg('Немає обраних рядків.', true);
+                return;
+            }
+            checkedRows.forEach(function (cb) {
+                fd.append('client_id', cb.value);
+            });
+            clientsSetAjaxMsg('Застосовую…', false);
+            fetch(clientsInteractionsForm.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: clientsAjaxHeaders
+            })
+                .then(function (r) {
+                    return r.json().then(function (j) {
+                        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || 'bulk_err');
+                        return j;
+                    });
+                })
+                .then(function (j) {
+                    clientsRefreshBulkSelectionUI();
+                    var n = typeof j.applied === 'number' ? j.applied : 0;
+                    clientsSetAjaxMsg('Канали збережено (' + n + ').', false);
+                })
+                .catch(function () {
+                    clientsSetAjaxMsg('Не вдалося зберегти канали.', true);
+                });
+        });
+    }
+    if (clientsInteractionsForm && clientsBulkInteractionsClearBtn) {
+        clientsBulkInteractionsClearBtn.addEventListener('click', function () {
+            clientsInteractionsForm.querySelectorAll('input[name="interaction"]').forEach(function (cb) {
+                cb.checked = false;
+            });
+        });
+    }
+
+    var clientsProcessingForm = document.getElementById('clientsProcessingSelectedForm');
+    var clientsBulkProcessingBtn = document.getElementById('clientsBulkProcessingSubmit');
+    var clientsBulkProcessingSelect = document.getElementById('clientsBulkProcessingSelect');
+    var clientsBulkClosureLabel = document.getElementById('clientsBulkClosureLabel');
+    var clientsBulkClosureSelect = document.getElementById('clientsBulkClosureSelect');
+    function syncBulkClosureUI() {
+        if (!clientsBulkProcessingSelect || !clientsBulkClosureLabel) return;
+        var closed = clientsBulkProcessingSelect.value === 'closed';
+        clientsBulkClosureLabel.style.display = closed ? '' : 'none';
+        if (clientsBulkClosureSelect) clientsBulkClosureSelect.required = closed;
+    }
+    if (clientsBulkProcessingSelect) {
+        clientsBulkProcessingSelect.addEventListener('change', syncBulkClosureUI);
+        syncBulkClosureUI();
+    }
+    if (clientsProcessingForm && clientsBulkProcessingBtn) {
+        clientsBulkProcessingBtn.addEventListener('click', function () {
+            var fd = new FormData(clientsProcessingForm);
+            var status = String(fd.get('processing_status') || '').trim();
+            if (!status) {
+                clientsSetAjaxMsg('Оберіть статус для обраних.', true);
+                return;
+            }
+            if (status === 'closed' && !String(fd.get('closure_result') || '').trim()) {
+                clientsSetAjaxMsg('Для закриття оберіть результат взаємодії.', true);
+                return;
+            }
+            var checkedRows = document.querySelectorAll('input.clients-row-check:checked');
+            if (!checkedRows.length) {
+                clientsSetAjaxMsg('Немає обраних рядків.', true);
+                return;
+            }
+            checkedRows.forEach(function (cb) { fd.append('client_id', cb.value); });
+            clientsSetAjaxMsg('Застосовую…', false);
+            fetch(clientsProcessingForm.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: clientsAjaxHeaders
+            })
+                .then(function (r) {
+                    return r.json().then(function (j) {
+                        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || 'bulk_err');
+                        return j;
+                    });
+                })
+                .then(function (j) {
+                    (j.updates || []).forEach(function (u) {
+                        var tr = document.querySelector('tr[data-client-id="' + u.id + '"]');
+                        if (!tr) return;
+                        var badge = tr.querySelector('.clients-crm-status-badge');
+                        if (badge && u.processing_status_label) {
+                            badge.textContent = u.processing_status_label;
+                            badge.className = 'clients-crm-tag clients-crm-status-badge clients-crm-tag--' + (u.processing_status || 'neutral');
+                        }
+                        var statusSel = tr.querySelector('.clients-inline-status-select');
+                        if (statusSel && u.processing_status) statusSel.value = u.processing_status;
+                        var nameSub = tr.querySelector('.clients-name-link .clients-email-sub[title]');
+                        if (nameSub && u.interaction_labels) {
+                            nameSub.textContent = 'Канали: ' + (u.interaction_labels.join(' · ') || '—');
+                            nameSub.title = u.interaction_labels.join(', ');
+                        }
+                    });
+                    clientsRefreshBulkSelectionUI();
+                    var n = typeof j.applied === 'number' ? j.applied : 0;
+                    clientsSetAjaxMsg('Статус застосовано (' + n + ').', false);
+                })
+                .catch(function (err) {
+                    var msg = (err && err.message === 'closure_required')
+                        ? 'Для закриття оберіть результат взаємодії.'
+                        : 'Не вдалося застосувати статус.';
+                    clientsSetAjaxMsg(msg, true);
+                });
+        });
+    }
+
+    function syncInlineClosureSelect(statusSel) {
+        var form = statusSel.closest('form.clients-inline-status-form');
+        if (!form) return;
+        var closureSel = form.querySelector('.clients-inline-closure-select');
+        if (!closureSel) return;
+        var closed = statusSel.value === 'closed';
+        closureSel.style.display = closed ? '' : 'none';
+        closureSel.required = closed;
+    }
+    document.querySelectorAll('.clients-inline-status-select').forEach(function (sel) {
+        syncInlineClosureSelect(sel);
+    });
+
+    document.addEventListener('change', function (ev) {
+        var closureSel = ev.target;
+        if (closureSel && closureSel.classList && closureSel.classList.contains('clients-inline-closure-select')) {
+            var form = closureSel.closest('form.clients-inline-status-form');
+            var statusSel = form && form.querySelector('.clients-inline-status-select');
+            if (form && statusSel && statusSel.value === 'closed' && closureSel.value) {
+                form.requestSubmit();
+            }
+            return;
+        }
+        var statusSel = ev.target;
+        if (statusSel && statusSel.classList && statusSel.classList.contains('clients-inline-status-select')) {
+            syncInlineClosureSelect(statusSel);
+            if (statusSel.value === 'closed') return;
+            var form = statusSel.closest('form.clients-inline-status-form');
+            if (!form) return;
+            var prev = statusSel.getAttribute('data-prev-status');
+            var fd = new FormData(form);
+            clientsSetAjaxMsg('Застосовую…', false);
+            fetch(form.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: clientsAjaxHeaders
+            })
+                .then(function (r) {
+                    return r.json().then(function (j) {
+                        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || 'bulk_err');
+                        return j;
+                    });
+                })
+                .then(function (j) {
+                    var tr = document.querySelector('tr[data-client-id="' + j.client_id + '"]');
+                    if (tr) {
+                        var badge = tr.querySelector('.clients-crm-status-badge');
+                        if (badge) {
+                            badge.textContent = j.processing_status_label || '';
+                            badge.className = 'clients-crm-tag clients-crm-status-badge clients-crm-tag--' + (j.processing_status || 'neutral');
+                        }
+                    }
+                    statusSel.setAttribute('data-prev-status', statusSel.value);
+                    clientsSetAjaxMsg('Статус збережено.', false);
+                })
+                .catch(function () {
+                    if (prev !== null && prev !== undefined) statusSel.value = prev;
+                    clientsSetAjaxMsg('Не вдалося зберегти статус.', true);
+                });
+        }
+    });
+
+    document.addEventListener('submit', function (ev) {
+        var form = ev.target;
+        if (!form || !form.classList) return;
+        if (form.classList.contains('clients-inline-status-form')) {
+            ev.preventDefault();
+            var statusSel = form.querySelector('.clients-inline-status-select');
+            if (!statusSel || statusSel.value !== 'closed') return;
+            var fd = new FormData(form);
+            clientsSetAjaxMsg('Застосовую…', false);
+            fetch(form.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: clientsAjaxHeaders
+            })
+                .then(function (r) {
+                    return r.json().then(function (j) {
+                        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || 'bulk_err');
+                        return j;
+                    });
+                })
+                .then(function (j) {
+                    var tr = document.querySelector('tr[data-client-id="' + j.client_id + '"]');
+                    if (tr) {
+                        var badge = tr.querySelector('.clients-crm-status-badge');
+                        if (badge) {
+                            badge.textContent = j.processing_status_label || 'Нейтральний';
+                            badge.className = 'clients-crm-tag clients-crm-status-badge clients-crm-tag--' + (j.processing_status || 'neutral');
+                        }
+                        if (statusSel) {
+                            statusSel.value = j.processing_status || 'neutral';
+                            syncInlineClosureSelect(statusSel);
+                        }
+                        var closureSel = form.querySelector('.clients-inline-closure-select');
+                        if (closureSel) closureSel.selectedIndex = 0;
+                    }
+                    clientsSetAjaxMsg('Лід закрито, робочі поля скинуто.', false);
+                })
+                .catch(function (err) {
+                    clientsSetAjaxMsg(
+                        (err && err.message === 'closure_required')
+                            ? 'Оберіть результат взаємодії.'
+                            : 'Не вдалося закрити лід.',
+                        true
+                    );
+                });
+            return;
+        }
+        if (form.classList.contains('clients-inline-channels-form')) {
+            ev.preventDefault();
+            var fd = new FormData(form);
+            clientsSetAjaxMsg('Застосовую…', false);
+            fetch(form.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: clientsAjaxHeaders
+            })
+                .then(function (r) {
+                    return r.json().then(function (j) {
+                        if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || 'bulk_err');
+                        return j;
+                    });
+                })
+                .then(function () {
+                    clientsSetAjaxMsg('Канали збережено.', false);
+                })
+                .catch(function () {
+                    clientsSetAjaxMsg('Не вдалося зберегти канали.', true);
+                });
+        }
+    });
+
+    document.addEventListener('focusin', function (ev) {
+        var t = ev.target;
+        if (!t || !t.classList) return;
+        if (t.classList.contains('clients-inline-mgr-select')) {
+            t.setAttribute('data-prev-mgr', t.value);
+        }
+        if (t.classList.contains('clients-inline-status-select')) {
+            t.setAttribute('data-prev-status', t.value);
+        }
+    });
+    document.addEventListener('change', function (ev) {
+        var sel = ev.target;
+        if (!sel || !sel.classList || !sel.classList.contains('clients-inline-mgr-select')) return;
+        var mgrForm = sel.closest('form.clients-inline-mgr-form');
+        if (!mgrForm) return;
+        var prev = sel.getAttribute('data-prev-mgr');
+        var fd = new FormData(mgrForm);
+        clientsSetAjaxMsg('Застосовую…', false);
+        fetch(mgrForm.action, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: clientsAjaxHeaders
+        })
+            .then(function (r) {
+                return r.json().then(function (j) {
+                    if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || 'bulk_err');
+                    return j;
+                });
+            })
+            .then(function (j) {
+                if (j.value !== undefined) sel.value = j.value;
+                sel.setAttribute('data-prev-mgr', sel.value);
+                clientsSetAjaxMsg('Збережено.', false);
+            })
+            .catch(function () {
+                if (prev !== null && prev !== undefined) sel.value = prev;
+                clientsSetAjaxMsg('Не вдалося зберегти.', true);
+            });
+    });
+
+    var form = document.getElementById('clientsFilterForm');
+    var searchInput = document.getElementById('clientsSearchInput');
+    var pageInput = document.getElementById('clientsPageInput');
+    if (form && searchInput && pageInput) {
+        var t = null;
+        var DEBOUNCE_MS = 500;
+        searchInput.addEventListener('input', function () {
+            if (t) clearTimeout(t);
+            t = setTimeout(function () {
+                pageInput.value = 1;
+                form.submit();
+            }, DEBOUNCE_MS);
+        });
+    }
+
+    /* Чіпи «Тип» / «Активність»: мультивибір; повторний клік знімає сегмент. */
+    if (form) {
+        form.addEventListener('click', function (ev) {
+            var a = ev.target.closest('a.clients-filter-chip');
+            if (!a || !form.contains(a)) return;
+            if (ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+            var chipType = a.getAttribute('data-chip-type');
+            var chipAction = a.getAttribute('data-chip-action');
+            if (!chipType || !chipAction) return;
+            ev.preventDefault();
+            var sp = new URLSearchParams();
+            try {
+                new FormData(form).forEach(function (val, key) {
+                    sp.append(key, val);
+                });
+            } catch (e) {
+                window.location.href = a.getAttribute('href') || '/clients';
+                return;
+            }
+            if (chipType === 'segment' || chipType === 'activity' || chipType === 'feed_tag') {
+                if (chipAction === 'clear') {
+                    sp.delete(chipType);
+                } else if (chipAction === 'toggle' || chipAction === 'set') {
+                    var chipVal = a.getAttribute('data-chip-value');
+                    var current = sp.getAll(chipType);
+                    sp.delete(chipType);
+                    if (chipVal) {
+                        var idx = current.indexOf(chipVal);
+                        if (idx >= 0) {
+                            current.forEach(function (v) {
+                                if (v !== chipVal) sp.append(chipType, v);
+                            });
+                        } else {
+                            current.forEach(function (v) { sp.append(chipType, v); });
+                            sp.append(chipType, chipVal);
+                        }
+                    }
+                }
+            }
+            sp.set('page', '1');
+            var qs = sp.toString();
+            window.location.href = '/clients' + (qs ? '?' + qs : '');
+        });
+    }
+
+    /* Реєстрація / Пошта: динамічні перемикачі з миттєвим застосуванням */
+    if (form && pageInput) {
+        ['registered', 'email_mode', 'gender'].forEach(function (groupName) {
+            form.querySelectorAll('input[type="radio"][name="' + groupName + '"]').forEach(function (input) {
+                input.addEventListener('change', function () {
+                    if (!input.checked) return;
+                    pageInput.value = 1;
+                    form.submit();
+                });
+            });
+        });
+        form.querySelectorAll('input[type="radio"][name="bad_clients"]').forEach(function (input) {
+            input.addEventListener('change', function () {
+                if (!input.checked) return;
+                pageInput.value = 1;
+                form.submit();
+            });
+        });
+    }
+
+    function toggleCheckset(root, makeChecked) {
+        if (!root) return;
+        var boxes = root.querySelectorAll('input[type="checkbox"]');
+        boxes.forEach(function (cb) { cb.checked = makeChecked; });
+    }
+
+    function escapeHtml(s) {
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderSelectedChips(setId, outId, fieldName) {
+        var setRoot = document.getElementById(setId);
+        var out = document.getElementById(outId);
+        if (!setRoot || !out) return;
+        var checked = setRoot.querySelectorAll('input[type="checkbox"][name="' + fieldName + '"]:checked');
+        if (!checked.length) {
+            out.innerHTML = '';
+            return;
+        }
+        var html = '';
+        checked.forEach(function (cb) {
+            var value = cb.value || '';
+            var safe = escapeHtml(value);
+            var encoded = encodeURIComponent(value);
+            html += '<span class="cff-selected-chip">'
+                + '<span title="' + safe + '">' + safe + '</span>'
+                + '<button type="button" class="cff-selected-remove" data-target-set="' + setId + '" data-name="' + fieldName + '" data-value="' + encoded + '" aria-label="Прибрати ' + safe + '">×</button>'
+                + '</span>';
+        });
+        out.innerHTML = html;
+    }
+
+    document.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('.cff-checkset-btn');
+        if (!btn) return;
+        ev.preventDefault();
+        var target = btn.getAttribute('data-target');
+        var root = target ? document.getElementById(target) : btn.closest('.cff-checkset');
+        var action = btn.getAttribute('data-action');
+        toggleCheckset(root, action === 'all');
+        if (target === 'clientsBrandSet') {
+            renderSelectedChips('clientsBrandSet', 'clientsBrandSelected', 'brand_contains');
+            updateBasketTriggerCount('clientsBrandSet');
+        } else if (target === 'clientsStatusSet') {
+            renderSelectedChips('clientsStatusSet', 'clientsStatusSelected', 'order_status');
+            updateBasketTriggerCount('clientsStatusSet');
+        } else if (target === 'clientsCitySet') {
+            renderSelectedChips('clientsCitySet', 'clientsCitySelected', 'geo_city');
+        } else if (target === 'clientsOblastSet') {
+            renderSelectedChips('clientsOblastSet', 'clientsOblastSelected', 'geo_oblast');
+        }
+    });
+
+    function updateBasketTriggerCount(setId) {
+        var setRoot = document.getElementById(setId);
+        if (!setRoot) return;
+        var details = setRoot.closest('details');
+        if (!details) return;
+        var cnt = details.querySelector('.cff-basket-trigger-count');
+        if (!cnt) return;
+        var n = setRoot.querySelectorAll('input[type="checkbox"]:checked').length;
+        cnt.textContent = 'обрано: ' + String(n);
+    }
+
+    document.querySelectorAll('.cff-basket-details').forEach(function (det) {
+        det.addEventListener('toggle', function () {
+            if (!det.open) return;
+            document.querySelectorAll('.cff-basket-details').forEach(function (other) {
+                if (other !== det && other.open) other.open = false;
+            });
+        });
+    });
+
+    function positionCrmChannelsPop(det) {
+        if (!det || !det.open) return;
+        var pop = det.querySelector('.clients-crm-channels-pop');
+        var summary = det.querySelector('summary');
+        if (!pop || !summary) return;
+        pop.classList.add('is-floating');
+        pop.style.visibility = 'hidden';
+        pop.style.display = 'block';
+        var popW = pop.offsetWidth || 300;
+        var popH = pop.offsetHeight || 200;
+        var r = summary.getBoundingClientRect();
+        var top = r.bottom + 6;
+        var left = r.right - popW;
+        if (left < 8) left = 8;
+        if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+        if (top + popH > window.innerHeight - 8) {
+            top = Math.max(8, r.top - popH - 6);
+        }
+        pop.style.top = top + 'px';
+        pop.style.left = left + 'px';
+        pop.style.right = 'auto';
+        pop.style.visibility = '';
+    }
+
+    function resetCrmChannelsPop(det) {
+        if (!det) return;
+        var pop = det.querySelector('.clients-crm-channels-pop');
+        if (!pop) return;
+        pop.classList.remove('is-floating');
+        pop.style.top = '';
+        pop.style.left = '';
+        pop.style.right = '';
+        pop.style.visibility = '';
+    }
+
+    document.querySelectorAll('.clients-crm-channels-details').forEach(function (det) {
+        det.addEventListener('toggle', function () {
+            if (det.open) {
+                document.querySelectorAll('.clients-crm-channels-details').forEach(function (other) {
+                    if (other !== det && other.open) {
+                        other.open = false;
+                        resetCrmChannelsPop(other);
+                    }
+                });
+                positionCrmChannelsPop(det);
+            } else {
+                resetCrmChannelsPop(det);
+            }
+        });
+    });
+
+    window.addEventListener('resize', function () {
+        document.querySelectorAll('.clients-crm-channels-details[open]').forEach(positionCrmChannelsPop);
+    });
+    window.addEventListener('scroll', function () {
+        document.querySelectorAll('.clients-crm-channels-details[open]').forEach(positionCrmChannelsPop);
+    }, true);
+
+    document.addEventListener('click', function (ev) {
+        document.querySelectorAll('.clients-crm-channels-details[open]').forEach(function (det) {
+            if (!det.contains(ev.target)) {
+                det.open = false;
+                resetCrmChannelsPop(det);
+            }
+        });
+    });
+
+    document.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Escape') return;
+        document.querySelectorAll('.clients-crm-channels-details[open]').forEach(function (det) {
+            det.open = false;
+            resetCrmChannelsPop(det);
+        });
+    });
+
+    document.addEventListener('change', function (ev) {
+        var cb = ev.target;
+        if (!(cb instanceof HTMLInputElement) || cb.type !== 'checkbox') return;
+        if (cb.name === 'brand_contains') {
+            renderSelectedChips('clientsBrandSet', 'clientsBrandSelected', 'brand_contains');
+            updateBasketTriggerCount('clientsBrandSet');
+        } else if (cb.name === 'order_status') {
+            renderSelectedChips('clientsStatusSet', 'clientsStatusSelected', 'order_status');
+            updateBasketTriggerCount('clientsStatusSet');
+        } else if (cb.name === 'interaction_exclude') {
+            var exSet = cb.closest('.clients-interaction-filter__body');
+            if (exSet) {
+                var n = exSet.querySelectorAll('input[type="checkbox"]:checked').length;
+                var det = exSet.closest('details');
+                var cnt = det && det.querySelector('.cff-basket-trigger-count');
+                if (cnt) cnt.textContent = 'обрано: ' + String(n);
+            }
+        } else if (cb.name === 'geo_city') {
+            renderSelectedChips('clientsCitySet', 'clientsCitySelected', 'geo_city');
+        } else if (cb.name === 'geo_oblast') {
+            renderSelectedChips('clientsOblastSet', 'clientsOblastSelected', 'geo_oblast');
+        }
+    });
+
+    document.addEventListener('click', function (ev) {
+        var removeBtn = ev.target.closest('.cff-selected-remove');
+        if (!removeBtn) return;
+        ev.preventDefault();
+        var setId = removeBtn.getAttribute('data-target-set') || '';
+        var fieldName = removeBtn.getAttribute('data-name') || '';
+        var fieldValue = removeBtn.getAttribute('data-value') || '';
+        var fieldValueDecoded = fieldValue;
+        try {
+            fieldValueDecoded = decodeURIComponent(fieldValue);
+        } catch (e) {}
+        if (!setId || !fieldName) return;
+        var setRoot = document.getElementById(setId);
+        if (!setRoot) return;
+        var boxes = setRoot.querySelectorAll('input[type="checkbox"][name="' + fieldName + '"]');
+        boxes.forEach(function (cb) {
+            if (cb.value === fieldValue || cb.value === fieldValueDecoded) cb.checked = false;
+        });
+        if (fieldName === 'brand_contains') {
+            renderSelectedChips('clientsBrandSet', 'clientsBrandSelected', 'brand_contains');
+            updateBasketTriggerCount('clientsBrandSet');
+        } else if (fieldName === 'order_status') {
+            renderSelectedChips('clientsStatusSet', 'clientsStatusSelected', 'order_status');
+            updateBasketTriggerCount('clientsStatusSet');
+        } else if (fieldName === 'geo_city') {
+            renderSelectedChips('clientsCitySet', 'clientsCitySelected', 'geo_city');
+        } else if (fieldName === 'geo_oblast') {
+            renderSelectedChips('clientsOblastSet', 'clientsOblastSelected', 'geo_oblast');
+        }
+    });
+
+    var brandSearch = document.getElementById('clientsBrandSearch');
+    var brandSet = document.getElementById('clientsBrandSet');
+    if (brandSearch && brandSet) {
+        brandSearch.addEventListener('input', function () {
+            var q = String(brandSearch.value || '').trim().toLowerCase();
+            brandSet.querySelectorAll('.cff-check-item').forEach(function (row) {
+                var hay = String(row.getAttribute('data-filter-text') || '');
+                row.style.display = (!q || hay.indexOf(q) !== -1) ? '' : 'none';
+            });
+        });
+    }
+
+    var citySearch = document.getElementById('clientsCitySearch');
+    var citySet = document.getElementById('clientsCitySet');
+    if (citySearch && citySet) {
+        citySearch.addEventListener('input', function () {
+            var q = String(citySearch.value || '').trim().toLowerCase();
+            citySet.querySelectorAll('.cff-check-item').forEach(function (row) {
+                var hay = String(row.getAttribute('data-filter-text') || '');
+                row.style.display = (!q || hay.indexOf(q) !== -1) ? '' : 'none';
+            });
+        });
+    }
+    var oblastSearch = document.getElementById('clientsOblastSearch');
+    var oblastSet = document.getElementById('clientsOblastSet');
+    if (oblastSearch && oblastSet) {
+        oblastSearch.addEventListener('input', function () {
+            var q = String(oblastSearch.value || '').trim().toLowerCase();
+            oblastSet.querySelectorAll('.cff-check-item').forEach(function (row) {
+                var hay = String(row.getAttribute('data-filter-text') || '');
+                row.style.display = (!q || hay.indexOf(q) !== -1) ? '' : 'none';
+            });
+        });
+    }
+
+    renderSelectedChips('clientsBrandSet', 'clientsBrandSelected', 'brand_contains');
+    renderSelectedChips('clientsStatusSet', 'clientsStatusSelected', 'order_status');
+    renderSelectedChips('clientsCitySet', 'clientsCitySelected', 'geo_city');
+    renderSelectedChips('clientsOblastSet', 'clientsOblastSelected', 'geo_oblast');
+
+    function wireClientFilterDateCombo(textId) {
+        var text = document.getElementById(textId);
+        if (!text) return;
+        var wrap = text.closest('.cff-date-combo');
+        if (!wrap) return;
+        var picker = wrap.querySelector('input[type="date"].cff-date-cal-native');
+        if (!picker) return;
+        function syncPickerFromText() {
+            var v = String(text.value || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+                picker.value = v;
+                return;
+            }
+            var m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+            if (m) {
+                var d = ('0' + m[1]).slice(-2);
+                var mo = ('0' + m[2]).slice(-2);
+                var y = m[3];
+                picker.value = y + '-' + mo + '-' + d;
+                return;
+            }
+            picker.value = '';
+        }
+        syncPickerFromText();
+        text.addEventListener('change', syncPickerFromText);
+        text.addEventListener('blur', syncPickerFromText);
+        picker.addEventListener('change', function () {
+            if (picker.value) text.value = picker.value;
+        });
+    }
+    ['clientsFirstFrom', 'clientsFirstTo', 'clientsLastFrom', 'clientsLastTo'].forEach(wireClientFilterDateCombo);
+});
+</script>
+{% endblock %}

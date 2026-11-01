@@ -1,0 +1,28 @@
+{# Блок наступного автооновлення. Очікує rotation з rotation_overview(). #}
+{% if rotation and rotation.next %}
+<div class="parser-schedule-card">
+    <div class="parser-schedule-card__main">
+        <span class="parser-schedule-card__label">Наступне автооновлення</span>
+        <strong class="parser-schedule-card__when">{{ rotation.next.at_label }}</strong>
+        <span class="parser-schedule-card__summary">{{ rotation.next.summary }}</span>
+    </div>
+    <div class="parser-schedule-card__meta">
+        <span>Ніч пн–пт, {{ rotation.night_label }} (Київ)</span>
+        {% if rotation.weekend %}
+        <span class="parser-muted">вихідні — автозапуск вимкнено</span>
+        {% elif rotation.auto_rotation_allowed %}
+        <span class="parser-status parser-status--ok">зараз нічне вікно</span>
+        {% elif rotation.in_night %}
+        <span class="parser-muted">ніч, але не будній день</span>
+        {% else %}
+        <span class="parser-muted">удень автозапуск вимкнено</span>
+        {% endif %}
+        {% if rotation.next.brands %}
+        <span class="parser-muted">· {{ rotation.next.brands|join(", ") }}{% if rotation.next.pending_count and rotation.next.pending_count > rotation.next.brands|length %}…{% endif %}</span>
+        {% endif %}
+    </div>
+    {% if rotation.brand_schedule %}
+    <div class="parser-schedule-card__brand">{{ rotation.brand_schedule.summary }}</div>
+    {% endif %}
+</div>
+{% endif %}

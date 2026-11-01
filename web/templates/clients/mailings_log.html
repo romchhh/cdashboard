@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Журнал відправок — Cosmy Agent{% endblock %}
+{% block mobile_title %}Журнал відправок{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/mailings.css">
+{% endblock %}
+
+{% block content %}
+<div class="mailings-page">
+  {% include "clients/clients_nav.html" %}
+
+  <div class="mailings-head">
+    <div class="mailings-head-main">
+      <h1>Журнал відправок</h1>
+      <p class="mailings-sub">Усі спроби надсилання email: API-тригери з сайту та ручні розсилки з панелі.</p>
+    </div>
+    <div class="mailings-head-actions">
+      <a href="/clients/mailings" class="btn-mini">← До розсилок</a>
+    </div>
+  </div>
+
+  <section class="mail-card">
+    <h2>Статистика</h2>
+
+    <div class="mail-quick-periods" aria-label="Швидкий вибір періоду">
+      <button type="button" class="btn-mini" data-period-days="0">Сьогодні</button>
+      <button type="button" class="btn-mini" data-period-days="6">7 днів</button>
+      <button type="button" class="btn-mini" data-period-days="29">30 днів</button>
+      <button type="button" class="btn-mini" data-period-month="1">Поточний місяць</button>
+    </div>
+
+    <form method="get" action="/clients/mailings/log" class="mail-stats-filters" id="mailStatsFilterForm">
+      <div class="mail-field">
+        <label for="statsFrom">З дати</label>
+        <input type="date" id="statsFrom" name="stats_from" value="{{ stats_from_str }}">
+      </div>
+      <div class="mail-field">
+        <label for="statsTo">По дату</label>
+        <input type="date" id="statsTo" name="stats_to" value="{{ stats_to_str }}">
+      </div>
+      <div class="mail-field">
+        <label for="statsChannel">Джерело</label>
+        <select id="statsChannel" name="stats_channel">
+          <option value="all" {{ 'selected' if stats_channel == 'all' else '' }}>Усі</option>
+          <option value="api" {{ 'selected' if stats_channel == 'api' else '' }}>API (сайт)</option>
+          <option value="manual" {{ 'selected' if stats_channel == 'manual' else '' }}>Вручну</option>
+        </select>
+      </div>
+      <div class="mail-field" style="min-width: 200px;">
+        <label for="statsEmail">Email (пошук)</label>
+        <input type="text" id="statsEmail" name="stats_email" value="{{ stats_email_q }}" placeholder="cosmy.ua@gmail.com">
+      </div>
+      <button type="submit" class="btn-mini primary">Показати</button>
+    </form>
+
+    {% set ds = delivery_stats %}
+    <div class="mail-stats-kpis">
+      <div class="mail-stats-kpi">
+        <p class="lbl">Надіслано (спроб)</p>
+        <p class="val">{{ ds.total_sent }}</p>
+      </div>
+      <div class="mail-stats-kpi ok">
+        <p class="lbl">Вдало</p>
+        <p class="val">{{ ds.total_ok }}</p>
+      </div>
+      <div class="mail-stats-kpi fail">
+        <p class="lbl">Помилки</p>
+        <p class="val">{{ ds.total_fail }}</p>
+      </div>
+      <div class="mail-stats-kpi rate">
+        <p class="lbl">Успішність</p>
+        <p class="val">{% if success_rate is not none %}{{ success_rate }}%{% else %}—{% endif %}</p>
+      </div>
+    </div>
+
+    <div class="mail-stats-split">
+      {% set api_s = ds.channel_stats.get('api', {}) %}
+      {% set man_s = ds.channel_stats.get('manual', {}) %}
+      <div class="mail-stats-mini">
+        <strong>API:</strong>
+        надіслано {{ api_s.get('sent', 0) }},
+        вдало {{ api_s.get('ok', 0) }},
+        помилок {{ api_s.get('fail', 0) }}
+      </div>
+      <div class="mail-stats-mini">
+        <strong>Вручну:</strong>
+        надіслано {{ man_s.get('sent', 0) }},
+        вдало {{ man_s.get('ok', 0) }},
+        помилок {{ man_s.get('fail', 0) }}
+      </div>
+    </div>
+
+    {% if ds.by_trigger %}
+    <p class="mail-sub-label">За типом листа</p>
+    <div class="mail-stats-table-wrap">
+      <table class="mail-stats-table">
+        <thead>
+          <tr>
+            <th>Тип листа</th>
+            <th>Надіслано</th>
+            <th>Вдало</th>
+            <th>Помилки</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in ds.by_trigger %}
+          <tr>
+            <td>{{ row.label }}</td>
+            <td>{{ row.sent }}</td>
+            <td>{{ row.ok }}</td>
+            <td>{{ row.fail }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <p class="mail-sub-label" style="margin-top: 16px;">Журнал відправок</p>
+    {% if ds.entries %}
+    <div class="mail-stats-table-wrap">
+      <table class="mail-stats-table">
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Email</th>
+            <th>Лист / тема</th>
+            <th>Тип</th>
+            <th>Джерело</th>
+            <th>Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in ds.entries %}
+          <tr>
+            <td>{% if e.sent_at %}{{ e.sent_at.strftime('%d.%m.%Y %H:%M') }}{% else %}—{% endif %}</td>
+            <td>{{ e.recipient_email }}</td>
+            <td>
+              {{ e.subject }}
+              {% if e.product_ids %}<br><span style="color:#64748b;font-size:0.78rem;">товари: {{ e.product_ids }}</span>{% endif %}
+            </td>
+            <td>{{ e.trigger_label }}</td>
+            <td><span class="mail-badge {{ e.channel }}">{{ e.channel_label }}</span></td>
+            <td>
+              {% if e.success %}
+                <span class="mail-badge ok">Вдало</span>
+              {% else %}
+                <span class="mail-badge fail">Помилка</span>
+                {% if e.error_message %}<br><span style="color:#991b1b;font-size:0.78rem;">{{ e.error_message[:120] }}{% if e.error_message|length > 120 %}…{% endif %}</span>{% endif %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="mail-stats-pager">
+      <span>Сторінка {{ ds.page }} з {{ ds.pages }} (усього {{ ds.total_sent }})</span>
+      {% if ds.page > 1 %}
+        <a class="btn-mini" href="/clients/mailings/log?stats_from={{ stats_from_str|urlencode }}&amp;stats_to={{ stats_to_str|urlencode }}&amp;stats_channel={{ stats_channel|urlencode }}&amp;stats_email={{ stats_email_q|urlencode }}&amp;stats_page={{ ds.page - 1 }}#mailStatsFilterForm">← Назад</a>
+      {% endif %}
+      {% if ds.page < ds.pages %}
+        <a class="btn-mini" href="/clients/mailings/log?stats_from={{ stats_from_str|urlencode }}&amp;stats_to={{ stats_to_str|urlencode }}&amp;stats_channel={{ stats_channel|urlencode }}&amp;stats_email={{ stats_email_q|urlencode }}&amp;stats_page={{ ds.page + 1 }}#mailStatsFilterForm">Далі →</a>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="mail-kpi">За обраний період записів немає. Після відправки листів через API або з <a href="/clients/mailings">розсилок</a> дані з’являться тут.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/mailings-log.js" defer></script>
+{% endblock %}

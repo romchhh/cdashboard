@@ -1,0 +1,4 @@
+{% macro procurement_sort_th(label, column, sort_by, sort_dir, sort_url, th_class='') %}
+<th class="procurement-sort-th{% if th_class %} {{ th_class }}{% endif %}{% if sort_by == column %} procurement-sort-th--{{ sort_dir }}{% endif %}" title="Сортування по всьому списку ({{ '↑' if sort_by == column and sort_dir == 'asc' else '↓' if sort_by == column else 'клік' }})"> <a href="{{ sort_url(column) }}" class="procurement-sort-link">{{ label }}</a>
+</th>
+{% endmacro %}

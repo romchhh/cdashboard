@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% from "procurement/_icons.html" import ui_icon %}
+{% block title %}Синхронізація — Cosmy Agent{% endblock %}
+{% block mobile_title %}Синхронізація{% endblock %}
+{% block content %}
+
+<div class="sync-page">
+    <div class="page-header sync-page-header">
+        <h1 class="dash-title-with-icon">
+            {{ ui_icon('refresh', 'dash-title-icon-svg') }}
+            <span>Синхронізація</span>
+        </h1>
+        <p class="subtitle">Ручний запуск імпорту та фонові розклади для фінансів, товарів, клієнтів і реклами</p>
+    </div>
+
+    {% if error %}
+    <div class="sync-notice sync-notice--error" role="alert">
+        {{ ui_icon('warning') }}
+        <div>{{ error }}</div>
+    </div>
+    {% endif %}
+
+    {# —— Транзакції (головна картка) —— #}
+    <section class="sync-hero-card">
+        <div class="sync-hero-top">
+            <div class="sync-hero-icon" aria-hidden="true">{{ ui_icon('money') }}</div>
+            <div class="sync-hero-copy">
+                <h2 class="sync-hero-title">Транзакції та баланси</h2>
+                <p class="sync-hero-desc">Завантаження з Monobank і NovaPay за обраний період. Імпорт іде у фоні і не блокує сайт.</p>
+            </div>
+        </div>
+
+        <form method="post" action="/sync" class="sync-hero-form">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+            <div class="sync-period-block">
+                <label class="filter-label">{{ ui_icon('calendar') }} Період синхронізації</label>
+                <div class="period-buttons sync-period-buttons">
+                    <label class="period-btn-wrap">
+                        <input type="radio" name="period" value="day" class="sync-period-radio">
+                        <span class="period-btn">1 день</span>
+                    </label>
+                    <label class="period-btn-wrap">
+                        <input type="radio" name="period" value="week" class="sync-period-radio">
+                        <span class="period-btn">Тиждень</span>
+                    </label>
+                    <label class="period-btn-wrap">
+                        <input type="radio" name="period" value="month" class="sync-period-radio" checked>
+                        <span class="period-btn">Місяць</span>
+                    </label>
+                    <label class="period-btn-wrap">
+                        <input type="radio" name="period" value="quarter" class="sync-period-radio">
+                        <span class="period-btn">Податковий квартал</span>
+                    </label>
+                    <label class="period-btn-wrap">
+                        <input type="radio" name="period" value="year" class="sync-period-radio">
+                        <span class="period-btn">З початку року</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="sync-hint">
+                {{ ui_icon('info') }}
+                <p>
+                    Для ліміту ФОП обирайте <strong>З початку року</strong>.
+                    Після запуску одразу поверне на дашборд.
+                    Monobank: 1 запит/хв — рік може зайняти час.
+                </p>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg sync-cta">
+                {{ ui_icon('play') }} Запустити синхронізацію транзакцій
+            </button>
+        </form>
+    </section>
+
+    {# —— Інші завдання —— #}
+    <div class="sync-jobs-grid">
+
+        <article class="sync-job-card">
+            <div class="sync-job-head">
+                <div class="sync-job-icon">{{ ui_icon('box') }}</div>
+                <div>
+                    <h2 class="sync-job-title">Продукти Cosmy</h2>
+                    <span class="sync-schedule">{{ ui_icon('clock') }} Авто: 03:00 Київ</span>
+                </div>
+            </div>
+
+            {% if products_synced_ok %}
+            <div class="sync-notice sync-notice--ok">
+                {{ ui_icon('info') }}
+                <p>Синхронізацію продуктів запущено у фоні (фід, зріз продажів, аналітика, ABC). Через кілька хвилин оновіть <a href="/procurement/dashboard">дашборд товарів</a>.</p>
+            </div>
+            {% endif %}
+            {% if analytics_calculated_ok %}
+            <div class="sync-notice sync-notice--ok">
+                {{ ui_icon('info') }}
+                <p>Перерахунок аналітики та ABC запущено у фоні. Через кілька хвилин оновіть <a href="/procurement/dashboard">дашборд товарів</a>.</p>
+            </div>
+            {% endif %}
+
+            <p class="sync-job-desc">
+                Фід <code>analytics_bot.xml</code>. Ручний запуск оновлює каталог поза нічним розкладом.
+            </p>
+
+            <div class="sync-job-actions">
+                <form method="post" action="/products/sync">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <button type="submit" class="btn btn-secondary">
+                        {{ ui_icon('refresh') }} Оновити продукти
+                    </button>
+                </form>
+                <form method="post" action="/products/calculate-analytics">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <button type="submit" class="btn btn-primary">
+                        {{ ui_icon('chart') }} Розрахувати аналітику
+                    </button>
+                </form>
+            </div>
+
+            <ul class="sync-job-meta">
+                <li><strong>Оновити продукти</strong> — повний цикл: фід + зріз продажів + аналітика + ABC</li>
+                <li><strong>Розрахувати аналітику</strong> — лише статуси і ABC без фіду (швидше)</li>
+            </ul>
+        </article>
+
+        <article class="sync-job-card">
+            <div class="sync-job-head">
+                <div class="sync-job-icon">{{ ui_icon('users') }}</div>
+                <div>
+                    <h2 class="sync-job-title">Клієнти Cosmy</h2>
+                    <span class="sync-schedule">{{ ui_icon('clock') }} Авто: 05:00 Київ</span>
+                </div>
+            </div>
+
+            {% if clients_synced_ok %}
+            <div class="sync-notice sync-notice--ok">
+                {{ ui_icon('info') }}
+                <p>Синхронізацію клієнтів запущено у фоні з <code>analytics_customer.xml</code>. Через кілька хвилин оновіть <a href="/clients">список клієнтів</a>.</p>
+            </div>
+            {% endif %}
+
+            <p class="sync-job-desc">
+                Фід <code>analytics_customer.xml</code> оновлюється щодня. Тут — ручне завантаження.
+            </p>
+
+            <div class="sync-job-actions">
+                <form method="post" action="/clients/sync">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <button type="submit" class="btn btn-secondary">
+                        {{ ui_icon('refresh') }} Синхронізувати клієнтів
+                    </button>
+                </form>
+            </div>
+        </article>
+
+        <article class="sync-job-card">
+            <div class="sync-job-head">
+                <div class="sync-job-icon">{{ ui_icon('trend') }}</div>
+                <div>
+                    <h2 class="sync-job-title">Рекламна аналітика</h2>
+                    <span class="sync-schedule">{{ ui_icon('clock') }} Авто: 02:00 Київ</span>
+                </div>
+            </div>
+
+            {% if ad_sync_started %}
+            <div class="sync-notice sync-notice--ok">
+                {{ ui_icon('info') }}
+                <p>Синхронізацію запущено у фоні: Google Ads, Meta Ads, Search Console, GA4 та CRM-фід. Через кілька хвилин оновіть <a href="/clients/marketing-report">дашборд реклами</a>.</p>
+            </div>
+            {% endif %}
+
+            <p class="sync-job-desc">
+                Кеш рекламних API (поточний і попередній місяць). Можна оновити вручну поза розкладом.
+            </p>
+
+            <div class="sync-job-actions">
+                <form method="post" action="/mkt-report/sync">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <button type="submit" class="btn btn-secondary">
+                        {{ ui_icon('refresh') }} Синхронізувати рекламу
+                    </button>
+                </form>
+            </div>
+        </article>
+
+    </div>
+</div>
+
+<style>
+.sync-page {
+    max-width: 960px;
+}
+.sync-page-header {
+    margin-bottom: 1.35rem;
+}
+.sync-page-header .subtitle {
+    margin-top: 0.35rem;
+    max-width: 42rem;
+}
+
+.sync-hero-card,
+.sync-job-card {
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+    border-radius: var(--radius, 20px);
+    box-shadow: var(--shadow, 0 1px 2px rgba(24, 24, 27, 0.04));
+}
+
+.sync-hero-card {
+    padding: 1.35rem 1.4rem 1.45rem;
+    margin-bottom: 1.15rem;
+}
+.sync-hero-top {
+    display: flex;
+    gap: 0.95rem;
+    align-items: flex-start;
+    margin-bottom: 1.15rem;
+}
+.sync-hero-icon,
+.sync-job-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 14px;
+    background: var(--accent-soft, #dbeafe);
+    color: var(--accent-ink, #1e40af);
+    flex-shrink: 0;
+}
+.sync-hero-icon .ui-icon,
+.sync-job-icon .ui-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+.sync-hero-title {
+    margin: 0 0 0.25rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text, #18181b);
+}
+.sync-hero-desc {
+    margin: 0;
+    color: var(--text-soft, #3f3f46);
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+.sync-period-block {
+    margin-bottom: 0.95rem;
+}
+.sync-period-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+.sync-hint {
+    display: flex;
+    gap: 0.55rem;
+    align-items: flex-start;
+    padding: 0.75rem 0.9rem;
+    margin-bottom: 1.05rem;
+    background: var(--bg-muted, #f4f4f5);
+    border-radius: var(--radius-sm, 14px);
+    border: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+}
+.sync-hint .ui-icon {
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.15rem;
+    color: var(--accent, #2563eb);
+    flex-shrink: 0;
+}
+.sync-hint p {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.45;
+    color: var(--text-soft, #3f3f46);
+}
+.sync-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.sync-cta .ui-icon {
+    width: 1rem;
+    height: 1rem;
+}
+
+.sync-jobs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+}
+.sync-job-card {
+    padding: 1.15rem 1.2rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.sync-job-head {
+    display: flex;
+    gap: 0.8rem;
+    align-items: flex-start;
+    margin-bottom: 0.85rem;
+}
+.sync-job-title {
+    margin: 0 0 0.3rem;
+    font-size: 1.02rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: var(--text, #18181b);
+}
+.sync-schedule {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent-ink, #1e40af);
+    background: var(--accent-soft, #dbeafe);
+    border-radius: var(--radius-pill, 999px);
+    padding: 0.2rem 0.55rem;
+}
+.sync-schedule .ui-icon {
+    width: 0.8rem;
+    height: 0.8rem;
+}
+.sync-job-desc {
+    margin: 0 0 1rem;
+    font-size: 0.86rem;
+    line-height: 1.45;
+    color: var(--text-soft, #3f3f46);
+}
+.sync-job-desc code,
+.sync-notice code {
+    font-size: 0.8em;
+    padding: 0.05em 0.35em;
+    border-radius: 6px;
+    background: var(--bg-muted, #f4f4f5);
+    border: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+}
+.sync-job-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: auto;
+}
+.sync-job-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.sync-job-actions .btn .ui-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+}
+.sync-job-meta {
+    margin: 0.9rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.35rem;
+}
+.sync-job-meta li {
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: var(--text-muted, #71717a);
+    padding-left: 0.7rem;
+    position: relative;
+}
+.sync-job-meta li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.45em;
+    width: 0.28rem;
+    height: 0.28rem;
+    border-radius: 50%;
+    background: var(--accent-light, #3b82f6);
+}
+.sync-job-meta strong {
+    color: var(--text-soft, #3f3f46);
+}
+
+.sync-notice {
+    display: flex;
+    gap: 0.55rem;
+    align-items: flex-start;
+    padding: 0.75rem 0.9rem;
+    margin-bottom: 0.85rem;
+    border-radius: var(--radius-sm, 14px);
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+.sync-notice .ui-icon {
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.12rem;
+    flex-shrink: 0;
+}
+.sync-notice p {
+    margin: 0;
+}
+.sync-notice a {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.sync-notice--ok {
+    background: var(--accent-soft, #dbeafe);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    color: var(--accent-ink, #1e40af);
+}
+.sync-notice--error {
+    background: #fef2f2;
+    border: 1px solid rgba(220, 38, 38, 0.22);
+    color: #991b1b;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 640px) {
+    .sync-hero-card,
+    .sync-job-card {
+        padding: 1.05rem;
+    }
+    .sync-job-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .sync-cta {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+{% endblock %}

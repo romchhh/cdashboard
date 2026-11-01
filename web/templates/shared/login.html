@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вхід — Cosmy Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=20261012m">
+    <link rel="stylesheet" href="/static/style.css?v=20261012m">
+</head>
+<body class="login-page">
+    <div class="login-box">
+        <h1>
+            <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Cosmy Agent
+        </h1>
+        <p class="login-sub">Вхід до панелі</p>
+        {% if error %}
+        <p class="error">{{ error }}</p>
+        {% endif %}
+        <form method="post" action="/login" class="login-form" autocomplete="off">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label>
+                Логін
+                <input type="text" name="username" required autofocus placeholder="логін" autocomplete="off">
+            </label>
+            <label>
+                Пароль
+                <input type="password" name="password" required placeholder="••••••••" autocomplete="off">
+            </label>
+            <label class="login-remember">
+                <input type="checkbox" name="remember_me" value="1"> Запамʼятати мене
+            </label>
+            <button type="submit">Увійти</button>
+        </form>
+    </div>
+</body>
+</html>

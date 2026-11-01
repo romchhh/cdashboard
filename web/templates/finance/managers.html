@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Менеджери — Cosmy Agent{% endblock %}
+{% block mobile_title %}Менеджери{% endblock %}
+
+{% block head %}
+<style>
+.mgr-team-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 1rem 1.1rem 1.1rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(15,23,42,.05);
+}
+.mgr-team-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.mgr-team-head h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #0f172a; }
+.mgr-period-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.mgr-period-tabs a {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  background: #f8fafc;
+}
+.mgr-period-tabs a.is-active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+.mgr-team-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.mgr-team-kpi {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.mgr-team-kpi .v { font-size: 1.25rem; font-weight: 800; color: #0f172a; }
+.mgr-team-kpi .k { font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+.mgr-team-table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid #e2e8f0; }
+.mgr-team-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; min-width: 640px; }
+.mgr-team-table th, .mgr-team-table td { padding: 9px 10px; text-align: left; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.mgr-team-table th { background: #f8fafc; color: #475569; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .05em; }
+.mgr-team-table tbody tr:hover { background: #f8fafc; }
+.mgr-team-table tbody tr:last-child td { border-bottom: none; }
+.mgr-team-table .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.mgr-team-table .num--hot { color: #1d4ed8; }
+.mgr-team-hint { font-size: 0.84rem; color: #64748b; margin: 0 0 10px; line-height: 1.45; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>
+        <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        Менеджери
+    </h1>
+    <p class="subtitle">Керування логінами веб-панелі та перегляд CRM-активності: хто з ким працює і які дії виконує</p>
+</div>
+
+<div class="form-actions-row" style="margin-bottom: 1.5rem;">
+    <a href="/managers/add" class="btn btn-primary">➕ Додати менеджера</a>
+</div>
+
+<div class="mgr-team-card">
+    <div class="mgr-team-head">
+        <h2>CRM-активність команди · {{ period_label }}</h2>
+        <nav class="mgr-period-tabs" aria-label="Період статистики">
+            {% for key, label in period_choices %}
+            <a href="/managers?period={{ key }}" class="{% if period_key == key %}is-active{% endif %}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+    </div>
+    <p class="mgr-team-hint">
+        Портфель — поточний стан призначених клієнтів. «В роботі» / «Прокомунік.» — скільки з них у відповідному статусі зараз.
+        «Закрито» та «Усього дій» — за обраний період у журналі CRM. Деталі — у «Профіль CRM».
+    </p>
+    <div class="mgr-team-kpis">
+        <div class="mgr-team-kpi"><div class="v">{{ team_totals.assigned }}</div><div class="k">Призначено клієнтів</div></div>
+        <div class="mgr-team-kpi"><div class="v">{{ team_totals.in_progress }}</div><div class="k">В роботі (зараз)</div></div>
+        <div class="mgr-team-kpi"><div class="v">{{ team_totals.actions }}</div><div class="k">Дій за період</div></div>
+        <div class="mgr-team-kpi"><div class="v">{{ team_totals.closures }}</div><div class="k">Закриттів за період</div></div>
+    </div>
+    {% if team_stats %}
+    <div class="mgr-team-table-wrap">
+        <table class="mgr-team-table">
+            <thead>
+                <tr>
+                    <th>Менеджер</th>
+                    <th class="num">В роботі</th>
+                    <th class="num">Прокомунік.</th>
+                    <th class="num">Закрито</th>
+                    <th class="num">Усього дій</th>
+                    <th>Остання дія</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in team_stats %}
+                {% set p = row.portfolio %}
+                {% set a = row.actions %}
+                <tr>
+                    <td>
+                        <strong>{{ row.display|e }}</strong>
+                        <div class="small-text" style="color:#64748b;">{{ row.username|e }}{% if row.role == 'admin' %} · адмін{% endif %}</div>
+                    </td>
+                    <td class="num">{{ p.status_counts.in_progress }}</td>
+                    <td class="num">{{ p.status_counts.communicated }}</td>
+                    <td class="num num--hot">{{ a.closures }}</td>
+                    <td class="num"><strong>{{ a.total_actions }}</strong></td>
+                    <td>{% if a.last_action_at %}{{ a.last_action_at.strftime('%d.%m.%Y %H:%M') }}{% else %}—{% endif %}</td>
+                    <td><a href="/managers/{{ row.user_id }}/crm?period={{ period_key }}" class="btn-link">Профіль CRM</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="mgr-team-hint">Немає користувачів для статистики.</p>
+    {% endif %}
+</div>
+
+<div class="report-detail-card">
+    <h2 style="margin:0 0 12px;font-size:1rem;">Облікові записи</h2>
+    <table class="tx-table">
+        <thead>
+            <tr>
+                <th>Логін</th>
+                <th>Ім'я (в звітах)</th>
+                <th>Роль</th>
+                <th>Доступ</th>
+                <th>Дії</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td><strong>{{ u.username }}</strong></td>
+                <td>{{ u.display_name or '—' }}</td>
+                <td>
+                    {% if u.role == 'admin' %}
+                    <span class="source-badge monobank">Адмін</span>
+                    {% else %}
+                    <span class="source-badge novapay">Менеджер</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if u.role == 'admin' %}
+                    <span class="muted">усі розділи</span>
+                    {% else %}
+                    {% if u.access_finance %}<span class="source-badge monobank" title="Фінанси">Фін</span>{% endif %}
+                    {% if u.access_marketing %}<span class="source-badge novapay" title="Маркетинг">Марк</span>{% endif %}
+                    {% if u.access_advertising %}<span class="source-badge cash" title="Реклама">Рекл</span>{% endif %}
+                    {% if u.access_warehouse %}<span class="source-badge cash" title="Склад">Склад</span>{% endif %}
+                    {% if not u.access_finance and not u.access_marketing and not u.access_warehouse and not u.access_advertising %}
+                    <span class="muted">—</span>
+                    {% endif %}
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/managers/{{ u.id }}/crm?period={{ period_key }}" class="btn-link" title="Профіль менеджера: клієнти, канали, журнал дій">Профіль CRM</a>
+                    <a href="/managers/{{ u.id }}/edit" class="btn-link">Змінити</a>
+                    {% if u.role != 'admin' %}
+                    <form method="post" action="/managers/{{ u.id }}/delete" style="display: inline;" onsubmit="return confirm('Видалити цього користувача?');">
+                        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                        <button type="submit" class="btn-link" style="color: var(--danger);">Видалити</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if not users %}
+    <p class="empty-state">Немає користувачів у БД. Увійдіть через логін/пароль з конфігу, потім додайте менеджерів тут.</p>
+    {% endif %}
+</div>
+{% endblock %}

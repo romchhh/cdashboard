@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% from "procurement/_icons.html" import ui_icon %}
+{% block title %}Парсер — пошук — Cosmy Agent{% endblock %}
+{% block mobile_title %}Пошук{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/css/parser.css?v=20261012s">
+{% endblock %}
+{% block content %}
+<div class="parser-shell">
+    <div class="page-header">
+        <h1 class="dash-title-with-icon">{{ ui_icon('search', 'dash-title-icon-svg') }}<span>Пошук одного товару</span></h1>
+        <p class="subtitle">Перевірка позиції по всіх магазинах. Пошук іде у фоні: сторінку можна оновити, адмінка не завмирає.</p>
+    </div>
+
+    {% include "parser/_nav.html" %}
+
+    <div class="parser-split">
+        <section class="parser-panel">
+            <h2>Що шукати</h2>
+            <p class="panel-lead">Краще вказувати бренд + назву + об’єм (наприклад мл) — менше помилкових збігів.</p>
+            <form id="parserSearchForm" class="parser-search-row">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <label class="parser-field">
+                    <span class="label">Назва товару</span>
+                    <input type="text" name="query" id="parserQuery" placeholder="SeSDerma C-Vit Cream 50 мл" required autocomplete="off">
+                    <span class="help">Текст, який піде в пошук магазинів</span>
+                </label>
+                <label class="parser-field">
+                    <span class="label">Наша ціна, ₴</span>
+                    <input type="text" name="our_price" id="parserOurPrice" inputmode="decimal" placeholder="необов’язково">
+                    <span class="help">Щоб порахувати позицію на ринку</span>
+                </label>
+                <button type="submit" class="btn btn-primary" id="parserSearchBtn">{{ ui_icon('play') }} Шукати</button>
+            </form>
+            <p class="parser-muted" id="parserStatusLine" style="margin-top:.85rem">Введіть запит і натисніть «Шукати».</p>
+            <div class="parser-kpi" id="parserSummary" hidden></div>
+            <div class="parser-result-list" id="parserResults"></div>
+        </section>
+
+        <section class="parser-panel">
+            <div class="parser-toolbar" style="justify-content:space-between">
+                <div>
+                    <h2 style="margin:0">Історія</h2>
+                    <p class="panel-lead" style="margin:0.25rem 0 0">Останні одиночні запити</p>
+                </div>
+                {% if history %}
+                <form method="post" action="/parser/api/history/clear">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">Очистити</button>
+                </form>
+                {% endif %}
+            </div>
+            <div class="parser-history" id="parserHistoryList">
+                {% if history %}
+                    {% for item in history %}
+                    <button type="button" data-id="{{ item.id }}">
+                        <strong>{{ item.query }}</strong>
+                        <span>{{ format_parsed_at(item.created_at) }}{% if item.found %} · знайдено {{ item.found }}{% endif %}</span>
+                    </button>
+                    {% endfor %}
+                {% else %}
+                    <p class="parser-muted">Поки порожньо.</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</div>
+<style>.btn-sm{padding:.35rem .7rem;font-size:.8rem}</style>
+<script>
+(function () {
+  const form = document.getElementById('parserSearchForm');
+  const statusLine = document.getElementById('parserStatusLine');
+  const summary = document.getElementById('parserSummary');
+  const results = document.getElementById('parserResults');
+  const historyList = document.getElementById('parserHistoryList');
+  const csrf = form.querySelector('[name=csrf_token]').value;
+
+  function money(v) {
+    if (v == null || Number.isNaN(Number(v)) || Number(v) < 10) return '—';
+    return Number(v).toLocaleString('uk-UA', { maximumFractionDigits: 0 }) + ' ₴';
+  }
+  function esc(t) {
+    return String(t || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+  }
+  function renderSummary(data) {
+    if (!data.results || !data.results.length) { summary.hidden = true; summary.innerHTML = ''; return; }
+    summary.hidden = false;
+    summary.innerHTML =
+      '<div class="kpi"><span>Знайдено</span><b>' + (data.found || 0) + ' з ' + (data.sites_total || '—') + '</b></div>' +
+      '<div class="kpi"><span>Найдешевше</span><b>' + money(data.market_min) + '</b></div>' +
+      '<div class="kpi"><span>Середня</span><b>' + money(data.market_avg) + '</b></div>' +
+      '<div class="kpi"><span>' + (data.our_price ? 'Наша позиція' : 'Найдорожче') + '</span><b>' + esc(data.position || money(data.market_max)) + '</b></div>';
+  }
+  function renderResults(data) {
+    results.innerHTML = (data.results || []).map(function (item) {
+      const photo = item.image ? '<img src="' + esc(item.image) + '" alt="">' : '<div class="ph">немає</div>';
+      return '<article class="parser-result">' + photo +
+        '<div><span class="parser-chip">' + esc(item.site) + '</span>' +
+        '<span class="parser-chip">' + Math.round((item.match || 0) * 100) + '% схожості</span>' +
+        '<h3>' + esc(item.title) + '</h3>' +
+        '<div class="meta">' + esc(item.volume || 'об’єм не вказано') +
+        (item.url ? ' · <a href="' + esc(item.url) + '" target="_blank" rel="noopener">відкрити</a>' : '') +
+        '</div></div><div class="price">' + money(item.price) + '</div></article>';
+    }).join('') || '<p class="parser-muted">Збігів не знайдено.</p>';
+  }
+  async function loadHistoryItem(id) {
+    const res = await fetch('/parser/api/history/' + id);
+    if (!res.ok) return;
+    const data = await res.json();
+    renderSummary(data); renderResults(data);
+    statusLine.textContent = data.query || '';
+    historyList.querySelectorAll('button[data-id]').forEach(function (el) {
+      el.classList.toggle('is-active', el.getAttribute('data-id') === id);
+    });
+  }
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    const btn = document.getElementById('parserSearchBtn');
+    btn.disabled = true;
+    statusLine.textContent = 'Запускаю пошук у фоні…';
+    fetch('/parser/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+      body: JSON.stringify({
+        query: document.getElementById('parserQuery').value,
+        our_price: document.getElementById('parserOurPrice').value
+      })
+    }).then(function (res) { return res.json().then(function (data) { return { ok: res.ok, status: res.status, data: data }; }); })
+      .then(function (pack) {
+        if (!pack.ok && pack.status !== 409) throw new Error(pack.data.error || 'Помилка пошуку');
+        watchSearch(pack.data.id);
+      })
+      .catch(function (e) {
+        statusLine.textContent = e.message || 'Помилка пошуку';
+        btn.disabled = false;
+      });
+  });
+  function watchSearch(id) {
+    const btn = document.getElementById('parserSearchBtn');
+    btn.disabled = true;
+    function tick() {
+      fetch('/parser/api/search/status').then(function (res) { return res.json(); }).then(function (data) {
+        if (id && data.id && data.id !== id) return;
+        if (data.results) { renderSummary(data); renderResults(data); }
+        const doneN = data.sites_done || ((data.results || []).length + (data.misses || []).length);
+        if (data.state === 'running') {
+          statusLine.textContent = 'Шукаю у фоні… ' + (data.found || 0) + ' цін уже є' + (doneN ? ' · магазинів ' + doneN : '');
+          setTimeout(tick, 1000);
+          return;
+        }
+        btn.disabled = false;
+        if (data.state === 'error') {
+          statusLine.textContent = data.error || 'Пошук зупинився';
+          return;
+        }
+        renderSummary(data); renderResults(data);
+        statusLine.textContent = 'Готово: ' + (data.found || 0) + ' збігів';
+        if (data.history) {
+          historyList.innerHTML = data.history.map(function (item) {
+            return '<button type="button" data-id="' + esc(item.id) + '"><strong>' + esc(item.query) +
+              '</strong><span>' + esc(item.created_at || '') + (item.found ? ' · знайдено ' + item.found : '') + '</span></button>';
+          }).join('');
+        }
+      }).catch(function () {
+        btn.disabled = false;
+        statusLine.textContent = 'Не вдалося прочитати статус пошуку';
+      });
+    }
+    tick();
+  }
+  fetch('/parser/api/search/status').then(function (res) { return res.json(); }).then(function (data) {
+    if (data.state === 'running') {
+      if (data.query) document.getElementById('parserQuery').value = data.query;
+      watchSearch(data.id);
+    }
+  }).catch(function () {});
+  historyList.addEventListener('click', function (ev) {
+    const btn = ev.target.closest('button[data-id]');
+    if (btn) loadHistoryItem(btn.getAttribute('data-id'));
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Відписані — Cosmy Agent{% endblock %}
+{% block mobile_title %}Відписані{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/mailings.css">
+{% endblock %}
+
+{% block content %}
+<div class="mailings-page">
+  {% include "clients/clients_nav.html" %}
+
+  <div class="mailings-head">
+    <div class="mailings-head-main">
+      <h1>Відписані від розсилок</h1>
+      <p class="mailings-sub">Ці адреси не отримують маркетингові листи (ручні розсилки, promo-signup, покинутий кошик тощо). Транзакційні листи про замовлення не блокуються.</p>
+    </div>
+    <div class="mailings-head-actions">
+      <a href="/clients/mailings" class="btn-mini">← До розсилок</a>
+    </div>
+  </div>
+
+  {% if notice and msg %}
+  <div class="mail-flash-wrap">
+    <div class="mail-flash {{ 'ok' if notice == 'ok' else 'error' }}" role="status">
+      <span>{{ msg }}</span>
+      <button type="button" class="mail-flash-close" aria-label="Закрити">×</button>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="mailings-grid">
+    <section class="mail-card">
+      <h2>Усього в списку</h2>
+      <p class="mail-kpi"><strong>{{ total_all }}</strong> адрес</p>
+    </section>
+    <section class="mail-card">
+      <h2>Додати вручну</h2>
+      <form method="post" action="/clients/mailings/unsubscribes/add" class="mail-stats-filters" style="align-items:flex-end;">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <div class="mail-field" style="min-width:220px;">
+          <label for="unsubEmail">Email</label>
+          <input type="email" id="unsubEmail" name="email" required placeholder="client@example.com">
+        </div>
+        <div class="mail-field" style="min-width:220px;">
+          <label for="unsubNote">Примітка</label>
+          <input type="text" id="unsubNote" name="note" placeholder="Запит клієнта, дзвінок…">
+        </div>
+        <button type="submit" class="btn-mini primary">Додати</button>
+      </form>
+    </section>
+  </div>
+
+  <section class="mail-card" style="margin-top:16px;">
+    <h2>Список</h2>
+
+    <form method="get" action="/clients/mailings/unsubscribes" class="mail-stats-filters" style="margin-bottom:12px;">
+      <div class="mail-field" style="min-width:240px;">
+        <label for="unsubQ">Пошук</label>
+        <input type="text" id="unsubQ" name="q" value="{{ q }}" placeholder="email або примітка">
+      </div>
+      <button type="submit" class="btn-mini primary">Знайти</button>
+    </form>
+
+    {% if rows %}
+    <div class="mail-stats-table-wrap">
+      <table class="mail-stats-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Джерело</th>
+            <th>Примітка</th>
+            <th>Дата</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td><strong>{{ row.email }}</strong></td>
+            <td>{{ source_labels.get(row.source, row.source) }}</td>
+            <td>{{ row.note or '—' }}</td>
+            <td>{{ row.created_at.strftime('%d.%m.%Y %H:%M') if row.created_at else '—' }}</td>
+            <td>
+              <form method="post" action="/clients/mailings/unsubscribes/{{ row.id }}/remove" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <button type="submit" class="btn-mini" title="Дозволити розсилки знову">Видалити</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pages > 1 %}
+    <div class="mail-stats-pagination" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+      {% if page > 1 %}
+      <a class="btn-mini" href="/clients/mailings/unsubscribes?page={{ page - 1 }}{% if q %}&q={{ q|urlencode }}{% endif %}">← Назад</a>
+      {% endif %}
+      <span class="mail-field-hint">Сторінка {{ page }} з {{ pages }} (знайдено {{ total_filtered }})</span>
+      {% if page < pages %}
+      <a class="btn-mini" href="/clients/mailings/unsubscribes?page={{ page + 1 }}{% if q %}&q={{ q|urlencode }}{% endif %}">Далі →</a>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="mail-field-hint">Список порожній{% if q %} за запитом «{{ q }}»{% endif %}.</p>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+document.querySelectorAll('.mail-flash-close').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var wrap = btn.closest('.mail-flash-wrap');
+    if (wrap) wrap.remove();
+  });
+});
+</script>
+{% endblock %}

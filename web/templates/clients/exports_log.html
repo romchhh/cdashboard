@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Журнал експортів — Cosmy Agent{% endblock %}
+{% block mobile_title %}Журнал експортів{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/mailings.css">
+<style>
+.exports-log-table-wrap { overflow-x: auto; margin-top: 1rem; }
+.exports-log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.exports-log-table th,
+.exports-log-table td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+.exports-log-table th { background: #f8fafc; font-weight: 600; color: #475569; white-space: nowrap; }
+.exports-log-table td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.exports-log-filters { max-width: 520px; word-break: break-word; color: #64748b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mailings-page">
+  {% include "clients/clients_nav.html" %}
+
+  <div class="mailings-head">
+    <div class="mailings-head-main">
+      <h1>Журнал експортів</h1>
+      <p class="mailings-sub">Усі завантаження бази клієнтів (CSV/Excel): хто, коли, який файл і з якими фільтрами.</p>
+    </div>
+    <div class="mailings-head-actions">
+      <a href="/clients" class="btn-mini">← До списку клієнтів</a>
+    </div>
+  </div>
+
+  <section class="mail-card">
+    <h2>Останні завантаження</h2>
+    {% if not export_logs %}
+    <p class="muted">Записів поки немає.</p>
+    {% else %}
+    <div class="exports-log-table-wrap">
+      <table class="exports-log-table">
+        <thead>
+          <tr>
+            <th>Дата і час (UTC)</th>
+            <th>Користувач</th>
+            <th>Тип бази</th>
+            <th>Формат</th>
+            <th>Рядків</th>
+            <th>Email у файлі</th>
+            <th>Файл</th>
+            <th>Фільтри / параметри</th>
+            <th>IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in export_logs %}
+          <tr>
+            <td class="mono">{{ row.exported_at.strftime('%Y-%m-%d %H:%M:%S') if row.exported_at else '—' }}</td>
+            <td>
+              {{ row.display_name or row.username }}
+              {% if row.role == 'admin' %}<span class="muted">(адмін)</span>{% endif %}
+            </td>
+            <td>{{ export_kind_labels.get(row.export_kind, row.export_kind) }}{% if row.client_id %} #{{ row.client_id }}{% endif %}</td>
+            <td>{{ row.file_format|upper }}</td>
+            <td>{% if row.row_count is not none %}{{ row.row_count }}{% else %}—{% endif %}</td>
+            <td>{% if row.include_email %}так{% else %}ні{% endif %}</td>
+            <td class="mono">{{ row.filename }}</td>
+            <td class="exports-log-filters">{{ row.filters_summary or '—' }}</td>
+            <td class="mono">{{ row.client_ip or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

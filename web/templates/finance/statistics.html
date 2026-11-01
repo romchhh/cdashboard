@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Статистика — Cosmy Agent{% endblock %}
+{% block mobile_title %}Статистика{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>
+        <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        Статистика
+    </h1>
+    <p class="subtitle">Підсумки та розбивка витрат за обраний період</p>
+</div>
+
+<!-- Period filter -->
+<div class="dashboard-period-form">
+    <div class="period-quick">
+        <span class="period-label">Період:</span>
+        <a href="/statistics?period=today" class="period-btn {{ 'active' if period == 'today' and not date_single_str and not date_from_str else '' }}">Сьогодні</a>
+        <a href="/statistics?period=yesterday" class="period-btn {{ 'active' if period == 'yesterday' and not date_from_str else '' }}">Вчора</a>
+        <a href="/statistics?period=week" class="period-btn {{ 'active' if period == 'week' and not date_from_str else '' }}">Тиждень</a>
+        <a href="/statistics?period=month" class="period-btn {{ 'active' if period == 'month' and not date_single_str and not date_from_str else '' }}">Місяць</a>
+        <a href="/statistics?period=quarter" class="period-btn {{ 'active' if period == 'quarter' and not date_from_str else '' }}">Квартал</a>
+        <a href="/statistics?period=year" class="period-btn {{ 'active' if period == 'year' and not date_from_str else '' }}">Рік</a>
+    </div>
+    <form method="get" action="/statistics" class="period-custom">
+        <label>Один день:</label>
+        <input type="date" name="date_single_str" value="{{ date_single_str }}" class="date-input-single" />
+        <label>З — По:</label>
+        <div class="date-inputs">
+            <input type="date" name="date_from_str" value="{{ date_from_str }}" />
+            <span class="date-sep">—</span>
+            <input type="date" name="date_to_str" value="{{ date_to_str }}" />
+        </div>
+        <button type="submit" class="btn-action">Застосувати</button>
+    </form>
+</div>
+
+<!-- Загальні витрати (тільки для адмінів) -->
+{% if request.state.role != 'manager' %}
+<div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+    <div class="kpi-card kpi-expense">
+        <div class="kpi-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/>
+            </svg>
+        </div>
+        <div class="kpi-content">
+            <div class="kpi-label">Загальні витрати за період</div>
+            <div class="kpi-value">{{ (pl_period.expense|abs)|fmt_ua }} ₴</div>
+            <div class="kpi-detail">{{ period_name }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if expense_chart_daily and expense_chart_daily|length > 0 %}
+<div class="dashboard-card report-chart-card">
+    <div class="card-header">
+        <h2 class="card-title">
+            <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
+            </svg>
+            Витрати за період
+        </h2>
+        <span class="card-subtitle">{{ period_name }}</span>
+    </div>
+    <div class="card-content">
+        <div class="report-chart-wrap">
+            <canvas id="expenseChart" width="800" height="320" data-chart-data="{{ expense_chart_json|e }}"></canvas>
+        </div>
+        <div class="report-chart-legend">
+            <span class="report-chart-legend-item expense"><span class="legend-dot"></span> Витрати</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Charts & Analytics Section -->
+<div class="dashboard-grid">
+    <!-- Top Expense Categories (by period, desc; first 10 visible, "Показати всі" to expand) -->
+    <div class="dashboard-card expenses-card">
+        <div class="card-header">
+            <h2 class="card-title">
+                <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                Категорії витрат за період
+            </h2>
+            <span class="card-subtitle">{{ period_name }}</span>
+        </div>
+        <div class="card-content">
+            {% if top_expense_categories %}
+            {% set visible_expenses = [] %}
+            {% for cat in top_expense_categories %}
+                {% if not (request.state.role == 'manager' and cash_category_ids and cat.id in cash_category_ids) %}
+                    {% set _ = visible_expenses.append(cat) %}
+                {% endif %}
+            {% endfor %}
+            {% set total_expenses = visible_expenses|sum(attribute='amount') %}
+            {% set max_amount = top_expense_categories[0].amount %}
+            <div class="expense-list" id="expense-list-all">
+                {% for cat in visible_expenses %}
+                {% set pct = (cat.amount / max_amount * 100)|round(1) if max_amount and max_amount > 0 else 0 %}
+                {% set pct_total = (cat.amount / total_expenses * 100)|round(1) if total_expenses and total_expenses > 0 else 0 %}
+                {% set tx_url = '/transactions?category_id=' ~ cat.id ~ '&date_from_str=' ~ date_from.strftime('%Y-%m-%d') ~ '&date_to_str=' ~ date_to.strftime('%Y-%m-%d') ~ '&tx_type=expense' %}
+                <a href="{{ tx_url }}" class="expense-item {{ 'expense-item-extra' if loop.index > 10 else '' }}" data-index="{{ loop.index }}">
+                    <div class="expense-info">
+                        <span class="expense-name">{{ cat.name }}</span>
+                        <span class="expense-amount">{{ cat.amount|fmt_ua }} ₴ <span class="expense-pct">({{ pct_total }}%)</span></span>
+                    </div>
+                    <div class="expense-bar">
+                        <div class="expense-bar-fill" style="width: {{ pct }}%"></div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% if visible_expenses|length > 10 %}
+            <div class="expense-toggle-wrap">
+                <button type="button" class="btn-link expense-toggle-btn" id="expense-toggle-btn" data-expanded="false">
+                    Показати всі ({{ visible_expenses|length }} категорій)
+                </button>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="empty-state">
+                <p>Немає даних про витрати за обраний період</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if pending_count > 0 %}
+<div class="alert" style="background: rgba(251, 191, 36, 0.12); color: #d97706; border: 1px solid rgba(251, 191, 36, 0.3); padding: 1rem 1.25rem; border-radius: 8px; margin-top: 1.5rem;">
+    <strong>{{ pending_count }}</strong> транзакцій потребують підтвердження. <a href="/pending" class="btn-link">Переглянути →</a>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const toggleBtn = document.getElementById('expense-toggle-btn');
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', function() {
+            const isExpanded = this.getAttribute('data-expanded') === 'true';
+            const extraItems = document.querySelectorAll('.expense-item-extra');
+            extraItems.forEach(item => {
+                item.style.display = isExpanded ? 'none' : 'flex';
+            });
+            this.setAttribute('data-expanded', !isExpanded);
+            this.textContent = isExpanded 
+                ? `Показати всі ({{ top_expense_categories|length }} категорій)`
+                : 'Сховати';
+        });
+    }
+
+    const chartCanvas = document.getElementById('expenseChart');
+    if (chartCanvas && typeof Chart !== 'undefined') {
+        const dataStr = chartCanvas.getAttribute('data-chart-data');
+        if (dataStr && dataStr !== '[]') {
+            try {
+                const data = JSON.parse(dataStr);
+                if (data && data.length) {
+                    new Chart(chartCanvas.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: data.map(d => d.label || d.date),
+                            datasets: [{
+                                label: 'Витрати',
+                                data: data.map(d => d.expense || 0),
+                                borderColor: '#ef4444',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                fill: true,
+                                tension: 0.3
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        callback: function(v) {
+                                            return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(0);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn('Expense chart data parse error:', e);
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,1511 @@
+{% extends "base.html" %}
+{% block title %}Клієнти — дашборд — Cosmy Agent{% endblock %}
+{% block mobile_title %}Клієнти{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+/* Лише дашборд клієнтів — без procurement_dashboard, щоб не підхоплювалися чужі відступи */
+.clients-dash {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 0 12px 2.5rem;
+    box-sizing: border-box;
+}
+.clients-dash .dash-hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 1.35rem;
+}
+.clients-dash .dash-hero .dashboard-title { margin: 0; font-size: 1.6rem; letter-spacing: -0.02em; line-height: 1.2; }
+.clients-dash .dash-hero .dashboard-subtitle { margin: 6px 0 0; font-size: 0.95rem; color: #64748b; line-height: 1.45; }
+.clients-dash .dash-meta { font-size: 13px; color: #64748b; white-space: nowrap; }
+.clients-dash .dash-meta strong { color: #334155; }
+.clients-dash .kpi-dash-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    align-items: start;
+}
+@media (min-width: 960px) {
+    .clients-dash .kpi-dash-layout {
+        grid-template-columns: minmax(260px, 0.95fr) minmax(320px, 1.25fr);
+        gap: 1.25rem;
+    }
+}
+.clients-dash .kpi-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;
+}
+.clients-dash .kpi-col .kpi-card {
+    min-width: 0;
+    width: 100%;
+}
+.clients-dash .kpi-card { align-items: flex-start; }
+.clients-dash .kpi-card .kpi-content {
+    width: 100%;
+    min-width: 0;
+}
+.clients-dash .kpi-value { word-break: break-word; overflow-wrap: anywhere; }
+.clients-dash .kpi-detail { line-height: 1.4; }
+
+/* KPI «Усього клієнтів»: смуга часток + рядки без «ламаного» flex */
+.clients-dash .kpi-clients-bar {
+    display: flex;
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 10px 0 12px;
+    background: #e2e8f0;
+    border: 1px solid #e2e8f0;
+}
+.clients-dash .kpi-clients-bar-seg {
+    min-width: 0;
+    transition: width 0.2s ease;
+}
+.clients-dash .kpi-clients-bar-seg--reg {
+    background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+.clients-dash .kpi-clients-bar-seg--guest {
+    background: linear-gradient(90deg, #cbd5e1, #94a3b8);
+}
+.clients-dash .kpi-clients-mini {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    line-height: 1.35;
+    margin-top: 8px;
+    table-layout: fixed;
+}
+.clients-dash .kpi-clients-mini th[scope="row"] {
+    text-align: left;
+    font-weight: 600;
+    color: #64748b;
+    padding: 9px 10px 9px 0;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    width: 46%;
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: normal;
+}
+.clients-dash .kpi-clients-mini td {
+    padding: 9px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+.clients-dash .kpi-clients-mini td.kpi-clients-mini-val {
+    text-align: right;
+    font-weight: 700;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    width: 30%;
+}
+.clients-dash .kpi-clients-mini td.kpi-clients-mini-pct {
+    text-align: right;
+    font-weight: 700;
+    font-size: 12px;
+    color: #475569;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    width: 24%;
+}
+.clients-dash .kpi-clients-mini tbody tr:last-child th,
+.clients-dash .kpi-clients-mini tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Середній чек: компактна таблиця замість сітки «карток» */
+.clients-dash .kpi-period-table-wrap {
+    margin-top: 6px;
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid #f1f5f9;
+    overflow: hidden;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #fff;
+}
+.clients-dash .kpi-period-table {
+    width: 100%;
+    min-width: 320px;
+    border-collapse: collapse;
+    font-size: 13px;
+    line-height: 1.35;
+    table-layout: fixed;
+}
+.clients-dash .kpi-period-table thead th {
+    text-align: left;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    padding: 8px 10px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.clients-dash .kpi-period-table thead th:first-child {
+    width: 44%;
+}
+.clients-dash .kpi-period-table thead th:nth-child(2) {
+    width: 32%;
+}
+.clients-dash .kpi-period-table thead th:nth-child(3) {
+    width: 24%;
+}
+.clients-dash .kpi-period-table thead th.kpi-period-th-num,
+.clients-dash .kpi-period-table thead th:not(:first-child) {
+    text-align: right;
+}
+.clients-dash .kpi-period-table tbody td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+    color: #334155;
+}
+.clients-dash .kpi-period-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.clients-dash .kpi-period-table .kpi-period-td-period {
+    font-weight: 600;
+    color: #475569;
+}
+.clients-dash .kpi-period-table .kpi-period-td-check {
+    text-align: right;
+    font-weight: 700;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.clients-dash .kpi-period-table .kpi-period-td-orders {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: #64748b;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.clients-dash .kpi-period-table .kpi-period-td-distinct {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: #64748b;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.clients-dash .kpi-card .kpi-period-table-wrap {
+    width: 100%;
+}
+.clients-dash .dashboard-title.dash-title-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.clients-dash .dash-title-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #6366f1;
+    line-height: 0;
+}
+.clients-dash .dash-title-icon svg {
+    width: 1.35em;
+    height: 1.35em;
+}
+
+.clients-dash .kpi-val-pct {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #64748b;
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
+}
+.clients-dash .kpi-card-sub {
+    margin: 8px 0 0;
+    font-size: 0.8125rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+.clients-dash .kpi-card-sub--stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    font-size: 0.8125rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+/* Великий блок: місяці */
+.clients-dash .monthly-hero {
+    margin-bottom: 2rem;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #c7d2fe;
+    background: linear-gradient(180deg, #eef2ff 0%, #ffffff 48%, #f8fafc 100%);
+    box-shadow: 0 4px 24px rgba(99, 102, 241, 0.08);
+}
+.clients-dash .monthly-hero-head {
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid #e0e7ff;
+    background: linear-gradient(90deg, rgba(99,102,241,0.06) 0%, transparent 55%);
+}
+.clients-dash .monthly-hero-head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #1e1b4b;
+    letter-spacing: -0.02em;
+}
+.clients-dash .monthly-hero-head-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+}
+.clients-dash .monthly-filter-active {
+    margin: 0;
+    font-size: 12px;
+    color: #4338ca;
+    line-height: 1.45;
+}
+.clients-dash .monthly-filter-active a {
+    color: #2563eb;
+    font-weight: 600;
+    margin-left: 6px;
+}
+.clients-dash .monthly-status-form {
+    padding: 10px 20px 12px;
+    border-bottom: 1px solid #e0e7ff;
+    background: #fafbff;
+}
+.clients-dash .monthly-range-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #e2e8f0;
+}
+.clients-dash .monthly-dt-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+}
+.clients-dash .monthly-dt-label input[type="date"] {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid #c7d2fe;
+    color: #1e293b;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-variant-numeric: tabular-nums;
+}
+.clients-dash .monthly-year-skip-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    margin-left: auto;
+}
+.clients-dash .monthly-year-skip-label select {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    min-width: 5.5rem;
+}
+.clients-dash .monthly-range-note {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: #b45309;
+    line-height: 1.4;
+}
+.clients-dash .monthly-hero-stats {
+    padding: 14px 20px 18px;
+    border-bottom: 1px solid #e0e7ff;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+.clients-dash .monthly-hero-stats-period {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.45;
+}
+.clients-dash .monthly-hero-stats-period strong {
+    color: #1e293b;
+    font-weight: 700;
+}
+.clients-dash .monthly-hero-stats-empty {
+    margin: 0;
+    font-size: 13px;
+    color: #64748b;
+    padding: 8px 0 4px;
+}
+.clients-dash .monthly-stats-range-hint {
+    font-size: 12px;
+    font-weight: 500;
+    color: #94a3b8;
+    margin-left: 6px;
+}
+.clients-dash .monthly-controls-empty {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.4;
+    max-width: 28rem;
+}
+.clients-dash .monthly-hero-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
+}
+.clients-dash .monthly-kpi-tile {
+    border-radius: 12px;
+    padding: 11px 12px 12px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    min-width: 0;
+}
+.clients-dash .monthly-kpi-tile-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    margin-bottom: 5px;
+    line-height: 1.3;
+}
+.clients-dash .monthly-kpi-tile-val {
+    font-size: 1.2rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    word-break: break-word;
+}
+.clients-dash .monthly-kpi-unit {
+    font-size: 0.72em;
+    font-weight: 700;
+    color: #475569;
+    margin-left: 3px;
+}
+.clients-dash .monthly-kpi-tile--total {
+    border-color: #c4b5fd;
+    background: linear-gradient(165deg, #eef2ff 0%, #fff 55%);
+}
+.clients-dash .monthly-kpi-tile--ok {
+    border-color: #86efac;
+    background: linear-gradient(165deg, #f0fdf4 0%, #fff 60%);
+}
+.clients-dash .monthly-kpi-tile--ok .monthly-kpi-tile-val {
+    color: #14532d;
+}
+.clients-dash .monthly-kpi-tile--bad {
+    border-color: #fca5a5;
+    background: linear-gradient(165deg, #fef2f2 0%, #fff 60%);
+}
+.clients-dash .monthly-kpi-tile--bad .monthly-kpi-tile-val {
+    color: #991b1b;
+}
+.clients-dash .monthly-kpi-tile--mid {
+    border-color: #cbd5e1;
+    background: linear-gradient(165deg, #f8fafc 0%, #fff 65%);
+}
+.clients-dash .monthly-kpi-tile--mid .monthly-kpi-tile-val {
+    color: #334155;
+}
+.clients-dash .monthly-kpi-tile--money .monthly-kpi-tile-val {
+    color: #047857;
+}
+.clients-dash .monthly-kpi-tile--meta .monthly-kpi-tile-val {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #334155;
+}
+.clients-dash .monthly-controls-panel {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 18px 24px;
+    padding: 14px 20px 16px;
+    background: #fafbff;
+    border-bottom: 1px solid #e0e7ff;
+}
+.clients-dash .monthly-controls-block {
+    flex: 1 1 260px;
+    min-width: 0;
+}
+.clients-dash .monthly-controls-block--narrow {
+    flex: 1 1 200px;
+    max-width: 420px;
+}
+.clients-dash .monthly-controls-block-title {
+    margin: 0 0 9px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #64748b;
+}
+.clients-dash .monthly-controls-divider {
+    width: 1px;
+    align-self: stretch;
+    min-height: 56px;
+    background: linear-gradient(180deg, transparent, #e2e8f0 12%, #e2e8f0 88%, transparent);
+    flex: 0 0 auto;
+}
+@media (max-width: 720px) {
+    .clients-dash .monthly-controls-divider {
+        display: none;
+    }
+}
+.clients-dash .monthly-detail-table-wrap {
+    margin: 0 16px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fafafa;
+    overflow: visible;
+}
+.clients-dash .monthly-detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    table-layout: fixed;
+}
+.clients-dash .monthly-detail-table th,
+.clients-dash .monthly-detail-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: left;
+    vertical-align: middle;
+}
+.clients-dash .monthly-detail-table th:first-child,
+.clients-dash .monthly-detail-table td:first-child {
+    width: 22%;
+    padding-right: 14px;
+}
+.clients-dash .monthly-detail-table th:nth-child(n + 2),
+.clients-dash .monthly-detail-table td:nth-child(n + 2) {
+    width: 19.5%;
+}
+.clients-dash .monthly-detail-table th {
+    background: #f1f5f9;
+    font-weight: 700;
+    color: #64748b;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.clients-dash .monthly-detail-table th.num,
+.clients-dash .monthly-detail-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    padding-left: 10px;
+    padding-right: 12px;
+}
+.clients-dash .monthly-detail-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.clients-dash .monthly-status-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: center;
+    min-width: 0;
+}
+.clients-dash .monthly-status-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #334155;
+    cursor: pointer;
+    user-select: none;
+}
+.clients-dash .monthly-status-item input {
+    accent-color: #4f46e5;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+.clients-dash .monthly-chart-series-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: center;
+    min-width: 0;
+}
+.clients-dash .monthly-chart-series-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    margin: 0;
+    padding: 7px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.25;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 8px;
+    border: 1px solid #c7d2fe;
+    background: #fff;
+    box-sizing: border-box;
+    transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.clients-dash .monthly-chart-series-btn.is-on {
+    border-color: #818cf8;
+    background: #eef2ff;
+}
+.clients-dash .monthly-chart-series-btn:not(.is-on) {
+    opacity: 0.5;
+    background: #f8fafc;
+}
+.clients-dash .monthly-chart-series-swatch {
+    flex-shrink: 0;
+}
+.clients-dash .monthly-chart-series-btn-label {
+    white-space: normal;
+    word-break: break-word;
+    max-width: min(220px, 42vw);
+}
+.clients-dash .monthly-status-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+.clients-dash .monthly-status-btn {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid #c7d2fe;
+    background: #fff;
+    color: #312e81;
+    cursor: pointer;
+}
+.clients-dash .monthly-status-btn:hover {
+    background: #eef2ff;
+    border-color: #a5b4fc;
+}
+.clients-dash .monthly-status-reset {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-decoration: none;
+}
+.clients-dash .monthly-status-reset:hover {
+    color: #0f172a;
+    text-decoration: underline;
+}
+.clients-dash .monthly-hero-chart {
+    padding: 12px 16px 20px;
+    background: #fff;
+}
+.clients-dash .monthly-chart-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -2px;
+    padding: 0 2px 4px;
+}
+.clients-dash .monthly-hero .monthly-chart-canvas {
+    position: relative;
+    height: min(420px, 55vh);
+    min-height: 300px;
+    min-width: max(100%, calc(var(--monthly-bar-count, 14) * var(--monthly-bar-w, 44px)));
+}
+
+/* Два пончики */
+.clients-dash .charts-row-donuts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+    align-items: stretch;
+}
+@media (max-width: 1100px) {
+    .clients-dash .charts-row-donuts {
+        grid-template-columns: 1fr;
+    }
+}
+.clients-dash .chart-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 14px 16px 12px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.clients-dash .chart-card h2 {
+    margin: 0 0 10px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #334155;
+    line-height: 1.3;
+}
+.clients-dash .chart-card .chart-canvas-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 260px;
+    height: 280px;
+}
+.clients-dash .chart-card.chart-card--donut .chart-canvas-wrap {
+    height: 300px;
+}
+
+.clients-dash .tables-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+.clients-dash .data-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    min-width: 0;
+}
+.clients-dash .data-card h2 {
+    margin: 0;
+    padding: 12px 14px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    border-bottom: 1px solid #f1f5f9;
+    background: #fafafa;
+    color: #334155;
+}
+.clients-dash .data-card .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.clients-dash .data-card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    table-layout: fixed;
+}
+.clients-dash .data-card th,
+.clients-dash .data-card td {
+    padding: 9px 12px;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+.clients-dash .data-card th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.clients-dash .data-card table:has(thead) thead th:first-child,
+.clients-dash .data-card table:has(thead) tbody td:first-child {
+    width: 50%;
+    min-width: 0;
+}
+.clients-dash .data-card table:has(thead) thead th.num,
+.clients-dash .data-card table:has(thead) tbody td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    width: 24%;
+}
+.clients-dash .data-card table:has(thead) thead th.num:last-child,
+.clients-dash .data-card table:has(thead) tbody td.num:last-child {
+    width: 22%;
+}
+.clients-dash .data-card table.clients-dash-dates-table {
+    table-layout: fixed;
+}
+.clients-dash .data-card table.clients-dash-dates-table td:first-child {
+    width: 40%;
+    min-width: 160px;
+    max-width: 48%;
+    font-weight: 600;
+    color: #475569;
+    vertical-align: middle;
+}
+.clients-dash .data-card table.clients-dash-dates-table td:last-child {
+    text-align: left;
+    vertical-align: middle;
+    word-break: break-word;
+}
+.clients-dash .data-card td.cell-wrap {
+    word-break: break-word;
+    max-width: min(320px, 42vw);
+}
+.clients-dash .empty-hint {
+    text-align: center;
+    padding: 48px 20px;
+    color: #64748b;
+}
+.clients-dash .empty-hint a { color: #2563eb; font-weight: 600; }
+.clients-dash .status-pill {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid transparent;
+}
+.clients-dash .status-pill--success { background: #dcfce7; color: #166534; border-color: #86efac; }
+.clients-dash .status-pill--danger { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.clients-dash .status-pill--warning { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.clients-dash .status-pill--info { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
+.clients-dash .status-pill--muted { background: #f3f4f6; color: #4b5563; border-color: #d1d5db; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container clients-dash">
+    {% include 'clients_nav.html' %}
+
+    <div class="dash-hero">
+        <div>
+            <h1 class="dashboard-title dash-title-with-icon">
+                <span class="dash-title-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v3.75a1.125 1.125 0 01-1.125 1.125h-2.25A1.125 1.125 0 013 16.875v-3.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+                </span>
+                <span>Клієнти — дашборд</span>
+            </h1>
+            <p class="dashboard-subtitle">Зведена аналітика бази Cosmy</p>
+        </div>
+        <div class="dash-meta">Оновлено: <strong>{{ dash.generated_at }}</strong> (Київ)</div>
+    </div>
+
+    {% if dash.totals.clients == 0 %}
+    <div class="empty-hint">
+        <p>У базі ще немає клієнтів.{% if request.state.role == 'admin' %} Запустіть синхронізацію на сторінці <a href="/sync">Синхронізація</a>.{% else %} Зверніться до адміністратора для синхронізації клієнтів.{% endif %}</p>
+    </div>
+    {% else %}
+
+    <div class="kpi-dash-layout">
+        <div class="kpi-col kpi-col--side">
+            <div class="kpi-card kpi-balance">
+                <div class="kpi-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Усього клієнтів</div>
+                    <div class="kpi-value">{{ dash.totals.clients|fmt_ua }}</div>
+                    <div class="kpi-clients-bar" role="img" aria-label="Частка зареєстрованих (синій) і гостей (сірий)">
+                        <span class="kpi-clients-bar-seg kpi-clients-bar-seg--reg" style="width: {{ dash.totals.pct_registered }}%;"></span>
+                        <span class="kpi-clients-bar-seg kpi-clients-bar-seg--guest" style="width: {{ dash.totals.pct_guests }}%;"></span>
+                    </div>
+                    <table class="kpi-clients-mini">
+                        <tbody>
+                            <tr>
+                                <th scope="row">Зареєстровані</th>
+                                <td class="kpi-clients-mini-val">{{ dash.totals.registered|fmt_ua }}</td>
+                                <td class="kpi-clients-mini-pct">{{ dash.totals.pct_registered }}%</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Гості</th>
+                                <td class="kpi-clients-mini-val">{{ dash.totals.guests|fmt_ua }}</td>
+                                <td class="kpi-clients-mini-pct">{{ dash.totals.pct_guests }}%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="kpi-card kpi-income">
+                <div class="kpi-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"/></svg>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Email у профілі</div>
+                    <div class="kpi-value">{{ dash.totals.with_email|fmt_ua }}<span class="kpi-val-pct">{{ dash.totals.pct_email }}%</span></div>
+                </div>
+            </div>
+            <div class="kpi-card kpi-profit">
+                <div class="kpi-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Статуси замовлень</div>
+                    <div class="kpi-value">{{ dash.orders.status_summary.total|fmt_ua }}</div>
+                    <div class="kpi-card-sub kpi-card-sub--stack">
+                        <span>Успішні: {{ dash.orders.status_summary.successful|fmt_ua }} ({{ dash.orders.status_summary.pct_successful }}% від кінцевих)</span>
+                        <span>неуспішні: {{ dash.orders.status_summary.unsuccessful|fmt_ua }} ({{ dash.orders.status_summary.pct_unsuccessful }}% від кінцевих)</span>
+                        {% if dash.orders.status_summary.transitional and dash.orders.status_summary.transitional > 0 %}
+                        <span>Проміжні: {{ dash.orders.status_summary.transitional|fmt_ua }} ({{ dash.orders.status_summary.pct_transitional }}% від усіх)</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="kpi-col kpi-col--tables">
+            <div class="kpi-card kpi-warehouse">
+                <div class="kpi-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125H18.75v-1.5h-15v1.5H3.375c-.621 0-1.125-.504-1.125-1.125V7.125c0-.621.504-1.125 1.125-1.125H6.75v-1.5H2.25z"/></svg>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Середній чек за періодами</div>
+                    <div class="kpi-period-table-wrap">
+                        <table class="kpi-period-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Період</th>
+                                    <th scope="col" class="kpi-period-th-num">Середній чек</th>
+                                    <th scope="col" class="kpi-period-th-num">Замовлень</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in dash.orders_by_period %}
+                                <tr>
+                                    <td class="kpi-period-td-period">{{ p.label }}</td>
+                                    <td class="kpi-period-td-check">{{ p.avg_check_uah|fmt_ua }}&nbsp;₴</td>
+                                    <td class="kpi-period-td-orders">{{ p.orders|fmt_ua }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="kpi-card kpi-medium kpi-clients-calendar">
+                <div class="kpi-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5a2.25 2.25 0 002.25-2.25m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5a2.25 2.25 0 012.25 2.25v7.5"/></svg>
+                </div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Активність замовлень</div>
+                    <div class="kpi-period-table-wrap">
+                        <table class="kpi-period-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Період</th>
+                                    <th scope="col" class="kpi-period-th-num">Замовлень</th>
+                                    <th scope="col" class="kpi-period-th-num">Унік. покупців</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in dash.orders_by_period %}
+                                <tr>
+                                    <td class="kpi-period-td-period">{{ p.label }}</td>
+                                    <td class="kpi-period-td-check">{{ p.orders|fmt_ua }}</td>
+                                    <td class="kpi-period-td-distinct">{{ p.distinct_buyers|fmt_ua }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <section class="monthly-hero" aria-labelledby="monthly-chart-title">
+        <div class="monthly-hero-head">
+            <div class="monthly-hero-head-row">
+                <h2 id="monthly-chart-title">Замовлення та виручка по місяцях</h2>
+                {% if dash.monthly_chart_filter.is_active %}
+                <p class="monthly-filter-active">
+                    <strong>{{ dash.monthly_chart_filter.label_ua }}</strong>
+                    <a href="/clients/dashboard?monthly_outcome=all{% if dash.monthly_chart_meta.is_custom %}&amp;monthly_from={{ dash.monthly_chart_meta.from_iso }}&amp;monthly_to={{ dash.monthly_chart_meta.to_iso }}{% endif %}">Усі</a>
+                </p>
+                {% endif %}
+            </div>
+        </div>
+        {% if dash.monthly_chart_meta.period_summary %}
+        {% set ps = dash.monthly_chart_meta.period_summary %}
+        {% set mo = dash.monthly_chart_filter.outcome %}
+        <div class="monthly-hero-stats" aria-label="Підсумок за обраний період">
+            <p class="monthly-hero-stats-period">
+                Обраний період:
+                <strong>{{ dash.monthly_chart_meta.from_display }}</strong> — <strong>{{ dash.monthly_chart_meta.to_display }}</strong>
+                {% if dash.monthly_chart_meta.is_custom %}<span class="monthly-stats-range-hint">(власні дати)</span>{% endif %}
+            </p>
+            {% if dash.monthly %}
+            <div class="monthly-hero-kpi-grid">
+                {% if mo == 'all' %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--total">
+                    <span class="monthly-kpi-tile-label">Усього замовлень</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders|fmt_ua }}</span>
+                </div>
+                <div class="monthly-kpi-tile monthly-kpi-tile--ok">
+                    <span class="monthly-kpi-tile-label">Успішні (кінцеві)</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders_success|fmt_ua }}</span>
+                </div>
+                <div class="monthly-kpi-tile monthly-kpi-tile--bad">
+                    <span class="monthly-kpi-tile-label">Неуспішні (кінцеві)</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders_unsuccessful|fmt_ua }}</span>
+                </div>
+                {% if ps.orders_transitional %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--mid">
+                    <span class="monthly-kpi-tile-label">Проміжні</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders_transitional|fmt_ua }}</span>
+                </div>
+                {% endif %}
+                {% elif mo == 'success' %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--ok">
+                    <span class="monthly-kpi-tile-label">Успішних за період</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders|fmt_ua }}</span>
+                </div>
+                {% else %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--bad">
+                    <span class="monthly-kpi-tile-label">Неуспішних за період</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.orders|fmt_ua }}</span>
+                </div>
+                {% endif %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--money">
+                    <span class="monthly-kpi-tile-label">Виручка</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.revenue|fmt_ua }}<span class="monthly-kpi-unit">₴</span></span>
+                </div>
+                {% if ps.avg_check_uah is not none %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--meta">
+                    <span class="monthly-kpi-tile-label">Сер. чек</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.avg_check_uah|fmt_ua }}<span class="monthly-kpi-unit">₴</span></span>
+                </div>
+                {% endif %}
+                <div class="monthly-kpi-tile monthly-kpi-tile--meta">
+                    <span class="monthly-kpi-tile-label">Місяців на графіку</span>
+                    <span class="monthly-kpi-tile-val">{{ ps.months|fmt_ua }}</span>
+                </div>
+            </div>
+            {% else %}
+            <p class="monthly-hero-stats-empty">За цей діапазон дат немає місяців із замовленнями — змініть період або натисніть «Період за замовч.».</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        <form method="get" action="/clients/dashboard" class="monthly-status-form" id="clients-monthly-form">
+            <div class="monthly-range-row">
+                <label class="monthly-dt-label">Від
+                    <input type="date" name="monthly_from" lang="en" value="{{ dash.monthly_chart_meta.from_iso }}" max="{{ dash.monthly_chart_meta.max_date_iso }}">
+                </label>
+                <label class="monthly-dt-label">До
+                    <input type="date" name="monthly_to" lang="en" value="{{ dash.monthly_chart_meta.to_iso }}" max="{{ dash.monthly_chart_meta.max_date_iso }}">
+                </label>
+                <button type="submit" class="monthly-status-btn">Застосувати</button>
+                {% if dash.monthly_chart_meta.is_custom %}
+                <a class="monthly-status-reset" href="/clients/dashboard?monthly_outcome={{ dash.monthly_chart_filter.outcome }}">Період за замовч.</a>
+                {% endif %}
+                {% if dash.monthly_chart_meta.year_presets %}
+                <label class="monthly-year-skip-label">Рік
+                    <select id="dash-monthly-year-preset" title="Заповнить дати з 1 січня по 31 грудня">
+                        <option value="">—</option>
+                        {% for y in dash.monthly_chart_meta.year_presets %}
+                        <option value="{{ y }}">{{ y }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                {% endif %}
+            </div>
+            {% if dash.monthly_chart_meta.notes_ua %}
+            <p class="monthly-range-note">{{ dash.monthly_chart_meta.notes_ua }}</p>
+            {% endif %}
+            <div class="monthly-controls-panel">
+                <div class="monthly-controls-block">
+                    <p class="monthly-controls-block-title" id="monthly-series-label">Ряди на графіку</p>
+                    <div class="monthly-chart-series-toggles" id="monthly-chart-series-toggles" role="group" aria-labelledby="monthly-series-label">
+                        {% if not dash.monthly %}
+                        <span class="monthly-controls-empty">Немає даних — спочатку оберіть період із замовленнями.</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="monthly-controls-divider" aria-hidden="true"></div>
+                <div class="monthly-controls-block monthly-controls-block--narrow">
+                    <p class="monthly-controls-block-title" id="monthly-outcome-label">Тип замовлень</p>
+                    <div class="monthly-status-checkboxes" role="radiogroup" aria-labelledby="monthly-outcome-label">
+                        <label class="monthly-status-item">
+                            <input type="radio" name="monthly_outcome" value="all" {% if dash.monthly_chart_filter.outcome == 'all' %}checked{% endif %} onchange="this.form.submit()">
+                            <span>Усі</span>
+                        </label>
+                        <label class="monthly-status-item">
+                            <input type="radio" name="monthly_outcome" value="success" {% if dash.monthly_chart_filter.outcome == 'success' %}checked{% endif %} onchange="this.form.submit()">
+                            <span>Успішні</span>
+                        </label>
+                        <label class="monthly-status-item">
+                            <input type="radio" name="monthly_outcome" value="unsuccessful" {% if dash.monthly_chart_filter.outcome == 'unsuccessful' %}checked{% endif %} onchange="this.form.submit()">
+                            <span>Неуспішні</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </form>
+        <div class="monthly-hero-chart">
+            <div class="monthly-chart-scroll"{% if dash.monthly %} style="--monthly-bar-count: {{ dash.monthly|length }};"{% endif %}>
+                <div class="chart-canvas-wrap monthly-chart-canvas"><canvas id="chartMonthly" aria-label="Замовлення та виручка по місяцях"></canvas></div>
+            </div>
+        </div>
+        {% if dash.monthly %}
+        <div class="monthly-detail-table-wrap">
+            <table class="monthly-detail-table">
+                <thead>
+                    <tr>
+                        <th>Місяць</th>
+                        <th class="num">Замовлень</th>
+                        <th class="num">Виручка ₴</th>
+                        <th class="num">Сер. чек ₴</th>
+                        <th class="num">Унік. пок.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in dash.monthly %}
+                    <tr>
+                        <td>{{ m.label_ua }}</td>
+                        <td class="num">{{ m.orders|fmt_ua }}</td>
+                        <td class="num">{{ m.revenue|fmt_ua }}</td>
+                        <td class="num">{% if m.avg_check_uah is not none %}{{ m.avg_check_uah|fmt_ua }}{% else %}—{% endif %}</td>
+                        <td class="num">{{ m.distinct_buyers|fmt_ua }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </section>
+
+    <div class="charts-row-donuts">
+        <div class="chart-card chart-card--donut">
+            <h2>Сегмент за кількістю замовлень</h2>
+            <div class="chart-canvas-wrap"><canvas id="chartSegments"></canvas></div>
+        </div>
+        <div class="chart-card chart-card--donut">
+            <h2>Активність (останнє замовлення)</h2>
+            <div class="chart-canvas-wrap"><canvas id="chartActivity"></canvas></div>
+        </div>
+    </div>
+
+    <div class="tables-grid">
+        <div class="data-card">
+            <h2>Топ міст</h2>
+            <div class="table-scroll">
+            <table>
+                <thead><tr><th>Місто</th><th class="num">Клієнтів</th><th class="num">%</th></tr></thead>
+                <tbody>
+                    {% for r in dash.top_cities %}
+                    <tr><td class="cell-wrap">{{ r.name }}</td><td class="num">{{ r.count }}</td><td class="num">{{ r.pct }}%</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+        <div class="data-card">
+            <h2>Топ джерел</h2>
+            <div class="table-scroll">
+            <table>
+                <thead><tr><th>Джерело</th><th class="num">Клієнтів</th><th class="num">%</th></tr></thead>
+                <tbody>
+                    {% for r in dash.top_sources %}
+                    <tr><td class="cell-wrap">{{ r.name }}</td><td class="num">{{ r.count }}</td><td class="num">{{ r.pct }}%</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+        <div class="data-card">
+            <h2>Топ менеджерів замовлень</h2>
+            <div class="table-scroll">
+            <table>
+                <thead><tr><th>Менеджер</th><th class="num">Замовлень</th><th class="num">%</th></tr></thead>
+                <tbody>
+                    {% for r in dash.top_order_managers %}
+                    <tr><td class="cell-wrap">{{ r.name }}</td><td class="num">{{ r.count }}</td><td class="num">{{ r.pct }}%</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+        <div class="data-card">
+            <h2>Статуси замовлень</h2>
+            <div class="table-scroll">
+            <table>
+                <thead><tr><th>Статус</th><th class="num">Замовлень</th><th class="num">%</th></tr></thead>
+                <tbody>
+                    {% for r in dash.top_order_statuses %}
+                    <tr>
+                        <td class="cell-wrap"><span class="status-pill status-pill--{{ r.tone }}">{{ r.name }}</span></td>
+                        <td class="num">{{ r.count }}</td>
+                        <td class="num">{{ r.pct }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="data-card" style="margin-bottom: 2rem;">
+        <h2>Дати фіду</h2>
+        <div class="table-scroll">
+        <table class="clients-dash-dates-table">
+            <tbody>
+                <tr><td>Генерація фіду (max)</td><td>{{ dash.dates.feed_generated_max or '—' }}</td></tr>
+                <tr><td>Перше замовлення (min)</td><td>{{ dash.dates.first_order_min or '—' }}</td></tr>
+                <tr><td>Останнє замовлення (max)</td><td>{{ dash.dates.last_order_max_client or '—' }}</td></tr>
+                <tr><td>Період order_date</td><td>{{ dash.dates.order_date_min or '—' }} — {{ dash.dates.order_date_max or '—' }}</td></tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <script id="clients-dash-json" type="application/json">{{ dash | tojson }}</script>
+    <script>
+(function () {
+    var el = document.getElementById('clients-dash-json');
+    if (!el) return;
+    var DASH = JSON.parse(el.textContent || '{}');
+    var Chart = window.Chart;
+    if (!Chart) return;
+
+    var font = { family: "system-ui, -apple-system, 'Segoe UI', sans-serif", size: 12 };
+    var gridSoft = { color: 'rgba(148, 163, 184, 0.22)' };
+
+    function fmtUaNum(n) {
+        var x = Math.round(Number(n) || 0);
+        return String(x).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+    }
+
+    var monthly = DASH.monthly || [];
+    var monthlyOutcome = (DASH.monthly_chart_filter && DASH.monthly_chart_filter.outcome) || 'all';
+    var monthlySplitBars = monthlyOutcome === 'all';
+    /** Заокруглення двошарової «свічки»: червоний низ (неуспіш.+проміж.), зелений верх (успіш.). */
+    function monthlyStackRadius(ctx) {
+        var row = monthly[ctx.dataIndex];
+        if (!row) return 0;
+        var nu = Number(row.orders_unsuccessful) || 0;
+        var nt = Number(row.orders_transitional) || 0;
+        var ns = Number(row.orders_success) || 0;
+        var bottom = nu + nt;
+        var di = ctx.datasetIndex;
+        var R = 6;
+        var cap = { topLeft: R, topRight: R, bottomLeft: R, bottomRight: R };
+        var topOnly = { topLeft: R, topRight: R, bottomLeft: 0, bottomRight: 0 };
+        var botOnly = { topLeft: 0, topRight: 0, bottomLeft: R, bottomRight: R };
+        if (di === 0) {
+            if (!bottom) return 0;
+            if (!ns) return cap;
+            return botOnly;
+        }
+        if (di === 1) {
+            if (!ns) return 0;
+            if (!bottom) return cap;
+            return topOnly;
+        }
+        return 0;
+    }
+    if (monthly.length && document.getElementById('chartMonthly')) {
+        var monthlyLabels = monthly.map(function (x) { return x.label_ua || x.ym; });
+        var barDatasets;
+        if (monthlySplitBars) {
+            /* Одна «свічка»: низ — червоний (неуспіш. + проміж.), верх — зелений (успіш.) */
+            barDatasets = [
+                {
+                    label: 'Неуспішні та проміжні',
+                    data: monthly.map(function (x) {
+                        return (Number(x.orders_unsuccessful) || 0) + (Number(x.orders_transitional) || 0);
+                    }),
+                    yAxisID: 'y',
+                    stack: 'orders',
+                    order: 2,
+                    backgroundColor: 'rgba(239, 68, 68, 0.92)',
+                    borderRadius: monthlyStackRadius,
+                    borderSkipped: false,
+                    maxBarThickness: 34,
+                },
+                {
+                    label: 'Успішні',
+                    data: monthly.map(function (x) { return Number(x.orders_success) || 0; }),
+                    yAxisID: 'y',
+                    stack: 'orders',
+                    order: 2,
+                    backgroundColor: 'rgba(34, 197, 94, 0.9)',
+                    borderRadius: monthlyStackRadius,
+                    borderSkipped: false,
+                    maxBarThickness: 34,
+                },
+            ];
+        } else {
+            var monoBarLabel = monthlyOutcome === 'success' ? 'Успішні' : 'Неуспішні';
+            var monoBarColor = monthlyOutcome === 'success'
+                ? 'rgba(34, 197, 94, 0.88)'
+                : 'rgba(239, 68, 68, 0.9)';
+            barDatasets = [
+                {
+                    label: monoBarLabel,
+                    data: monthly.map(function (x) { return x.orders; }),
+                    yAxisID: 'y',
+                    order: 2,
+                    backgroundColor: monoBarColor,
+                    borderRadius: { topLeft: 6, topRight: 6, bottomLeft: 0, bottomRight: 0 },
+                    borderSkipped: false,
+                    maxBarThickness: 36,
+                },
+            ];
+        }
+        var revDataset = {
+            label: 'Виручка, ₴',
+            data: monthly.map(function (x) { return x.revenue; }),
+            yAxisID: 'y1',
+            type: 'line',
+            order: 1,
+            borderColor: 'rgba(5, 150, 105, 1)',
+            backgroundColor: 'rgba(16, 185, 129, 0.08)',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: '#fff',
+            pointBorderColor: 'rgba(5, 150, 105, 1)',
+            pointBorderWidth: 2,
+            borderWidth: 2.5,
+        };
+        var revDsIndex = barDatasets.length;
+        var legendSlot = document.getElementById('monthly-chart-series-toggles');
+        function attachMonthlySeriesToggles(chart, slot, revIndex) {
+            if (!slot) return;
+            slot.innerHTML = '';
+            var n = chart.data.datasets.length;
+            var order = [];
+            for (var j = 0; j < n; j++) order.push(j);
+            order.sort(function (a, b) {
+                var aRev = a === revIndex ? 0 : 1;
+                var bRev = b === revIndex ? 0 : 1;
+                if (aRev !== bRev) return aRev - bRev;
+                return a - b;
+            });
+            order.forEach(function (i) {
+                var ds = chart.data.datasets[i];
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'monthly-chart-series-btn is-on';
+                btn.setAttribute('aria-pressed', 'true');
+                var sw = document.createElement('span');
+                sw.className = 'monthly-chart-series-swatch';
+                sw.setAttribute('aria-hidden', 'true');
+                if (ds.type === 'line') {
+                    sw.style.cssText =
+                        'display:inline-block;width:20px;height:0;vertical-align:middle;border-radius:0;border-bottom:3px solid ' +
+                        String(ds.borderColor || '#059669');
+                } else {
+                    sw.style.cssText =
+                        'display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:middle;background:' +
+                        (typeof ds.backgroundColor === 'string' ? ds.backgroundColor : '#94a3b8');
+                }
+                var lab = document.createElement('span');
+                lab.className = 'monthly-chart-series-btn-label';
+                lab.textContent = ds.label || '';
+                btn.appendChild(sw);
+                btn.appendChild(lab);
+                btn.addEventListener('click', function () {
+                    var next = !chart.isDatasetVisible(i);
+                    chart.setDatasetVisibility(i, next);
+                    chart.update();
+                    btn.classList.toggle('is-on', next);
+                    btn.setAttribute('aria-pressed', next ? 'true' : 'false');
+                });
+                slot.appendChild(btn);
+            });
+        }
+        var monthlyChart = new Chart(document.getElementById('chartMonthly'), {
+            type: 'bar',
+            data: {
+                labels: monthlyLabels,
+                datasets: barDatasets.concat([revDataset]),
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { top: 2, bottom: 2 } },
+                interaction: { mode: 'index', intersect: false },
+                datasets: {
+                    bar: {
+                        categoryPercentage: 0.82,
+                        barPercentage: monthlySplitBars ? 0.88 : 0.92,
+                    },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: function (items) {
+                                if (!items.length) return '';
+                                var row = monthly[items[0].dataIndex];
+                                if (!row) return items[0].label || '';
+                                var line1 = (row.ym || '') + ' · ' + (row.label_ua || row.ym || '');
+                                if (row.orders != null)
+                                    return [line1, 'Усього замовлень: ' + fmtUaNum(row.orders)];
+                                return line1;
+                            },
+                            label: function (ctx) {
+                                var v = ctx.parsed.y;
+                                var di = ctx.datasetIndex;
+                                if (di === revDsIndex) return ' Виручка: ' + fmtUaNum(v) + ' ₴';
+                                if (monthlySplitBars) {
+                                    if (di === 0) {
+                                        var row0 = monthly[ctx.dataIndex];
+                                        var nu0 = row0 ? (Number(row0.orders_unsuccessful) || 0) : 0;
+                                        var nt0 = row0 ? (Number(row0.orders_transitional) || 0) : 0;
+                                        var parts = [];
+                                        if (nu0) parts.push('неуспіш.: ' + fmtUaNum(nu0));
+                                        if (nt0) parts.push('проміж.: ' + fmtUaNum(nt0));
+                                        var tail = parts.length ? ' (' + parts.join(', ') + ')' : '';
+                                        return ' Неуспіш. та проміж.: ' + fmtUaNum(v) + tail;
+                                    }
+                                    if (di === 1) return ' Успішні: ' + fmtUaNum(v);
+                                }
+                                return ' Замовлень: ' + fmtUaNum(v);
+                            },
+                            afterBody: function (items) {
+                                if (!items.length) return [];
+                                var row = monthly[items[0].dataIndex];
+                                if (!row) return [];
+                                var di = items[0].datasetIndex;
+                                var lines = [];
+                                if (monthlySplitBars && di !== revDsIndex && row.revenue_success != null) {
+                                    lines.push('Виручка (успіш.): ' + fmtUaNum(Math.round(row.revenue_success)) + ' ₴');
+                                    lines.push('Виручка (неуспіш.): ' + fmtUaNum(Math.round(row.revenue_unsuccessful)) + ' ₴');
+                                    var rt = Number(row.revenue_transitional);
+                                    if (rt) lines.push('Виручка (проміж.): ' + fmtUaNum(Math.round(rt)) + ' ₴');
+                                }
+                                if (row.distinct_buyers != null)
+                                    lines.push('Унік. покупців: ' + fmtUaNum(row.distinct_buyers));
+                                if (row.avg_check_uah != null)
+                                    lines.push('Сер. чек: ' + fmtUaNum(Math.round(row.avg_check_uah)) + ' ₴');
+                                return lines;
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        type: 'category',
+                        offset: true,
+                        stacked: monthlySplitBars,
+                        grid: { display: false, drawBorder: false },
+                        ticks: {
+                            font: font,
+                            autoSkip: false,
+                            maxRotation: 58,
+                            minRotation: 22,
+                            padding: 2,
+                        },
+                    },
+                    y: {
+                        type: 'linear',
+                        position: 'left',
+                        stacked: monthlySplitBars,
+                        title: { display: true, text: 'Кількість замовлень', font: { ...font, weight: '600' }, color: '#475569' },
+                        grid: { ...gridSoft, drawBorder: false },
+                        ticks: { font: font, color: '#64748b' },
+                        beginAtZero: true,
+                    },
+                    y1: {
+                        type: 'linear',
+                        position: 'right',
+                        title: { display: true, text: 'Виручка, ₴', font: { ...font, weight: '600' }, color: '#047857' },
+                        grid: { drawOnChartArea: false, drawBorder: false },
+                        ticks: {
+                            font: font,
+                            color: '#059669',
+                            callback: function (val) { return fmtUaNum(val); },
+                        },
+                        beginAtZero: true,
+                    },
+                },
+            },
+        });
+        attachMonthlySeriesToggles(monthlyChart, legendSlot, revDsIndex);
+    }
+
+    var seg = DASH.segments || [];
+    if (seg.length && document.getElementById('chartSegments')) {
+        new Chart(document.getElementById('chartSegments'), {
+            type: 'doughnut',
+            data: {
+                labels: seg.map(function (s) { return s.name; }),
+                datasets: [{
+                    data: seg.map(function (s) { return s.count; }),
+                    backgroundColor: ['#e2e8f0', '#93c5fd', '#6366f1', '#8b5cf6', '#f59e0b'],
+                    borderWidth: 2,
+                    borderColor: '#fff',
+                    hoverOffset: 6,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '58%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { font: font, boxWidth: 10, padding: 10 },
+                    },
+                },
+            },
+        });
+    }
+
+    var act = DASH.activity || [];
+    if (act.length && document.getElementById('chartActivity')) {
+        new Chart(document.getElementById('chartActivity'), {
+            type: 'doughnut',
+            data: {
+                labels: act.map(function (s) { return s.name; }),
+                datasets: [{
+                    data: act.map(function (s) { return s.count; }),
+                    backgroundColor: ['#34d399', '#fbbf24', '#fb7185', '#cbd5e1'],
+                    borderWidth: 2,
+                    borderColor: '#fff',
+                    hoverOffset: 6,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '58%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { font: font, boxWidth: 10, padding: 10 },
+                    },
+                },
+            },
+        });
+    }
+
+    var mForm = document.getElementById('clients-monthly-form');
+    var ySel = document.getElementById('dash-monthly-year-preset');
+    if (mForm && ySel) {
+        ySel.addEventListener('change', function () {
+            var y = this.value;
+            if (!y) return;
+            var fi = mForm.querySelector('[name="monthly_from"]');
+            var ti = mForm.querySelector('[name="monthly_to"]');
+            if (fi) fi.value = y + '-01-01';
+            if (ti) ti.value = y + '-12-31';
+            mForm.submit();
+        });
+    }
+})();
+    </script>
+    {% endif %}
+</div>
+{% endblock %}

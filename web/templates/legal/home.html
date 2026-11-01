@@ -1,0 +1,47 @@
+{% extends "legal/base_public.html" %}
+{% block title %}{{ app_name }} — внутрішня аналітика Cosmy{% endblock %}
+{% block content %}
+<h1>{{ app_name }}</h1>
+<p class="legal-lead">
+    Внутрішній веб-застосунок компанії <strong>{{ company_name }}</strong> для фінансової аналітики,
+    закупівель, CRM та звітів по рекламі (Google Ads, Meta Ads, Google Search Console, Google Analytics 4).
+</p>
+
+<section class="legal-section">
+    <h2>Призначення</h2>
+    <p>
+        Застосунок використовується <strong>лише уповноваженими співробітниками {{ company_name }}</strong>
+        для аналізу бізнес-показників. Доступ захищений логіном і паролем; публічна реєстрація відсутня.
+    </p>
+</section>
+
+<section class="legal-section">
+    <h2>Інтеграції Google (OAuth)</h2>
+    <p>
+        Для звітів по рекламі застосунок підключається до Google Ads API (scope
+        <code>https://www.googleapis.com/auth/adwords</code>) у режимі читання метрик:
+        витрати, покази, кліки, конверсії тощо. Дані використовуються виключно для внутрішніх дашбордів
+        {{ company_name }} і не передаються третім особам.
+    </p>
+</section>
+
+<section class="legal-section">
+    <h2>Контакти</h2>
+    <p>
+        Питання щодо застосунку та обробки даних:
+        <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
+    </p>
+    <p>
+        Офіційний сайт магазину:
+        <a href="https://cosmy.com.ua" rel="noopener">cosmy.com.ua</a>
+    </p>
+</section>
+
+<section class="legal-section legal-section--muted">
+    <h2>Юридичні документи</h2>
+    <ul>
+        <li><a href="{{ privacy_url }}">Політика конфіденційності</a></li>
+        <li><a href="{{ terms_url }}">Умови використання</a></li>
+    </ul>
+</section>
+{% endblock %}

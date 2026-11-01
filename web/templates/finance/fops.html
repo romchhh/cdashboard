@@ -1,0 +1,801 @@
+{% extends "base.html" %}
+{% block title %}ФОПи — Cosmy Agent{% endblock %}
+{% block mobile_title %}ФОПи{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/fops.css?v=20260831b">
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>ФОПи</h1>
+  <p class="subtitle">Додавання / видалення ФОП, перевірка та перестворення сесій NovaPay</p>
+</div>
+
+{% if flash_msg %}
+<div class="fop-flash fop-flash--{{ flash_kind or 'ok' }}" role="status">{{ flash_msg }}</div>
+{% endif %}
+
+<section class="fop-card">
+  <div class="fop-card-head fop-card-head--row">
+    <div>
+      <h2>Список ФОП</h2>
+      <p>Monobank / NovaPay — синхронізація транзакцій. Для NovaPay потрібна активна сесія.</p>
+    </div>
+    <button type="button" class="btn btn-primary" id="fopAddOpenBtn">Додати ФОП</button>
+  </div>
+  <div class="fop-table-wrap">
+    <table class="fop-table">
+      <thead>
+        <tr>
+          <th>Назва</th>
+          <th>Джерела</th>
+          <th>Сесія NovaPay</th>
+          <th>Статус</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="{% if not row.is_active %}is-inactive{% endif %}">
+          <td>
+            <strong>{{ row.name }}</strong>
+          </td>
+          <td class="fop-sources">
+            {% if row.has_mono %}<span class="fop-badge mono">Monobank</span>{% endif %}
+            {% if row.has_novapay %}<span class="fop-badge nova">NovaPay</span>{% endif %}
+            {% if not row.has_mono and not row.has_novapay %}<span class="fop-tag muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% if row.has_novapay_config and row.session %}
+              <span class="fop-session fop-session--{{ row.session.status }}">{{ row.session.message }}</span>
+              {% if row.novapay_has_refresh %}
+              <div class="fop-token-hint">Refresh: <code>{{ row.novapay_refresh_preview }}</code></div>
+              {% else %}
+              <div class="fop-token-hint fop-token-hint--warn">Refresh Token не задано</div>
+              {% endif %}
+              <div class="fop-session-actions">
+                <button type="button" class="btn-mini primary js-nova-settings"
+                        data-fop="{{ row.name }}"
+                        data-has-refresh="{{ '1' if row.novapay_has_refresh else '0' }}">
+                  Токен / сесія
+                </button>
+                <button type="button" class="btn-mini js-check-session" data-fop="{{ row.name }}">Перевірити</button>
+                <form method="post" action="/fops/novapay/session/refresh" class="fop-inline-form">
+                  <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                  <input type="hidden" name="fop_name" value="{{ row.name }}">
+                  <button type="submit" class="btn-mini">Продовжити</button>
+                </form>
+                <button type="button" class="btn-mini js-recreate-session" data-fop="{{ row.name }}">JWT</button>
+              </div>
+            {% elif row.has_novapay %}
+              <span class="fop-tag muted">є NovaPay, немає конфігу</span>
+            {% else %}
+              <span class="fop-tag muted">не потрібно</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.is_active %}
+              <span class="fop-badge ok">активний</span>
+            {% else %}
+              <span class="fop-badge fail">вимкнений</span>
+            {% endif %}
+          </td>
+          <td class="fop-row-actions">
+            {% if row.is_active and (row.has_mono or row.has_novapay) %}
+            <button type="button" class="btn-mini js-probe-tx" data-fop="{{ row.name }}"
+                    title="Завантажити останні транзакції з банку">
+              Останні транз.
+            </button>
+            {% endif %}
+            {% if row.is_active %}
+            <form method="post" action="/fops/{{ row.id }}/delete" class="js-delete-fop" data-name="{{ row.name }}">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <button type="submit" class="btn-mini danger">В архів</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">Поки немає ФОП.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if archived_rows %}
+<section class="fop-card fop-card--archive">
+  <details class="fop-archive-details" {% if request.query_params.get('archive') %}open{% endif %}>
+    <summary class="fop-archive-summary">
+      <div>
+        <h2>Архів ФОП</h2>
+        <p>Прибрані зі списку ФОПи. Транзакції збережені — статистика в звітах лишається.</p>
+      </div>
+      <span class="fop-archive-count">{{ archived_rows|length }}</span>
+    </summary>
+    <div class="fop-table-wrap">
+      <table class="fop-table fop-table--archive">
+        <thead>
+          <tr>
+            <th>Назва</th>
+            <th>Джерела в історії</th>
+            <th>Транзакцій</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in archived_rows %}
+          <tr>
+            <td><strong>{{ row.name }}</strong></td>
+            <td class="fop-sources">
+              {% if row.has_mono %}<span class="fop-badge mono">Monobank</span>{% endif %}
+              {% if row.has_novapay %}<span class="fop-badge nova">NovaPay</span>{% endif %}
+              {% if row.has_cash %}<span class="fop-badge cash">Готівка</span>{% endif %}
+              {% if not row.has_mono and not row.has_novapay and not row.has_cash %}
+              <span class="fop-tag muted">—</span>
+              {% endif %}
+            </td>
+            <td>{{ row.transactions_total|fmt_ua }}</td>
+            <td class="fop-row-actions">
+              <form method="post" action="/fops/{{ row.id }}/restore" class="js-restore-fop" data-name="{{ row.name }}">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <button type="submit" class="btn-mini">Відновити</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+{% endif %}
+
+{# Wizard: Додати ФОП #}
+<div id="fopAddDialog" class="fop-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="fopAddTitle">
+  <div class="fop-dialog-backdrop" data-fop-add-close></div>
+  <div class="fop-dialog-card fop-dialog-card--wide">
+    <div class="fop-add-top">
+      <h2 class="fop-dialog-title" id="fopAddTitle">Додати ФОП</h2>
+      <button type="button" class="btn-mini" data-fop-add-close aria-label="Закрити">✕</button>
+    </div>
+
+    <div id="fopAddStepType" class="fop-add-step">
+      <p class="fop-dialog-lead">Оберіть джерело для нового ФОП</p>
+      <div class="fop-type-grid">
+        <button type="button" class="fop-type-card" data-fop-type="mono">
+          <span class="fop-badge mono">Monobank</span>
+          <strong>Через токен Mono</strong>
+          <span>Назва, токен і вибір IBAN для моніторингу</span>
+        </button>
+        <button type="button" class="fop-type-card" data-fop-type="novapay">
+          <span class="fop-badge nova">NovaPay</span>
+          <strong>Через NovaPay</strong>
+          <span>Імʼя, refresh + certificate + логін API, JWT-сесія</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="fopAddStepMono" class="fop-add-step" hidden>
+      <button type="button" class="fop-back-btn" data-fop-add-back>← Назад до вибору</button>
+      <p class="fop-dialog-lead">Вставте токен — з’явиться список рахунків. Оберіть IBAN для моніторингу.</p>
+      <form method="post" action="/fops/mono/add" class="fop-form" id="monoAddForm">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <div class="form-group">
+          <label for="mono_name">Назва ФОП</label>
+          <input id="mono_name" name="name" type="text" required placeholder="Напр. Єльникова Анна" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="mono_token">Токен Monobank</label>
+          <div class="fop-token-row">
+            <input id="mono_token" name="token" type="password" required placeholder="X-Token" autocomplete="off">
+            <button type="button" class="btn-mini primary" id="monoLoadAccountsBtn">Рахунки</button>
+          </div>
+          <p class="fop-field-hint" id="monoTokenHint">Після введення токена натисніть «Рахунки» або зачекайте автозавантаження.</p>
+        </div>
+        <div class="form-group" id="monoIbanGroup" hidden>
+          <label for="mono_iban">Рахунок для моніторингу</label>
+          <select id="mono_iban" name="iban" required disabled>
+            <option value="">Спочатку завантажте рахунки…</option>
+          </select>
+          <p class="fop-field-hint" id="monoClientName" hidden></p>
+        </div>
+        <p class="fop-form-error" id="monoAccountsError" hidden></p>
+        <div class="fop-dialog-actions">
+          <button type="button" class="btn-mini" data-fop-add-close>Скасувати</button>
+          <button type="submit" class="btn btn-primary" id="monoSubmitBtn" disabled>Додати Monobank</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="fopAddStepNova" class="fop-add-step" hidden>
+      <button type="button" class="fop-back-btn" data-fop-add-back>← Назад до вибору</button>
+      <p class="fop-dialog-lead">Імʼя + дані з кабінету (Система → Налаштування → API). Якщо вказати refresh, certificate і логін — JWT-сесія створиться одразу.</p>
+      <form method="post" action="/fops/novapay/add" class="fop-form" id="novapayAddForm">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <div class="form-group">
+          <label for="nova_name">Назва ФОП (ключ NovaPay)</label>
+          <input id="nova_name" name="name" type="text" required placeholder="Напр. Тимченко" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="nova_refresh">Refresh token (опційно)</label>
+          <input id="nova_refresh" name="refresh" type="text" placeholder="якщо є з кабінету" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="nova_cert">Public certificate PEM (опційно)</label>
+          <textarea id="nova_cert" name="cert" rows="3" placeholder="-----BEGIN RSA PUBLIC KEY-----"></textarea>
+        </div>
+        <div class="fop-form-sep">JWT-сесія зараз (опційно)</div>
+        <div class="form-group">
+          <label for="nova_login">Логін API NovaPay</label>
+          <input id="nova_login" name="login" type="text" autocomplete="username">
+        </div>
+        <div class="fop-dialog-actions">
+          <button type="button" class="btn-mini" data-fop-add-close>Скасувати</button>
+          <button type="submit" class="btn btn-primary">Додати NovaPay</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Modal: останні транзакції #}
+<div class="fop-dialog" id="fopTxDialog" hidden role="dialog" aria-labelledby="fopTxTitle" aria-modal="true">
+  <div class="fop-dialog-backdrop js-close-tx-dialog"></div>
+  <div class="fop-dialog-card fop-dialog-card--wide">
+    <h2 class="fop-dialog-title" id="fopTxTitle">Останні транзакції</h2>
+    <p class="fop-dialog-lead" id="fopTxLead">Завантаження з банку…</p>
+    <div id="fopTxBody" class="fop-tx-body"></div>
+    <div class="fop-dialog-actions">
+      <button type="button" class="btn btn-secondary js-close-tx-dialog">Закрити</button>
+    </div>
+  </div>
+</div>
+
+{# Modal: NovaPay token + session #}
+<div id="fopNovaDialog" class="fop-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="fopNovaTitle">
+  <div class="fop-dialog-backdrop" data-fop-nova-close></div>
+  <div class="fop-dialog-card fop-dialog-card--wide">
+    <div class="fop-add-top">
+      <h2 class="fop-dialog-title" id="fopNovaTitle">NovaPay — токен і сесія</h2>
+      <button type="button" class="btn-mini" data-fop-nova-close aria-label="Закрити">✕</button>
+    </div>
+    <p class="fop-dialog-lead" id="fopNovaLead">Оновіть refresh + certificate з кабінету NovaPay і створіть JWT-сесію.</p>
+
+    <form id="fopNovaForm" class="fop-form" method="post" action="/fops/novapay/credentials/update">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <input type="hidden" name="fop_name" id="fopNovaName" value="">
+
+      <div class="form-group">
+        <label for="fop_nova_refresh">Refresh Token <span class="fop-req">*</span></label>
+        <textarea id="fop_nova_refresh" name="refresh" rows="3" required
+                  placeholder="Вставте новий Refresh Token з кабінету NovaPay Business"></textarea>
+        <p class="fop-field-hint">Після збереження стара сесія буде скинута — потрібен новий JWT.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="fop_nova_cert">Certificate PEM (опційно)</label>
+        <textarea id="fop_nova_cert" name="cert" rows="3"
+                  placeholder="-----BEGIN RSA PUBLIC KEY-----"></textarea>
+      </div>
+
+      <div class="fop-form-sep">JWT-сесія</div>
+      <p class="fop-field-hint">Після збереження токена можна одразу створити сесію — вкажіть логін API (якщо ще не збережений).</p>
+
+      <div class="form-group">
+        <label for="fop_nova_login">Логін API NovaPay</label>
+        <input id="fop_nova_login" name="login" type="text" autocomplete="username">
+      </div>
+
+      <p class="fop-dialog-error" id="fopNovaError" hidden></p>
+
+      <div class="fop-dialog-actions">
+        <button type="button" class="btn-mini" data-fop-nova-close>Скасувати</button>
+        <button type="submit" class="btn-mini" name="save_mode" value="save" id="fopNovaSaveBtn">Лише зберегти токен</button>
+        <button type="submit" class="btn btn-primary" id="fopNovaSaveLoginBtn">Зберегти і створити JWT</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Modal: recreate session #}
+<div id="fopSessionDialog" class="fop-dialog" hidden role="dialog" aria-modal="true" aria-labelledby="fopSessionTitle">
+  <div class="fop-dialog-backdrop" data-fop-dialog-close></div>
+  <div class="fop-dialog-card">
+    <h2 class="fop-dialog-title" id="fopSessionTitle">Сесія NovaPay</h2>
+    <p class="fop-dialog-lead" id="fopSessionLead">Створення JWT-сесії через UserAuthenticationJWT (refresh + certificate + логін API з кабінету).</p>
+    <p class="fop-dialog-hint" id="fopSessionLoginHint">Логін можна залишити порожнім, якщо він уже збережений у налаштуваннях ФОП. Пароль і OTP не потрібні.</p>
+
+    <form id="fopSessionLoginForm" class="fop-form" method="post" action="/fops/novapay/session/start">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <input type="hidden" name="fop_name" id="fopSessionName" value="">
+      <div class="form-group">
+        <label for="fop_login">Логін API (опційно)</label>
+        <input id="fop_login" name="login" type="text" autocomplete="username" placeholder="якщо ще не збережено">
+      </div>
+      <div class="fop-dialog-actions">
+        <button type="button" class="btn-mini" data-fop-dialog-close>Скасувати</button>
+        <button type="submit" class="btn-mini primary" id="fopSessionLoginBtn">Створити JWT-сесію</button>
+      </div>
+    </form>
+
+    <p class="fop-dialog-error" id="fopSessionError" hidden></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  var csrf = '{{ request.state.csrf_token }}';
+
+  // --- Wizard: Додати ФОП ---
+  (function initAddWizard() {
+    var dialog = document.getElementById('fopAddDialog');
+    var stepType = document.getElementById('fopAddStepType');
+    var stepMono = document.getElementById('fopAddStepMono');
+    var stepNova = document.getElementById('fopAddStepNova');
+    var title = document.getElementById('fopAddTitle');
+    var openBtn = document.getElementById('fopAddOpenBtn');
+
+    function showStep(step) {
+      if (stepType) stepType.hidden = step !== 'type';
+      if (stepMono) stepMono.hidden = step !== 'mono';
+      if (stepNova) stepNova.hidden = step !== 'novapay';
+      if (title) {
+        if (step === 'mono') title.textContent = 'Додати через Monobank';
+        else if (step === 'novapay') title.textContent = 'Додати через NovaPay';
+        else title.textContent = 'Додати ФОП';
+      }
+    }
+
+    function openAdd(step) {
+      if (!dialog) return;
+      showStep(step || 'type');
+      dialog.hidden = false;
+    }
+
+    function closeAdd() {
+      if (dialog) dialog.hidden = true;
+      showStep('type');
+    }
+
+    if (openBtn) openBtn.addEventListener('click', function () { openAdd('type'); });
+    document.querySelectorAll('[data-fop-add-close]').forEach(function (el) {
+      el.addEventListener('click', closeAdd);
+    });
+    document.querySelectorAll('[data-fop-add-back]').forEach(function (el) {
+      el.addEventListener('click', function () { showStep('type'); });
+    });
+    document.querySelectorAll('[data-fop-type]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openAdd(btn.getAttribute('data-fop-type') || 'type');
+      });
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && dialog && !dialog.hidden) closeAdd();
+    });
+  })();
+
+  // --- Monobank: завантаження IBAN зі списку рахунків ---
+  (function initMonoAccounts() {
+    var tokenInput = document.getElementById('mono_token');
+    var loadBtn = document.getElementById('monoLoadAccountsBtn');
+    var ibanGroup = document.getElementById('monoIbanGroup');
+    var ibanSelect = document.getElementById('mono_iban');
+    var submitBtn = document.getElementById('monoSubmitBtn');
+    var errEl = document.getElementById('monoAccountsError');
+    var clientNameEl = document.getElementById('monoClientName');
+    var hintEl = document.getElementById('monoTokenHint');
+    var debounceTimer = null;
+    var lastLoadedToken = '';
+
+    function showMonoErr(msg) {
+      if (!errEl) return;
+      errEl.hidden = !msg;
+      errEl.textContent = msg || '';
+    }
+
+    function resetIbanSelect() {
+      if (!ibanSelect) return;
+      ibanSelect.innerHTML = '<option value="">Спочатку завантажте рахунки…</option>';
+      ibanSelect.disabled = true;
+      if (ibanGroup) ibanGroup.hidden = true;
+      if (submitBtn) submitBtn.disabled = true;
+      if (clientNameEl) { clientNameEl.hidden = true; clientNameEl.textContent = ''; }
+      lastLoadedToken = '';
+    }
+
+    function fillAccounts(data) {
+      if (!ibanSelect) return;
+      ibanSelect.innerHTML = '';
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Оберіть рахунок…';
+      ibanSelect.appendChild(placeholder);
+
+      var accounts = data.accounts || [];
+      var preferred = null;
+      accounts.forEach(function (acc) {
+        var opt = document.createElement('option');
+        opt.value = acc.iban;
+        opt.textContent = acc.label || acc.iban;
+        ibanSelect.appendChild(opt);
+        if (acc.is_fop && !preferred) preferred = acc.iban;
+      });
+      if (preferred) ibanSelect.value = preferred;
+      ibanSelect.disabled = accounts.length === 0;
+      if (ibanGroup) ibanGroup.hidden = false;
+      if (submitBtn) submitBtn.disabled = !ibanSelect.value;
+      if (clientNameEl) {
+        if (data.client_name) {
+          clientNameEl.hidden = false;
+          clientNameEl.textContent = 'Клієнт у Mono: ' + data.client_name;
+        } else {
+          clientNameEl.hidden = true;
+        }
+      }
+      if (hintEl) hintEl.textContent = 'Оберіть рахунок, який потрібно моніторити.';
+      lastLoadedToken = (tokenInput && tokenInput.value || '').trim();
+    }
+
+    function loadAccounts() {
+      var token = (tokenInput && tokenInput.value || '').trim();
+      if (!token) {
+        showMonoErr('Вставте токен Monobank');
+        resetIbanSelect();
+        return;
+      }
+      if (token === lastLoadedToken && ibanSelect && !ibanSelect.disabled && ibanSelect.options.length > 1) {
+        return;
+      }
+      showMonoErr('');
+      if (loadBtn) { loadBtn.disabled = true; loadBtn.textContent = '…'; }
+      if (submitBtn) submitBtn.disabled = true;
+      var fd = new FormData();
+      fd.append('csrf_token', csrf);
+      fd.append('token', token);
+      fetch('/fops/mono/accounts', {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'fetch' }
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+          if (!res.data || !res.data.ok) {
+            showMonoErr((res.data && res.data.error) || 'Не вдалося завантажити рахунки');
+            resetIbanSelect();
+            return;
+          }
+          fillAccounts(res.data);
+        })
+        .catch(function (err) {
+          showMonoErr(err && err.message ? err.message : 'Помилка мережі');
+          resetIbanSelect();
+        })
+        .finally(function () {
+          if (loadBtn) { loadBtn.disabled = false; loadBtn.textContent = 'Рахунки'; }
+        });
+    }
+
+    if (loadBtn) loadBtn.addEventListener('click', loadAccounts);
+    if (tokenInput) {
+      tokenInput.addEventListener('input', function () {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        if ((tokenInput.value || '').trim() !== lastLoadedToken) {
+          resetIbanSelect();
+          showMonoErr('');
+        }
+        debounceTimer = setTimeout(function () {
+          if ((tokenInput.value || '').trim().length >= 20) loadAccounts();
+        }, 700);
+      });
+      tokenInput.addEventListener('change', function () {
+        if ((tokenInput.value || '').trim()) loadAccounts();
+      });
+    }
+    if (ibanSelect) {
+      ibanSelect.addEventListener('change', function () {
+        if (submitBtn) submitBtn.disabled = !ibanSelect.value;
+      });
+    }
+    var monoForm = document.getElementById('monoAddForm');
+    if (monoForm) {
+      monoForm.addEventListener('submit', function (e) {
+        if (!ibanSelect || !ibanSelect.value) {
+          e.preventDefault();
+          showMonoErr('Оберіть IBAN зі списку рахунків');
+        }
+      });
+    }
+  })();
+
+  var dialog = document.getElementById('fopSessionDialog');
+  var loginForm = document.getElementById('fopSessionLoginForm');
+  var nameInput = document.getElementById('fopSessionName');
+  var lead = document.getElementById('fopSessionLead');
+  var errBox = document.getElementById('fopSessionError');
+
+  function showErr(msg) {
+    if (!errBox) return;
+    errBox.hidden = !msg;
+    errBox.textContent = msg || '';
+  }
+
+  function openDialog(fopName) {
+    if (!dialog) return;
+    showErr('');
+    if (nameInput) nameInput.value = fopName || '';
+    if (lead) {
+      lead.textContent = 'Створення JWT-сесії для «' + fopName + '» (refresh + certificate + логін API).';
+    }
+    dialog.hidden = false;
+    var focusEl = document.getElementById('fop_login');
+    if (focusEl) focusEl.focus();
+  }
+
+  function closeDialog() {
+    if (dialog) dialog.hidden = true;
+    showErr('');
+  }
+
+  document.querySelectorAll('[data-fop-dialog-close]').forEach(function (el) {
+    el.addEventListener('click', closeDialog);
+  });
+
+  document.querySelectorAll('.js-recreate-session').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      openDialog(btn.getAttribute('data-fop') || '');
+    });
+  });
+
+  // --- NovaPay: оновлення Refresh Token ---
+  (function initNovaSettings() {
+    var novaDialog = document.getElementById('fopNovaDialog');
+    var novaForm = document.getElementById('fopNovaForm');
+    var novaName = document.getElementById('fopNovaName');
+    var novaLead = document.getElementById('fopNovaLead');
+    var novaErr = document.getElementById('fopNovaError');
+    var loginInput = document.getElementById('fop_nova_login');
+    var refreshInput = document.getElementById('fop_nova_refresh');
+
+    function novaShowErr(msg) {
+      if (!novaErr) return;
+      novaErr.hidden = !msg;
+      novaErr.textContent = msg || '';
+    }
+
+    function openNova(fopName) {
+      if (!novaDialog) return;
+      novaShowErr('');
+      if (novaName) novaName.value = fopName || '';
+      if (novaLead) novaLead.textContent = 'Оновіть refresh + certificate для «' + fopName + '» і створіть JWT-сесію.';
+      if (refreshInput) refreshInput.value = '';
+      if (loginInput) loginInput.value = '';
+      novaDialog.hidden = false;
+      if (refreshInput) refreshInput.focus();
+    }
+
+    function closeNova() {
+      if (novaDialog) novaDialog.hidden = true;
+      novaShowErr('');
+    }
+
+    document.querySelectorAll('[data-fop-nova-close]').forEach(function (el) {
+      el.addEventListener('click', closeNova);
+    });
+    document.querySelectorAll('.js-nova-settings').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openNova(btn.getAttribute('data-fop') || '');
+      });
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && novaDialog && !novaDialog.hidden) closeNova();
+    });
+
+    if (novaForm) {
+      novaForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        novaShowErr('');
+        var submitter = e.submitter;
+        var withLogin = submitter && submitter.id === 'fopNovaSaveLoginBtn';
+        if (withLogin && !(loginInput && loginInput.value.trim())) {
+          novaShowErr('Для JWT-сесії вкажіть логін API NovaPay (або збережіть його раніше)');
+          return;
+        }
+        if (!(refreshInput && refreshInput.value.trim())) {
+          novaShowErr('Вкажіть Refresh Token');
+          return;
+        }
+        var btns = novaForm.querySelectorAll('button[type="submit"]');
+        btns.forEach(function (b) { b.disabled = true; });
+        var fd = new FormData(novaForm);
+        fetch(novaForm.getAttribute('action'), {
+          method: 'POST',
+          body: fd,
+          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json', 'X-Requested-With': 'fetch' }
+        })
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+          .then(function (res) {
+            if (!res.data || !res.data.ok) {
+              novaShowErr((res.data && res.data.error) || 'Не вдалося зберегти');
+              return;
+            }
+            if (res.data.session_start_error) {
+              novaShowErr('Токен збережено, але JWT не створено: ' + res.data.session_start_error);
+              return;
+            }
+            window.location.href = '/fops?msg=' + encodeURIComponent(res.data.message || 'Токен оновлено') + '&kind=ok';
+          })
+          .catch(function (err) {
+            novaShowErr(err && err.message ? err.message : 'Помилка мережі');
+          })
+          .finally(function () {
+            btns.forEach(function (b) { b.disabled = false; });
+          });
+      });
+    }
+  })();
+
+  (function () {
+    var txDialog = document.getElementById('fopTxDialog');
+    var txTitle = document.getElementById('fopTxTitle');
+    var txLead = document.getElementById('fopTxLead');
+    var txBody = document.getElementById('fopTxBody');
+
+    function esc(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function closeTxDialog() {
+      if (txDialog) txDialog.hidden = true;
+    }
+
+    function renderTxBlock(block) {
+      var srcLabel = block.source === 'monobank' ? 'Monobank' : 'NovaPay';
+      var html = '<section class="fop-tx-block">';
+      html += '<h3 class="fop-tx-block__title"><span class="fop-badge ' + (block.source === 'monobank' ? 'mono' : 'nova') + '">' + srcLabel + '</span>';
+      if (block.ok && block.message) html += ' <span class="fop-tx-block__meta">' + esc(block.message) + '</span>';
+      html += '</h3>';
+      if (!block.ok) {
+        html += '<p class="fop-tx-error">' + esc(block.error || 'Помилка') + '</p>';
+      } else if (!block.transactions || !block.transactions.length) {
+        html += '<p class="fop-tx-empty">Транзакцій за період не знайдено.</p>';
+      } else {
+        html += '<div class="fop-tx-table-wrap"><table class="fop-tx-table"><thead><tr>';
+        html += '<th>Дата</th><th>Сума</th><th>Тип</th><th>Контрагент</th><th>Опис</th></tr></thead><tbody>';
+        block.transactions.forEach(function (tx) {
+          var sign = tx.type === 'income' ? '+' : '−';
+          var cls = tx.type === 'income' ? 'income' : 'expense';
+          html += '<tr><td>' + esc(tx.date) + '</td>';
+          html += '<td class="fop-tx-amount fop-tx-amount--' + cls + '">' + sign + esc(tx.amount) + ' ₴</td>';
+          html += '<td>' + (tx.type === 'income' ? 'надходження' : 'витрата') + '</td>';
+          html += '<td>' + esc(tx.counterparty) + '</td>';
+          html += '<td>' + esc(tx.description) + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+      }
+      html += '</section>';
+      return html;
+    }
+
+    window.openTxDialog = function (fopName) {
+      if (!txDialog) return;
+      txDialog.hidden = false;
+      if (txTitle) txTitle.textContent = 'Останні транзакції — ' + fopName;
+      if (txLead) txLead.textContent = 'Запит до банку…';
+      if (txBody) txBody.innerHTML = '<p class="fop-tx-loading">Завантаження…</p>';
+
+      fetch('/fops/transactions/preview?fop_name=' + encodeURIComponent(fopName) + '&limit=5', {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (txLead) {
+            txLead.textContent = data.ok
+              ? 'Показано до 5 останніх транзакцій з кожного підключеного джерела (без запису в БД).'
+              : (data.error || 'Не вдалося отримати дані');
+          }
+          if (!txBody) return;
+          if (!data.results || !data.results.length) {
+            txBody.innerHTML = '<p class="fop-tx-error">' + esc(data.error || 'Немає даних') + '</p>';
+            return;
+          }
+          txBody.innerHTML = data.results.map(renderTxBlock).join('');
+        })
+        .catch(function () {
+          if (txLead) txLead.textContent = 'Помилка мережі';
+          if (txBody) txBody.innerHTML = '<p class="fop-tx-error">Не вдалося виконати запит.</p>';
+        });
+    };
+
+    document.querySelectorAll('.js-close-tx-dialog').forEach(function (el) {
+      el.addEventListener('click', closeTxDialog);
+    });
+
+    document.querySelectorAll('.js-probe-tx').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var name = btn.getAttribute('data-fop') || '';
+        if (name) window.openTxDialog(name);
+      });
+    });
+  })();
+
+  document.querySelectorAll('.js-check-session').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var name = btn.getAttribute('data-fop') || '';
+      var cell = btn.closest('td');
+      var statusEl = cell ? cell.querySelector('.fop-session') : null;
+      btn.disabled = true;
+      fetch('/fops/novapay/session/status?fop_name=' + encodeURIComponent(name), {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (statusEl) {
+            statusEl.textContent = data.message || data.error || '—';
+            statusEl.className = 'fop-session fop-session--' + (data.status || 'error');
+          }
+        })
+        .catch(function (e) {
+          if (statusEl) {
+            statusEl.textContent = 'помилка перевірки';
+            statusEl.className = 'fop-session fop-session--error';
+          }
+        })
+        .finally(function () { btn.disabled = false; });
+    });
+  });
+
+  document.querySelectorAll('.js-delete-fop').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      var name = form.getAttribute('data-name') || 'ФОП';
+      if (!window.confirm('Перенести «' + name + '» в архів?\n\nТранзакції НЕ видаляються — статистика залишиться.')) {
+        e.preventDefault();
+      }
+    });
+  });
+
+  document.querySelectorAll('.js-restore-fop').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      var name = form.getAttribute('data-name') || 'ФОП';
+      if (!window.confirm('Повернути «' + name + '» з архіву в активний список?')) {
+        e.preventDefault();
+      }
+    });
+  });
+
+  if (loginForm) {
+    loginForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      showErr('');
+      var btn = document.getElementById('fopSessionLoginBtn');
+      if (btn) btn.disabled = true;
+      var fd = new FormData(loginForm);
+      fetch(loginForm.getAttribute('action'), {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'fetch' }
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+          if (!res.data || !res.data.ok) {
+            showErr((res.data && res.data.error) || 'Помилка JWT');
+            return;
+          }
+          window.location.href = '/fops?msg=' + encodeURIComponent(res.data.message || 'JWT-сесію створено') + '&kind=ok';
+        })
+        .catch(function (err) {
+          showErr(err && err.message ? err.message : 'Помилка мережі');
+        })
+        .finally(function () { if (btn) btn.disabled = false; });
+    });
+  }
+
+})();
+</script>
+{% endblock %}

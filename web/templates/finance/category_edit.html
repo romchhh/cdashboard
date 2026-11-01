@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Редагувати категорію' if category else 'Додати категорію' }} — Cosmy Agent{% endblock %}
+{% block mobile_title %}{{ 'Редагувати категорію' if category else 'Додати категорію' }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>
+        {% if category %}
+        <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        Редагувати категорію
+        {% else %}
+        <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        Додати категорію
+        {% endif %}
+    </h1>
+    {% if category %}
+    <p class="subtitle">{{ category.name }} — {{ 'Витрата' if category.is_expense else 'Дохід' }}</p>
+    {% endif %}
+</div>
+
+{% if error and error != 'rule_empty' %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card category-edit-card">
+    <h2 class="card-title">Основні дані</h2>
+    <form method="post" action="{{ '/categories/' ~ category.id ~ '/edit' if category else '/categories/add' }}">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="name">Назва</label>
+                <input type="text" id="name" name="name" required
+                       value="{{ category.name if category else '' }}"
+                       placeholder="Наприклад: Закупка товару">
+            </div>
+            <div class="form-group category-edit-type">
+                <label>Тип</label>
+                <label class="checkbox-inline">
+                    <input type="checkbox" name="is_expense" value="1"
+                           {{ 'checked' if not category or category.is_expense else '' }}>
+                    Витрата (якщо зняти — буде «Дохід»)
+                </label>
+            </div>
+        </div>
+        <div class="form-row">
+            <button type="submit" class="btn btn-primary btn-lg">
+                {{ 'Зберегти зміни' if category else 'Додати категорію' }}
+            </button>
+            <a href="/categories" class="btn btn-secondary">Скасувати</a>
+        </div>
+    </form>
+</div>
+
+{% if category %}
+<div class="card rules-card">
+    <h2 class="card-title">Правила класифікації</h2>
+    {% if error == 'rule_empty' %}
+    <p class="alert alert-error">Вкажіть ключове слово або шаблон контрагента.</p>
+    {% endif %}
+    <p class="rules-desc">Слово в описі платежу або в назві контрагента → ця категорія призначається автоматично.</p>
+
+    <form method="post" action="/categories/{{ category.id }}/rules/add" class="rules-add-inline">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <input type="text" id="rule_keyword" name="keyword" placeholder="Ключове слово (опис)" class="rules-input">
+        <input type="text" id="rule_counterparty" name="counterparty_pattern" placeholder="Шаблон контрагента" class="rules-input">
+        <button type="submit" class="btn btn-primary">Додати</button>
+    </form>
+
+    {% if category.rules %}
+    <div class="rules-chips">
+        {% for rule in category.rules %}
+        <span class="rule-chip">
+            <span class="rule-chip-label">{% if rule.keyword and rule.counterparty_pattern %}{{ rule.keyword }} · {{ rule.counterparty_pattern }}{% else %}{{ rule.keyword or rule.counterparty_pattern or '—' }}{% endif %}</span>
+            <form method="post" action="/categories/{{ category.id }}/rules/{{ rule.id }}/delete" class="rule-chip-delete" onsubmit="return confirm('Видалити?');">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <button type="submit" title="Видалити">&times;</button>
+            </form>
+        </span>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="rules-empty-hint">Правил немає. Додайте ключове слово або шаблон контрагента вище.</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

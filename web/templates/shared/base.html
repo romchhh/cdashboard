@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{% block title %}Cosmy Agent{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=20261012m">
+    <link rel="stylesheet" href="/static/style.css?v=20261012m">
+    {% block head %}{% endblock %}
+</head>
+<body>
+{% if request.url.path != "/login" %}
+<div class="app-layout" id="appLayout">
+    <!-- Мобільний хедер з бургер-меню -->
+    <header class="mobile-header" aria-hidden="false">
+        <button type="button" class="burger-btn" id="burgerBtn" aria-label="Відкрити меню" aria-expanded="false">
+            <span class="burger-line"></span>
+            <span class="burger-line"></span>
+            <span class="burger-line"></span>
+        </button>
+        <span class="mobile-header-title" id="mobilePageTitle">{% block mobile_title %}Cosmy Agent{% endblock %}</span>
+    </header>
+    <!-- Затемнення при відкритому меню -->
+    <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
+    <aside class="sidebar" id="sidebar" role="navigation">
+        <button type="button" class="sidebar-toggle-desktop" id="sidebarToggleDesktop" aria-label="Згорнути меню" title="Згорнути меню">
+            <svg class="toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+            </svg>
+        </button>
+        <div class="sidebar-brand">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="brand-icon">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="brand-text">Cosmy Agent</span>
+        </div>
+        <nav class="sidebar-nav sidebar-nav-main">
+            {% if request.state.access_finance %}
+            <a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}" title="Головна">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+                <span class="nav-text">Головна</span>
+            </a>
+            <a href="/statistics" class="{% if request.url.path == '/statistics' %}active{% endif %}" title="Статистика">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                <span class="nav-text">Статистика</span>
+            </a>
+            <a href="/transactions" class="{% if request.url.path == '/transactions' %}active{% endif %}" title="Транзакції">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                </svg>
+                <span class="nav-text">Транзакції</span>
+            </a>
+            <a href="/cash" class="{% if request.url.path == '/cash' %}active{% endif %}" title="Готівка">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>
+                <span class="nav-text">Готівка</span>
+            </a>
+            <a href="/manual-expense" class="{% if request.url.path == '/manual-expense' %}active{% endif %}" title="Витрата поза картами">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                <span class="nav-text">Витрата поза картами</span>
+            </a>
+            {% if request.state.role == 'admin' %}
+            <a href="/reports" class="{% if request.url.path == '/reports' %}active{% endif %}" title="Звіти">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <span class="nav-text">Звіти</span>
+            </a>
+            {% endif %}
+            {% endif %}
+            {% if request.state.access_marketing %}
+            <a href="/clients" class="{% if request.url.path.startswith('/clients') and not request.url.path.startswith('/clients/advertising') and not request.url.path.startswith('/clients/ad-analytics') and not request.url.path.startswith('/clients/marketing-report') %}active{% endif %}" title="Клієнти Cosmy">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                </svg>
+                <span class="nav-text">Клієнти</span>
+            </a>
+            <a href="/clients/mailings" class="{% if request.url.path.startswith('/clients/mailings') %}active{% endif %}" title="Email-розсилки">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.945a2 2 0 002.22 0L21 8m-16 9h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+                </svg>
+                <span class="nav-text">Розсилки</span>
+            </a>
+            {% endif %}
+            {% if request.state.access_advertising %}
+            <a href="/clients/marketing-report/overview" class="{% if request.url.path.startswith('/clients/marketing-report') or request.url.path.startswith('/clients/ad-analytics') or request.url.path.startswith('/clients/advertising') %}active{% endif %}" title="Аналіз реклами">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/>
+                </svg>
+                <span class="nav-text">Аналіз реклами</span>
+            </a>
+            {% endif %}
+            {% if request.state.access_warehouse %}
+            <a href="/procurement/dashboard" class="{% if request.url.path.startswith('/procurement') or request.url.path.startswith('/products') %}active{% endif %}" title="Аналітика товарів">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                </svg>
+                <span class="nav-text">Товари</span>
+            </a>
+            <a href="/parser" class="{% if request.url.path.startswith('/parser') %}active{% endif %}" title="Парсер цін конкурентів">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+                </svg>
+                <span class="nav-text">Парсер</span>
+            </a>
+            {% endif %}
+            {% if request.state.role == 'admin' %}
+            <a href="/managers" class="{% if request.url.path.startswith('/managers') %}active{% endif %}" title="Менеджери">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+                <span class="nav-text">Менеджери</span>
+            </a>
+            <a href="/fops" class="{% if request.url.path.startswith('/fops') %}active{% endif %}" title="ФОПи">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+                <span class="nav-text">ФОПи</span>
+            </a>
+            {% endif %}
+        </nav>
+        {% if request.state.access_finance %}
+        <nav class="sidebar-nav sidebar-nav-secondary" aria-label="Рідко використовувані розділи">
+            <a href="/categories" class="{% if request.url.path.startswith('/categories') %}active{% endif %}" title="Категорії">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                <span class="nav-text">Категорії</span>
+            </a>
+            {% if request.state.role == 'admin' %}
+            <a href="/sync" class="{% if request.url.path == '/sync' %}active{% endif %}" title="Синхронізація">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="nav-text">Синхронізація</span>
+            </a>
+            {% endif %}
+        </nav>
+        {% endif %}
+        <div class="sidebar-footer">
+            <a href="/logout" title="Вихід">
+                <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                <span class="nav-text">Вихід</span>
+            </a>
+        </div>
+    </aside>
+    <main class="main-content{% block main_extra_class %}{% endblock %}">
+{% endif %}
+        {% block content %}{% endblock %}
+{% if request.url.path != "/login" %}
+    </main>
+</div>
+<script>
+(function() {
+    var layout = document.getElementById('appLayout');
+    var sidebar = document.getElementById('sidebar');
+    var overlay = document.getElementById('sidebarOverlay');
+    var burgerBtn = document.getElementById('burgerBtn');
+    if (!layout || !sidebar || !overlay || !burgerBtn) return;
+
+    function openMenu() {
+        layout.classList.add('sidebar-open');
+        document.body.classList.add('menu-open');
+        burgerBtn.setAttribute('aria-expanded', 'true');
+        burgerBtn.setAttribute('aria-label', 'Закрити меню');
+        overlay.setAttribute('aria-hidden', 'false');
+    }
+    function closeMenu() {
+        layout.classList.remove('sidebar-open');
+        document.body.classList.remove('menu-open');
+        burgerBtn.setAttribute('aria-expanded', 'false');
+        burgerBtn.setAttribute('aria-label', 'Відкрити меню');
+        overlay.setAttribute('aria-hidden', 'true');
+    }
+    function toggleMenu() {
+        if (layout.classList.contains('sidebar-open')) closeMenu();
+        else openMenu();
+    }
+
+    burgerBtn.addEventListener('click', toggleMenu);
+    overlay.addEventListener('click', closeMenu);
+    sidebar.querySelectorAll('.sidebar-nav a, .sidebar-footer a').forEach(function(link) {
+        link.addEventListener('click', closeMenu);
+    });
+
+    var STORAGE_KEY = 'finadmin_sidebar_collapsed';
+    var toggleDesktop = document.getElementById('sidebarToggleDesktop');
+    if (toggleDesktop) {
+        if (localStorage.getItem(STORAGE_KEY) === '1') {
+            layout.classList.add('sidebar-collapsed');
+            toggleDesktop.setAttribute('aria-label', 'Розгорнути меню');
+            toggleDesktop.setAttribute('title', 'Розгорнути меню');
+        }
+        toggleDesktop.addEventListener('click', function() {
+            layout.classList.toggle('sidebar-collapsed');
+            var collapsed = layout.classList.contains('sidebar-collapsed');
+            localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
+            toggleDesktop.setAttribute('aria-label', collapsed ? 'Розгорнути меню' : 'Згорнути меню');
+            toggleDesktop.setAttribute('title', collapsed ? 'Розгорнути меню' : 'Згорнути меню');
+        });
+    }
+})();
+</script>
+{% endif %}
+{% if request.url.path.startswith('/procurement') or request.url.path == '/products' %}
+<script src="/static/procurement-table-sort.js" defer></script>
+<script src="/static/procurement-product-search.js?v=6" defer></script>
+{% endif %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

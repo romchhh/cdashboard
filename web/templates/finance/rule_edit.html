@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Редагувати правило — {{ category.name }} — Cosmy Agent{% endblock %}
+{% block mobile_title %}Редагувати правило{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>
+        <svg class="icon icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.5rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+        Редагувати правило
+    </h1>
+    <p class="subtitle">Категорія: {{ category.name }}</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">
+    {% if error == 'rule_empty' %}
+    Вкажіть ключове слово або шаблон контрагента.
+    {% else %}
+    {{ error }}
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="form-card">
+    <form method="post" action="/categories/{{ category.id }}/rules/{{ rule.id }}/edit">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="keyword">Ключове слово (в описі)</label>
+                <input type="text" id="keyword" name="keyword" value="{{ rule.keyword or '' }}" placeholder="Наприклад: доставка">
+            </div>
+            <div class="form-group">
+                <label for="counterparty_pattern">Шаблон контрагента</label>
+                <input type="text" id="counterparty_pattern" name="counterparty_pattern" value="{{ rule.counterparty_pattern or '' }}" placeholder="Наприклад: медвідь">
+            </div>
+        </div>
+        <div class="form-row">
+            <button type="submit" class="btn btn-primary btn-lg">Зберегти</button>
+            <a href="/categories/{{ category.id }}/edit" class="btn btn-secondary">Скасувати</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+# Git Ignore for Databases
+
+# Databases folder
+databases/*.db
+databases/*.db-journal
+databases/*.db-wal
+databases/*.db-shm
+
+# Backups
+databases_backup_*/
+databases_backup_*.tar.gz
+*.db.backup

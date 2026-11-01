@@ -1,0 +1,6 @@
+# 413 на розсилці — часто НЕ nginx, а Starlette: multipart поле max 1 MB (виправлено в додатку:
+# WEB_FORM_MAX_PART_MB + /clients/mailings/send-json для великого HTML).
+#
+# Якщо 413 лишається — перевірте проксі перед uvicorn (інший nginx, Cloudflare тощо):
+#   client_max_body_size 200m;
+#   sudo nginx -t && sudo systemctl reload nginx

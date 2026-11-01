@@ -1,0 +1,15 @@
+{# Продаж/день + динаміка в одній колонці.
+   Потрібні: item; selected_avg_day або avg_daily_sales; horizon_days (опц.); show_60d (опц.). #}
+{% set _avg_day = selected_avg_day if selected_avg_day is defined else (avg_daily_sales or 0) %}
+<div class="procurement-sales-dynamics-cell"> <div class="procurement-sales-dynamics-cell__avg"> <strong>{{ "%.2f"|format(_avg_day or 0) }}</strong><span class="procurement-sales-dynamics-cell__unit">/день</span> </div> <div class="procurement-sales-periods"> <span title="{{ (item.sales_qty_1d or 0) }} шт за 1д · {{ '%.2f'|format(item.sales_avg_per_day_1d or 0) }} шт/день"
+              class="procurement-sales-period{% if horizon_days is defined and horizon_days == 1 %} period-chip-active{% endif %}"> 1д:<strong>{{ item.sales_qty_1d or 0 }}</strong> </span> <span title="{{ (item.sales_qty_7d or 0) }} шт за 7д · {{ '%.2f'|format(item.sales_avg_per_day_7d or 0) }} шт/день"
+              class="procurement-sales-period{% if horizon_days is defined and horizon_days == 7 %} period-chip-active{% endif %}"> 7д:<strong>{{ item.sales_qty_7d or 0 }}</strong> </span> <span title="{{ (item.sales_qty_30d or 0) }} шт за 30д · {{ '%.2f'|format(item.sales_avg_per_day_30d or 0) }} шт/день"
+              class="procurement-sales-period{% if horizon_days is defined and horizon_days == 30 %} period-chip-active{% endif %}"> 30д:<strong>{{ item.sales_qty_30d or 0 }}</strong> </span> {% if show_60d|default(false) %}
+        <span title="{{ (item.sales_qty_60d or 0) }} шт за 60д · {{ '%.2f'|format(item.sales_avg_per_day_60d or 0) }} шт/день"
+              class="procurement-sales-period{% if horizon_days is defined and horizon_days == 60 %} period-chip-active{% endif %}"> 60д:<strong>{{ item.sales_qty_60d or 0 }}</strong> </span> {% endif %}
+        <span title="{{ (item.sales_qty_90d or 0) }} шт за 90д · {{ '%.2f'|format(item.sales_avg_per_day_90d or 0) }} шт/день"
+              class="procurement-sales-period{% if horizon_days is defined and horizon_days == 90 %} period-chip-active{% endif %}"> 90д:<strong>{{ item.sales_qty_90d or 0 }}</strong> </span> <span title="{{ (item.sales_qty_180d or 0) }} шт за 180д · {{ '%.2f'|format(item.sales_avg_per_day_180d or 0) }} шт/день"
+              class="procurement-sales-period{% if horizon_days is defined and horizon_days == 180 %} period-chip-active{% endif %}"> 180д:<strong>{{ item.sales_qty_180d or 0 }}</strong> </span> <span title="{{ (item.sales_qty_360d or 0) }} шт за 360д · {{ '%.2f'|format(item.sales_avg_per_day_360d or 0) }} шт/день"
+              class="procurement-sales-period{% if horizon_days is defined and horizon_days == 360 %} period-chip-active{% endif %}"> 360д:<strong>{{ item.sales_qty_360d or 0 }}</strong> </span> </div> <div class="procurement-sales-dynamics-cell__dynamics"> {% include 'procurement/_procurement_dynamics_cell.html' %}
+    </div>
+</div>

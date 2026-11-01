@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cosmy — порівняння цін конкурентів</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,640&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="page">
+    <aside class="history-panel" id="historyPanel">
+      <div class="history-head">
+        <p class="eyebrow">Історія запитів</p>
+        <button type="button" class="ghost-btn" id="clearHistory" hidden>Очистити</button>
+      </div>
+      <div class="history-list" id="historyList">
+        <p class="muted">Поки порожньо. Після першого пошуку запити з’являться тут.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="hero">
+        <p class="eyebrow">Парсер косметики</p>
+        <h1>Порівняйте товар <em>з {{ sites|length }}</em> конкурентами</h1>
+        <p class="lede">
+          Шукаємо ту саму позицію за назвою, об’ємом і концентрацією, забираємо фото
+          і ціну — щоб не порівняти 60 мл із 180 мл.
+        </p>
+        <ul class="site-pills" id="sitePills">
+          {% for site in sites %}
+          <li>{{ site }}</li>
+          {% endfor %}
+        </ul>
+      </header>
+
+      <form class="search-card" id="searchForm">
+        <label class="field grow">
+          <span>Назва товару</span>
+          <input type="text" name="query" id="query" placeholder="Наприклад: iS Clinical Cleansing Complex 180 мл" required autocomplete="off">
+        </label>
+        <label class="field price-field">
+          <span>Наша ціна, грн</span>
+          <input type="text" name="our_price" id="ourPrice" inputmode="decimal" placeholder="необов’язково">
+        </label>
+        <button type="submit" class="search-btn" id="searchBtn">Шукати</button>
+      </form>
+
+      <p class="hint" id="statusLine">Вкажіть бренд, назву і об’єм — так збіг буде точнішим.</p>
+
+      <section class="catalog-card">
+        <div>
+          <p class="eyebrow">Каталог фінадміна</p>
+          <h2>16 товарів → Excel зі порівнянням і запасом маржі</h2>
+          <p class="muted">
+            Система дивиться не лише хто дешевший, а чи можна опустити нашу ціну
+            до ринку, не пробивши ціну підлоги: закупівля / (1 − маржа).
+          </p>
+        </div>
+        <div class="catalog-actions">
+          <button type="button" class="search-btn" id="reportBtn">Зібрати звіт</button>
+          <a class="ghost-link" id="reportDownload" href="/api/report/download" hidden>Завантажити Excel</a>
+        </div>
+        <p class="hint" id="reportStatus">Звіт обходить усі магазини по кожній позиції — це кілька хвилин.</p>
+      </section>
+
+      <section class="summary" id="summary" hidden></section>
+      <section class="results" id="results"></section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

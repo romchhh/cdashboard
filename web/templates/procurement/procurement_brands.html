@@ -1,0 +1,857 @@
+{% extends "base.html" %}
+
+{% block title %}Бренди — Товари{% endblock %}
+{% block mobile_title %}Бренди{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+{% from "procurement/_icons.html" import title_with_icon, ui_icon %}
+
+<div class="dashboard-container procurement_dashboard"> <div class="dashboard-header" style="margin-bottom: 24px;"> <h1 class="dashboard-title">{{ title_with_icon('tag', 'Бренди') }}</h1> <p class="dashboard-subtitle">Всі бренди: залишки, заморожений капітал, динаміка складу та продажів</p> </div> {% include 'procurement_nav.html' %}
+
+    <!-- KPI підсумки --> {% set products_on_site = warehouse_analytics.total_products|default(0) %}
+    {% set products_in_stock = products_on_site - (warehouse_analytics.out_of_stock_products|default(0)) %}
+    {% set stock_pieces_total = warehouse_analytics.total_stock_qty|default(0) %}
+    {% set variations_total = warehouse_analytics.total_sku|default(0) %}
+    <div class="brands-kpi-grid"> <div class="brands-kpi-card brands-kpi-brands"> <div class="brands-kpi-value">{{ brands_count }}</div> <div class="brands-kpi-label">Брендів</div> </div> <div class="brands-kpi-card brands-kpi-on-site" title="Унікальні товари в каталозі на сайті (один товар = одна позиція, варіації не окремо)"> <div class="brands-kpi-value">{{ "{:,}".format(products_on_site).replace(',', ' ') }}</div> <div class="brands-kpi-label">На сайті</div> <div class="brands-kpi-hint">товарів у каталозі</div> </div> <div class="brands-kpi-card brands-kpi-variations" title="Варіації: товар без опцій = 1; кожна опція (розмір, колір…) рахується окремо"> <div class="brands-kpi-value">{{ "{:,}".format(variations_total).replace(',', ' ') }}</div> <div class="brands-kpi-label">Варіацій товарів</div> <div class="brands-kpi-hint">SKU в каталозі</div> </div> <div class="brands-kpi-card brands-kpi-in-stock" title="Товари, у яких є хоча б 1 шт на складі (повністю без залишку не рахуються)"> <div class="brands-kpi-value">{{ "{:,}".format(products_in_stock).replace(',', ' ') }}</div> <div class="brands-kpi-label">В наявності</div> <div class="brands-kpi-hint">унікальних товарів</div> </div> <div class="brands-kpi-card brands-kpi-pieces" title="Сума залишків у штуках по всьому складу: товар А (5 шт) + товар Б (10 шт) + …"> <div class="brands-kpi-value">{{ "{:,}".format(stock_pieces_total).replace(',', ' ') }}</div> <div class="brands-kpi-label">Усього шт</div> <div class="brands-kpi-hint">на складі (сума кількостей)</div> </div> <div class="brands-kpi-card brands-kpi-frozen" title="Вартість залишків за закупівельною ціною (залишок × закупівельна)"> <div class="brands-kpi-value">{{ "{:,.0f}".format(total_frozen).replace(',', ' ') }} ₴</div> <div class="brands-kpi-label">Заморожено</div> <div class="brands-kpi-hint">залишок × закупівельна</div> </div> </div> {% include 'procurement/_procurement_sku_catalog.html' %}
+
+    <!-- Графік динаміки складу та продажів --> <div class="brands-chart-card"> <div class="brands-chart-head"> <div> <h3 class="brands-chart-title">Динаміка складу та продажів</h3> <p class="brands-chart-hint"> <strong>Залишок</strong> і <strong>заморожено (₴)</strong> — щоденний зріз складу після sync фіда (залишок × закупівельна).
+                    <strong>Продажі (шт)</strong> і <strong>виручка (₴)</strong> — успішні замовлення CRM по даті <code>order_date</code>.
+                    Режим <strong>Тиждень</strong> — сума за пн–нд (плавніша динаміка); <strong>День</strong> — по календарних днях.
+                </p> </div> <div class="brands-chart-periods"> {% for d in history_days_allowed %}
+                <a href="/procurement/brands?history_days={{ d }}&history_granularity={{ history_granularity_selected }}"
+                   class="brands-horizon-btn {% if history_days_selected == d %}active{% endif %}">{{ d }}д</a> {% endfor %}
+                <span class="brands-chart-periods__sep" aria-hidden="true"></span> <a href="/procurement/brands?history_days={{ history_days_selected }}&history_granularity=day"
+                   class="brands-horizon-btn {% if history_granularity_selected == 'day' %}active{% endif %}">День</a> <a href="/procurement/brands?history_days={{ history_days_selected }}&history_granularity=week"
+                   class="brands-horizon-btn {% if history_granularity_selected == 'week' %}active{% endif %}">Тиждень</a> </div> </div> {% if history_data %}
+        <div class="brands-chart-wrap"> <canvas id="warehouseDynamicsChart"></canvas> </div> <div class="brands-chart-legend-wrap"> <p class="brands-chart-legend-title">Показники на графіку</p> <div class="brands-chart-series-toggles" id="warehouseChartSeriesToggles" role="group" aria-label="Показники на графіку"></div> </div> {% else %}
+        <p class="brands-chart-empty">Немає історичних даних. Після кількох днів синхронізації продуктів зʼявиться графік.</p> {% endif %}
+    </div> <!-- Фільтри та сортування --> <div class="brands-filters-card"> <div class="brands-filters-row"> <!-- Пошук --> <div class="brands-filter-group"> <label class="brands-filter-label">{{ ui_icon('search') }} Пошук бренду</label> <input type="text" id="brandSearch" class="brands-search-input" placeholder="Назва бренду..." oninput="applyFilters()"> </div> <!-- Сортування --> <div class="brands-filter-group"> <label class="brands-filter-label">{{ ui_icon('type') }} Сортувати за</label> <select id="sortBy" class="brands-filter-select" onchange="applyFilters()"> <option value="revenue">Виручкою</option> <option value="sales">Продажами (шт)</option> <option value="frozen">Замороженим капіталом</option> <option value="products">Кількістю на сайті</option> <option value="margin">Середньою маржею</option> <option value="name">Назвою (А→Я)</option> </select> </div> <!-- Горизонт для виручки / продажів --> <div class="brands-filter-group" id="horizonGroup"> <label class="brands-filter-label">{{ ui_icon('calendar') }} Горизонт (виручка / продажі)</label> <div class="brands-horizon-btns" id="horizonBtns"> <button class="brands-horizon-btn" data-days="1" onclick="setHorizon(1)">1д</button> <button class="brands-horizon-btn" data-days="7" onclick="setHorizon(7)">7д</button> <button class="brands-horizon-btn active" data-days="30" onclick="setHorizon(30)">30д</button> <button class="brands-horizon-btn" data-days="60" onclick="setHorizon(60)">60д</button> <button class="brands-horizon-btn" data-days="90" onclick="setHorizon(90)">90д</button> <button class="brands-horizon-btn" data-days="180" onclick="setHorizon(180)">180д</button> <button class="brands-horizon-btn" data-days="360" onclick="setHorizon(360)">360д</button> </div> </div> </div> </div> <!-- Таблиця брендів --> <div class="brands-table-card"> <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px; flex-wrap:wrap;"> <div> <h3 class="brands-table-title" style="margin:0;">Список брендів</h3> <p class="brands-table-legend"> <strong>На сайті</strong> — унікальних товарів у каталозі ·
+                    <strong>В наявності</strong> — SKU з залишком Dilovod &gt; 0 ·
+                    <strong>Маржа</strong> — середня по товарах у наявності (залишок &gt; 0), % ·
+                    <strong>Заморожено</strong> — залишок у шт і вартість за закупівельною
+                </p> </div> <span id="brandsCount" style="font-size:13px; color:#6b7280;"></span> </div> <div class="table-wrapper"> <table class="brands-table" id="brandsTable"> <thead> <tr> <th class="brands-th-index" title="Порядковий номер">#</th> <th class="brands-th-name" title="Назва бренду">Бренд</th> <th class="brands-th-num sortable" data-col="rev_1d"   title="1 день: продажі (шт) і виручка (₴). Сортування за виручкою.">1д</th> <th class="brands-th-num sortable" data-col="rev_7d"   title="7 днів: продажі (шт) і виручка (₴). Сортування за виручкою.">7д</th> <th class="brands-th-num sortable" data-col="rev_30d"  title="30 днів: продажі (шт) і виручка (₴). Сортування за виручкою.">30д</th> <th class="brands-th-num sortable" data-col="rev_60d"  title="60 днів: продажі (шт) і виручка (₴). Сортування за виручкою.">60д</th> <th class="brands-th-num sortable" data-col="rev_90d"  title="90 днів: продажі (шт) і виручка (₴). Сортування за виручкою.">90д</th> <th class="brands-th-num sortable" data-col="rev_180d" title="180 днів: продажі (шт) і виручка (₴). Сортування за виручкою.">180д</th> <th class="brands-th-num sortable" data-col="rev_360d" title="360 днів: продажі (шт) і виручка (₴). Сортування за виручкою.">360д</th> <th class="brands-th-num sortable" data-col="margin" title="Середня маржа по товарах бренду в наявності (залишок > 0): (ціна продажу − закупівельна) ÷ ціна продажу × 100">Маржа, %</th> <th class="brands-th-num sortable" data-col="products" title="Унікальні товари бренду в каталозі на сайті (варіації не рахуються окремо)">На сайті</th> <th class="brands-th-num sortable" data-col="in_stock" title="SKU з залишком Dilovod &gt; 0 (варіант 50ml і 200ml рахуються окремо). Не quantity OpenCart.">В наявності</th> <th class="brands-th-num sortable col-muted" data-col="frozen" title="Заморожений капітал на складі: кількість штук у залишку Dilovod і сума за закупівельною ціною (залишок × закупівельна).">Заморожено</th> </tr> </thead> <tbody id="brandsTbody"> {% for b in all_brands %}
+                    <tr
+                        data-name="{{ b.name | lower }}"
+                        data-sales_1d="{{ b.sales_qty_1d or 0 }}"
+                        data-sales_7d="{{ b.sales_qty_7d or 0 }}"
+                        data-sales_30d="{{ b.sales_qty_30d or 0 }}"
+                        data-sales_60d="{{ b.sales_qty_60d or 0 }}"
+                        data-sales_90d="{{ b.sales_qty_90d or 0 }}"
+                        data-sales_180d="{{ b.sales_qty_180d or 0 }}"
+                        data-sales_360d="{{ b.sales_qty_360d or 0 }}"
+                        data-rev_1d="{{ (b.revenue_1d or 0) | round(0) | int }}"
+                        data-rev_7d="{{ (b.revenue_7d or 0) | round(0) | int }}"
+                        data-rev_30d="{{ (b.revenue_30d or 0) | round(0) | int }}"
+                        data-rev_60d="{{ (b.revenue_60d or 0) | round(0) | int }}"
+                        data-rev_90d="{{ (b.revenue_90d or 0) | round(0) | int }}"
+                        data-rev_180d="{{ (b.revenue_180d or 0) | round(0) | int }}"
+                        data-rev_360d="{{ (b.revenue_360d or 0) | round(0) | int }}"
+                        data-products="{{ b.products_count or 0 }}"
+                        data-in_stock="{{ b.sku_in_stock or 0 }}"
+                        data-margin="{{ (b.avg_margin_pct or 0) | round(2) }}"
+                        data-stock="{{ b.stock_qty or 0 }}"
+                        data-frozen="{{ (b.frozen_capital or 0) | round(0) | int }}"
+                    > <td class="brands-index">{{ loop.index }}</td> <td class="brands-name-cell"> {% if b.brand_id %}
+                            <a href="/procurement/brand/{{ b.brand_id }}" class="brands-link">{{ b.name }}</a> {% else %}
+                            <span>{{ b.name }}</span> {% endif %}
+                        </td> <td class="brands-num brands-combined-cell"> <span class="brands-qty">{{ b.sales_qty_1d or 0 }} шт</span> <span class="brands-rev">{{ "{:,.0f}".format(b.revenue_1d or 0).replace(',', ' ') }} ₴</span> </td> <td class="brands-num brands-combined-cell"> <span class="brands-qty">{{ b.sales_qty_7d or 0 }} шт</span> <span class="brands-rev">{{ "{:,.0f}".format(b.revenue_7d or 0).replace(',', ' ') }} ₴</span> </td> <td class="brands-num brands-combined-cell"> <span class="brands-qty">{{ b.sales_qty_30d or 0 }} шт</span> <span class="brands-rev">{{ "{:,.0f}".format(b.revenue_30d or 0).replace(',', ' ') }} ₴</span> </td> <td class="brands-num brands-combined-cell"> <span class="brands-qty">{{ b.sales_qty_60d or 0 }} шт</span> <span class="brands-rev">{{ "{:,.0f}".format(b.revenue_60d or 0).replace(',', ' ') }} ₴</span> </td> <td class="brands-num brands-combined-cell"> <span class="brands-qty">{{ b.sales_qty_90d or 0 }} шт</span> <span class="brands-rev">{{ "{:,.0f}".format(b.revenue_90d or 0).replace(',', ' ') }} ₴</span> </td> <td class="brands-num brands-combined-cell"> <span class="brands-qty">{{ b.sales_qty_180d or 0 }} шт</span> <span class="brands-rev">{{ "{:,.0f}".format(b.revenue_180d or 0).replace(',', ' ') }} ₴</span> </td> <td class="brands-num brands-combined-cell"> <span class="brands-qty">{{ b.sales_qty_360d or 0 }} шт</span> <span class="brands-rev">{{ "{:,.0f}".format(b.revenue_360d or 0).replace(',', ' ') }} ₴</span> </td> <td class="brands-num" title="Середня маржа по {{ b.margin_products_count or 0 }} товарах з ціною"> {% if b.avg_margin_pct is not none %}
+                            <strong>{{ "%.1f"|format(b.avg_margin_pct) }}%</strong> {% else %}—{% endif %}
+                        </td> <td class="brands-num" title="Товарів бренду в каталозі на сайті: {{ b.products_count or 0 }}">{{ b.products_count or 0 }}</td> <td class="brands-num" title="SKU в наявності: {{ b.sku_in_stock or 0 }} · унікальних товарів з залишком: {{ b.products_in_stock or 0 }}"> <span class="brands-qty">{{ b.sku_in_stock or 0 }} SKU</span> <span class="brands-rev">{{ b.products_in_stock or 0 }} тов.</span> </td> <td class="brands-num col-muted brands-combined-cell brands-frozen-cell"
+                            title="На складі {{ b.stock_qty or 0 }} шт на суму {{ '{:,.0f}'.format(b.frozen_capital or 0).replace(',', ' ') }} ₴ (залишок × закупівельна ціна)"> {% if (b.stock_qty or 0) > 0 or (b.frozen_capital or 0) > 0 %}
+                            <span class="brands-qty">{{ b.stock_qty or 0 }} шт</span> <span class="brands-frozen-amt">{% if (b.frozen_capital or 0) > 0 %}{{ "{:,.0f}".format(b.frozen_capital).replace(',', ' ') }} ₴{% else %}—{% endif %}</span> {% else %}—{% endif %}
+                        </td> </tr> {% endfor %}
+                </tbody> </table> </div> </div> <!-- Пагінація --> <nav id="brandsPagination" style="display:none; margin-top:16px; justify-content:center; align-items:center; gap:8px; flex-wrap:wrap;"> <button id="brandsPrevBtn" class="brands-page-btn" onclick="changePage(-1)">← Попередня</button> <span id="brandsPageInfo" style="font-size:14px; color:#374151; font-weight:600;"></span> <button id="brandsNextBtn" class="brands-page-btn" onclick="changePage(1)">Наступна →</button> </nav>
+</div> <style>
+.brands-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.brands-kpi-card {
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    text-align: center;
+}
+.brands-kpi-value {
+    font-size: 24px;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 4px;
+}
+.brands-kpi-label {
+    font-size: 13px;
+    color: #6b7280;
+}
+.brands-kpi-hint {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 6px;
+    line-height: 1.35;
+}
+
+.brands-chart-card {
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.brands-chart-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.brands-chart-title { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: #111827; }
+.brands-chart-hint { margin: 0; font-size: 12px; color: #6b7280; line-height: 1.45; max-width: 640px; }
+.brands-chart-periods { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.brands-chart-periods__sep { width: 1px; height: 22px; background: #e5e7eb; margin: 0 2px; }
+.brands-chart-wrap { position: relative; height: 340px; }
+.brands-chart-empty { margin: 0; padding: 24px; text-align: center; color: #9ca3af; font-size: 14px; }
+.brands-chart-legend-wrap {
+    margin-top: 12px;
+}
+.brands-chart-legend-title {
+    margin: 0 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.brands-chart-series-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    align-items: center;
+}
+.brands-chart-series-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    padding: 7px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: #1e293b;
+    line-height: 1.25;
+    cursor: pointer;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.brands-chart-series-btn.is-on {
+    border-color: #93c5fd;
+    background: #eff6ff;
+}
+.brands-chart-series-btn:not(.is-on) {
+    opacity: 0.55;
+    background: #f8fafc;
+}
+.brands-chart-series-btn:not(.is-on) .brands-chart-series-btn-label {
+    text-decoration: line-through;
+}
+.brands-chart-series-swatch {
+    flex-shrink: 0;
+    display: inline-block;
+    width: 18px;
+    height: 0;
+    vertical-align: middle;
+    border-radius: 0;
+}
+.brands-chart-series-swatch.is-fill {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    border: none;
+}
+.brands-chart-series-btn-label {
+    white-space: nowrap;
+}
+
+.dashboard-quick-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+}
+.dq-status-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: #111827;
+    transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+.dq-status-card:hover {
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    transform: translateY(-1px);
+}
+.dq-status-label { font-weight: 700; font-size: 14px; line-height: 1.3; }
+.dq-status-count { font-size: 13px; color: #6b7280; }
+.dq-status-count strong { color: #111827; }
+.dq-status-meta { font-size: 11px; color: #9ca3af; margin-top: -2px; }
+.dq-status-frozen { font-size: 12px; font-weight: 600; color: #059669; }
+.dq-status-frozen--muted { color: #9ca3af; font-weight: 500; }
+
+/* Filters */
+.brands-filters-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid #e5e7eb;
+    margin-bottom: 20px;
+}
+.brands-filters-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+.brands-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.brands-filter-label .ui-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+    flex-shrink: 0;
+    color: var(--accent-ink, #1e40af);
+    opacity: 0.85;
+}
+.brands-filter-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;}
+.brands-search-input {
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+    min-width: 220px;
+}
+.brands-search-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+.brands-filter-select {
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+}
+.brands-filter-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+.brands-horizon-btns {
+    display: flex;
+    gap: 6px;
+}
+.brands-horizon-btn {
+    padding: 6px 14px;
+    border: 2px solid #e5e7eb;
+    border-radius: var(--radius-pill, 999px);
+    background: #f9fafb;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.brands-horizon-btn:hover {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #3b82f6;
+}
+.brands-horizon-btn.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+/* Table card */
+.brands-table-card {
+    background: white;
+    border-radius: var(--radius, 20px);
+    padding: 24px;
+    box-shadow: var(--shadow, 0 1px 2px rgba(24, 24, 27, 0.04));
+    border: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+}
+.brands-table-card .table-wrapper {
+    margin-top: 12px;
+    overflow: auto;
+    border: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+    border-radius: var(--radius-sm, 14px);
+    background: #fff;
+}
+.brands-table-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 16px;
+}
+.brands-table-legend {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.45;
+    max-width: 720px;
+}
+.brands-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.brands-table th {
+    padding: 0.7rem 0.85rem;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    font-weight: 600;
+    font-size: 0.72rem;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    box-shadow: inset 0 -1px 0 #e2e8f0;
+    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid #f1f5f9;
+}
+@media (max-width: 768px) {
+    .brands-table th { top: calc(56px + env(safe-area-inset-top, 0px)); }
+}
+/* Muted (grey) column: frozen */
+.brands-table th.col-muted {
+    background: #eef0f3;
+    color: #6b7280;
+}
+.brands-table td.col-muted {
+    background: #f7f8fa;
+    color: #6b7280;
+}
+.brands-table tbody tr:hover td.col-muted {
+    background: #edf0f4;
+}
+/* Combined qty + revenue cell */
+.brands-combined-cell {
+    vertical-align: middle;
+}
+.brands-combined-cell .brands-qty {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+}
+.brands-combined-cell .brands-rev {
+    display: block;
+    font-size: 12px;
+    color: #059669;
+    font-weight: 500;
+    white-space: nowrap;
+    margin-top: 4px;
+}
+.brands-frozen-cell .brands-frozen-amt {
+    display: block;
+    font-size: 12px;
+    color: #db2777;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-top: 4px;
+}
+.brands-table th.brands-th-index {
+    text-align: center;
+    width: 40px;
+}
+.brands-table th.brands-th-num {
+    text-align: right;
+}
+.brands-table th.brands-th-name {
+    text-align: left;
+}
+/* Sortable column click */
+.brands-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+.brands-table th.sortable:hover {
+    background: #eef2f7;
+    color: #1d4ed8;
+}
+.brands-table th.sort-active {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+.brands-table th.sort-active::after {
+    content: ' ↓';
+    font-size: 11px;
+}
+.brands-table th.sort-active.sort-asc::after {
+    content: ' ↑';
+}
+/* Highlight active horizon column group */
+.brands-table th.col-horizon-active {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.brands-table td {
+    padding: 0.85rem 0.85rem;
+    border-bottom: 1px solid #f1f5f9;
+    border-right: 1px solid #f1f5f9;
+    font-size: 0.875rem;
+    vertical-align: middle;
+}
+.brands-table td:last-child {
+    border-right: none;
+}
+.brands-table tbody tr:nth-child(even):not(:hover) {
+    background: #fcfcfd;
+}
+.brands-table tbody tr:hover {
+    background: #f8fafc;
+}
+.brands-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.brands-table .brands-index {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: #9ca3af;
+    font-size: 12px;
+}
+.brands-table .brands-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.brands-table .brands-name-cell {
+    font-weight: 600;
+}
+.brands-link {
+    color: #3b82f6;
+    text-decoration: none;
+    font-weight: 600;
+}
+.brands-link:hover {
+    text-decoration: underline;
+}
+.brands-page-btn {
+    padding: 7px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.brands-page-btn:hover:not(:disabled) {
+    border-color: #3b82f6;
+    color: #3b82f6;
+    background: #eff6ff;
+}
+.brands-page-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+</style> <script>
+var currentHorizon = 30;
+var currentSortCol = null;
+var currentSortAsc = false;
+var currentPage = 1;
+var PER_PAGE = 50;
+var filteredRows = [];  // відсортовані видимі рядки після фільтрації
+
+function setHorizon(days) {
+    currentHorizon = days;
+    document.querySelectorAll('.brands-horizon-btn').forEach(function(btn) {
+        btn.classList.toggle('active', parseInt(btn.dataset.days) === days);
+    });
+    applyFilters();
+}
+
+function updateHorizonHighlight() {
+    var d = currentHorizon;
+    document.querySelectorAll('.brands-table th[data-col]').forEach(function(th) {
+        var col = th.dataset.col;
+        var isActive = (col === 'rev_' + d + 'd');
+        th.classList.toggle('col-horizon-active', isActive && !th.classList.contains('sort-active'));
+    });
+}
+
+function getSortKey(row, key) {
+    var d = currentHorizon;
+    var map = {
+        'revenue':  'rev_' + d + 'd',
+        'sales':    'sales_' + d + 'd',
+        'frozen':   'frozen',
+        'name':     'name',
+        'products': 'products',
+        'margin':   'margin'
+    };
+    var attr = map[key] || key;
+    var val = row.dataset[attr];
+    if (attr === 'name') return (val || '').toLowerCase();
+    return parseFloat(val) || 0;
+}
+
+function applyFilters() {
+    currentPage = 1;
+    renderPage();
+}
+
+function renderPage() {
+    var search  = (document.getElementById('brandSearch').value || '').toLowerCase().trim();
+    var sortBy  = document.getElementById('sortBy').value;
+    var tbody   = document.getElementById('brandsTbody');
+    var allRows = Array.from(tbody.querySelectorAll('tr'));
+
+    // 1. Фільтр пошуку
+    filteredRows = allRows.filter(function(r) {
+        return !search || (r.dataset.name || '').indexOf(search) > -1;
+    });
+
+    // 2. Сортування
+    var key = currentSortCol || sortBy;
+    var asc = currentSortCol ? currentSortAsc : (sortBy === 'name');
+    filteredRows.sort(function(a, b) {
+        var ka = getSortKey(a, key);
+        var kb = getSortKey(b, key);
+        if (typeof ka === 'string') return asc ? ka.localeCompare(kb) : kb.localeCompare(ka);
+        return asc ? ka - kb : kb - ka;
+    });
+
+    // 3. Пагінація — визначаємо зріз
+    var totalPages = Math.max(1, Math.ceil(filteredRows.length / PER_PAGE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    var start = (currentPage - 1) * PER_PAGE;
+    var pageRows = filteredRows.slice(start, start + PER_PAGE);
+
+    // 4. Перебудовуємо DOM
+    allRows.forEach(function(r) {
+        r.style.display = 'none';
+        tbody.appendChild(r);
+    });
+    pageRows.forEach(function(r, i) {
+        r.style.display = '';
+        r.querySelector('.brands-index').textContent = start + i + 1;
+        tbody.appendChild(r);
+    });
+
+    // 5. Лічильник
+    var total = filteredRows.length;
+    var countEl = document.getElementById('brandsCount');
+    if (total === allRows.length) {
+        countEl.textContent = 'Брендів: ' + total;
+    } else {
+        countEl.textContent = 'Показано: ' + total + ' з ' + allRows.length;
+    }
+
+    // 6. Пагінація
+    var pag = document.getElementById('brandsPagination');
+    if (totalPages > 1) {
+        pag.style.display = 'flex';
+        document.getElementById('brandsPageInfo').textContent = 'Сторінка ' + currentPage + ' з ' + totalPages;
+        document.getElementById('brandsPrevBtn').disabled = currentPage <= 1;
+        document.getElementById('brandsNextBtn').disabled = currentPage >= totalPages;
+    } else {
+        pag.style.display = 'none';
+    }
+
+    updateHorizonHighlight();
+}
+
+function changePage(delta) {
+    var totalPages = Math.max(1, Math.ceil(filteredRows.length / PER_PAGE));
+    currentPage = Math.min(Math.max(1, currentPage + delta), totalPages);
+    renderPage();
+    // Скролимо до таблиці
+    document.getElementById('brandsTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Клік по заголовку — сортування
+    document.querySelectorAll('.brands-table th.sortable').forEach(function(th) {
+        th.addEventListener('click', function() {
+            var col = th.dataset.col;
+            if (currentSortCol === col) {
+                currentSortAsc = !currentSortAsc;
+            } else {
+                currentSortCol = col;
+                currentSortAsc = false;
+            }
+            document.querySelectorAll('.brands-table th.sortable').forEach(function(h) {
+                h.classList.remove('sort-active', 'sort-asc');
+            });
+            th.classList.add('sort-active');
+            if (currentSortAsc) th.classList.add('sort-asc');
+
+            var sel = document.getElementById('sortBy');
+            if (col === 'frozen')            sel.value = 'frozen';
+            else if (col.startsWith('rev_')) sel.value = 'revenue';
+            else if (col === 'products')     sel.value = 'products';
+            else if (col === 'margin')       sel.value = 'margin';
+            else if (col === 'name')         sel.value = 'name';
+
+            applyFilters();
+        });
+    });
+
+    document.getElementById('sortBy').addEventListener('change', function() {
+        currentSortCol = null;
+        document.querySelectorAll('.brands-table th.sortable').forEach(function(h) {
+            h.classList.remove('sort-active', 'sort-asc');
+        });
+        applyFilters();
+    });
+
+    applyFilters();
+});
+</script>
+{% endblock %}
+
+{% block scripts %}
+{% if history_data %}
+<script type="application/json" id="warehouse-history-data">{{ history_data|tojson }}</script>
+<script>
+(function () {
+    const dataEl = document.getElementById('warehouse-history-data');
+    const canvas = document.getElementById('warehouseDynamicsChart');
+    if (!dataEl || !canvas) return;
+    const rows = JSON.parse(dataEl.textContent);
+    const labels = rows.map(function (d) { return d.date; });
+    const legendSlot = document.getElementById('warehouseChartSeriesToggles');
+
+    function warehouseDatasetVisible(chart, index) {
+        if (typeof chart.isDatasetVisible === 'function') {
+            return chart.isDatasetVisible(index);
+        }
+        return !chart.getDatasetMeta(index).hidden;
+    }
+
+    function warehouseSetDatasetVisible(chart, index, visible) {
+        if (typeof chart.setDatasetVisibility === 'function') {
+            chart.setDatasetVisibility(index, visible);
+        }
+        chart.getDatasetMeta(index).hidden = !visible;
+    }
+
+    function syncWarehouseAxes(chart) {
+        var scaleIds = ['yStock', 'ySales', 'yMoney'];
+        scaleIds.forEach(function (scaleId) {
+            var anyOn = chart.data.datasets.some(function (ds, i) {
+                return ds.yAxisID === scaleId && warehouseDatasetVisible(chart, i);
+            });
+            if (chart.options.scales[scaleId]) {
+                chart.options.scales[scaleId].display = anyOn;
+            }
+            if (chart.scales[scaleId]) {
+                chart.scales[scaleId].options.display = anyOn;
+            }
+        });
+    }
+
+    function attachWarehouseSeriesToggles(chart, slot) {
+        if (!slot) return;
+        slot.innerHTML = '';
+        chart.data.datasets.forEach(function (ds, i) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'brands-chart-series-btn is-on';
+            btn.setAttribute('aria-pressed', 'true');
+
+            var sw = document.createElement('span');
+            sw.className = 'brands-chart-series-swatch';
+            sw.setAttribute('aria-hidden', 'true');
+            var color = String(ds.borderColor || '#64748b');
+            if (ds.fill) {
+                sw.classList.add('is-fill');
+                sw.style.background = typeof ds.backgroundColor === 'string' ? ds.backgroundColor : color;
+                sw.style.border = '1px solid ' + color;
+            } else if (ds.borderDash && ds.borderDash.length) {
+                sw.style.borderBottom = '3px dashed ' + color;
+            } else {
+                sw.style.borderBottom = '3px solid ' + color;
+            }
+
+            var lab = document.createElement('span');
+            lab.className = 'brands-chart-series-btn-label';
+            lab.textContent = ds.label || '';
+
+            btn.appendChild(sw);
+            btn.appendChild(lab);
+            btn.addEventListener('click', function () {
+                var next = !warehouseDatasetVisible(chart, i);
+                warehouseSetDatasetVisible(chart, i, next);
+                syncWarehouseAxes(chart);
+                chart.update();
+                btn.classList.toggle('is-on', next);
+                btn.setAttribute('aria-pressed', next ? 'true' : 'false');
+            });
+            slot.appendChild(btn);
+        });
+    }
+
+    var warehouseChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Залишок (шт)',
+                    data: rows.map(function (d) { return d.stock; }),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    yAxisID: 'yStock',
+                    tension: 0.35,
+                    fill: false,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                },
+                {
+                    label: 'Продажі (шт)',
+                    data: rows.map(function (d) { return d.sales; }),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                    yAxisID: 'ySales',
+                    tension: 0.35,
+                    fill: false,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                },
+                {
+                    label: 'Заморожено (₴)',
+                    data: rows.map(function (d) { return d.frozen; }),
+                    borderColor: '#ec4899',
+                    backgroundColor: 'rgba(236, 72, 153, 0.06)',
+                    yAxisID: 'yMoney',
+                    tension: 0.35,
+                    fill: true,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                },
+                {
+                    label: 'Виручка (₴)',
+                    data: rows.map(function (d) { return d.revenue; }),
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                    yAxisID: 'yMoney',
+                    tension: 0.35,
+                    fill: false,
+                    borderWidth: 2,
+                    borderDash: [4, 3],
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function (ctx) {
+                            var v = ctx.parsed.y;
+                            if (v == null || Number.isNaN(v)) return null;
+                            if (ctx.dataset.yAxisID === 'yMoney') {
+                                return ctx.dataset.label + ': ' + Math.round(v).toLocaleString('uk-UA') + ' ₴';
+                            }
+                            return ctx.dataset.label + ': ' + Math.round(v).toLocaleString('uk-UA') + ' шт';
+                        },
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    ticks: { maxTicksLimit: 12, font: { size: 11 } },
+                    grid: { display: false },
+                },
+                yStock: {
+                    type: 'linear',
+                    position: 'left',
+                    beginAtZero: true,
+                    title: { display: true, text: 'Залишок, шт', font: { size: 11 }, color: '#10b981' },
+                    ticks: {
+                        font: { size: 11 },
+                        color: '#10b981',
+                        callback: function (v) {
+                            if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+                            if (v >= 1000) return (v / 1000).toFixed(0) + 'k';
+                            return v;
+                        },
+                    },
+                },
+                ySales: {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: true,
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: 'Продажі, шт', font: { size: 11 }, color: '#3b82f6' },
+                    ticks: {
+                        font: { size: 11 },
+                        color: '#3b82f6',
+                        callback: function (v) {
+                            if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+                            if (v >= 1000) return (v / 1000).toFixed(0) + 'k';
+                            return v;
+                        },
+                    },
+                },
+                yMoney: {
+                    type: 'linear',
+                    position: 'right',
+                    offset: true,
+                    beginAtZero: true,
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: '₴', font: { size: 11 }, color: '#ec4899' },
+                    ticks: {
+                        font: { size: 11 },
+                        color: '#6b7280',
+                        callback: function (v) {
+                            if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
+                            if (v >= 1000) return (v / 1000).toFixed(0) + 'k';
+                            return v;
+                        },
+                    },
+                },
+            },
+        },
+    });
+    syncWarehouseAxes(warehouseChart);
+    warehouseChart.update();
+    attachWarehouseSeriesToggles(warehouseChart, legendSlot);
+})();
+</script>
+{% endif %}
+{% endblock %}

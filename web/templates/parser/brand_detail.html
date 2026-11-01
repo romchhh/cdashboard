@@ -1,0 +1,864 @@
+{% extends "base.html" %}
+{% from "procurement/_icons.html" import ui_icon %}
+{% block title %}{{ brand }} — парсер — Cosmy Agent{% endblock %}
+{% block mobile_title %}{{ brand }}{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/css/parser.css?v=20261013n">
+<link rel="stylesheet" href="/static/css/parser_matrix.css?v=20261016c">
+{% endblock %}
+{% block content %}
+{% set shop_cols = shop_cols if shop_cols is defined and shop_cols else (report.sites if report and report.sites else sites) %}
+{% set st = price_stats if price_stats is defined and price_stats else {} %}
+{% set parsed_n = st.parsed if st.parsed is defined else (rows|selectattr('from_report')|list|length) %}
+{% set brand_enabled = brand_info.enabled if brand_info is defined and brand_info and brand_info.enabled is defined else True %}
+{% set brand_slug_val = brand_info.slug if brand_info else brand %}
+<div class="parser-shell parser-shell--wide pmx" id="parserBrandPage"
+     data-brand-slug="{{ brand_slug_val }}"
+     data-sites="{{ shop_cols|join('||') }}">
+    <div class="page-header page-header-with-actions">
+        <div>
+            <a href="/parser/brands" class="parser-back">← Усі бренди</a>
+            <h1 class="dash-title-with-icon">{{ ui_icon('tag', 'dash-title-icon-svg') }}<span>{{ brand }}</span></h1>
+            <p class="subtitle" id="brandSubtitle">
+                {% if brand_info %}пропаршено <strong id="subParsed">{{ parsed_n }}</strong> з <strong id="subTotal">{{ brand_info.catalog_count }}</strong> · {% endif %}
+                останній парсинг: <strong id="subLastAt">{{ format_parsed_at(brand_info.last_parsed_at if brand_info else None) }}</strong>
+                {% if rotation and rotation.brand_schedule %} · {{ rotation.brand_schedule.summary }}{% endif %}
+            </p>
+        </div>
+        <div class="page-header-actions parser-actions-row">
+            <form method="post" action="/parser/brands/{{ brand_info.slug if brand_info else brand }}/toggle" class="parser-inline-toggle">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <input type="hidden" name="enabled" value="{% if brand_enabled %}0{% else %}1{% endif %}">
+                <button type="submit" class="btn btn-secondary">{% if brand_enabled %}Вимкнути з парсингу{% else %}Увімкнути в парсинг{% endif %}</button>
+            </form>
+            <form method="post" action="/parser/brands/{{ brand_info.slug if brand_info else brand }}/run">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <button type="submit" class="btn btn-primary" id="brandRunBtn" {% if not brand_enabled %}disabled title="Спочатку увімкніть бренд"{% endif %}>{{ ui_icon('refresh') }} {% if report %}Оновити моніторинг{% else %}Запустити моніторинг{% endif %}</button>
+            </form>
+            {% if report %}
+            <a class="btn btn-secondary" href="/parser/api/report/download?brand={{ brand_info.slug if brand_info else brand }}">Завантажити Excel</a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% include "parser/_nav.html" %}
+    {% include "parser/_schedule.html" %}
+
+    <div class="parser-live" id="parserLive" hidden>
+        <div class="parser-live-top">
+            <strong id="liveTitle">Моніторинг…</strong>
+            <span id="liveCounts" class="parser-muted">0 / 0</span>
+        </div>
+        <div class="parser-live-bar"><i id="liveBar" style="width:0%"></i></div>
+        <div class="parser-live-product parser-muted" id="liveProduct">—</div>
+        <div class="parser-live-time parser-muted" id="liveTime"></div>
+        <div class="parser-muted" style="margin-top:0.35rem;font-size:0.75rem">Збір іде у фоні: вкладку можна закрити і відкрити знову — ціни допишуться самі.</div>
+    </div>
+
+    {% if notice == 'started' %}
+    <div class="parser-alert parser-alert--ok" id="startedNotice">{{ ui_icon('info') }} Моніторинг запущено — таблиця оновлюється в реальному часі.</div>
+    {% endif %}
+    {% if error == 'disabled' %}
+    <div class="parser-alert parser-alert--warn">{{ ui_icon('warning') }} Бренд вимкнено з парсингу. Увімкніть його, щоб запускати моніторинг.</div>
+    {% elif error == 'run_failed' %}
+    <div class="parser-alert parser-alert--err">{{ ui_icon('warning') }} Не вдалося запустити парсинг. Відкрийте вкладку «Логи» — там буде причина. Якщо запису немає, натисніть кнопку ще раз.</div>
+    {% elif error and error.startswith('Зараз уже') %}
+    <div class="parser-alert parser-alert--warn">{{ ui_icon('info') }} {{ error }}</div>
+    {% elif error %}
+    <div class="parser-alert parser-alert--err">{{ ui_icon('warning') }} Не вдалося запустити парсинг. {{ error }}</div>
+    {% endif %}
+    <div class="parser-alert parser-alert--err" id="liveError" hidden></div>
+    {% if not brand_enabled %}
+    <div class="parser-alert parser-alert--warn">{{ ui_icon('info') }} Цей бренд вимкнено — він не потрапить у повний прогін каталогу.</div>
+    {% elif rows and not report %}
+    <div class="parser-alert parser-alert--warn" id="pendingHint">{{ ui_icon('info') }} Нижче — усі товари бренду з фіда. Натисніть «Запустити моніторинг», щоб зібрати ціни конкурентів.</div>
+    {% endif %}
+
+    {% if rows %}
+    <div class="pmx-kpis" id="pmxKpis"></div>
+
+    <div class="pmx-legend" aria-label="Легенда кольорів">
+        <span class="leg leg-dearer">конкурент дорожчий за нас</span>
+        <span class="leg leg-same">±3% від нашої</span>
+        <span class="leg leg-cheaper">конкурент дешевший</span>
+        <span class="leg leg-min">★ мінімум ринку</span>
+        <span class="leg leg-low">≈ слабкий збіг (не в статистиці)</span>
+        <span class="leg leg-vol">інший обʼєм</span>
+        <span class="leg leg-oos">немає в наявності</span>
+        <span class="leg leg-odd">підозріла ціна (&gt;±85%, не в статистиці)</span>
+        <span class="leg leg-nf">не знайдено / немає бренду</span>
+        <span class="leg leg-unav">сайт не відповів</span>
+    </div>
+
+    <div class="parser-panel parser-panel--flush">
+        <div class="pmx-toolbar">
+            <div class="pmx-toolbar-title">
+                <h2>Товари бренду · порівняння з магазинами</h2>
+                <p>Клікніть по рядку — відкриється інспектор: що саме знайдено в кожному магазині і наскільки це збігається.</p>
+            </div>
+            <input type="search" id="pmxSearch" class="pmx-search" placeholder="Назва / модель…" autocomplete="off">
+            <select id="pmxSort" class="pmx-select" aria-label="Сортування">
+                <option value="default">Сортування: за замовчуванням</option>
+                <option value="worst">Дорожчі за ринок спершу</option>
+                <option value="best">Дешевші за ринок спершу</option>
+                <option value="found_asc">Найменше конкурентів спершу</option>
+                <option value="found_desc">Найбільше конкурентів спершу</option>
+                <option value="price_desc">Наша ціна ↓</option>
+                <option value="price_asc">Наша ціна ↑</option>
+                <option value="name">За назвою</option>
+            </select>
+        </div>
+        <div class="pmx-chips" id="pmxChips"></div>
+
+        <div class="pmx-wrap">
+            <table class="pmx-table" id="brandResultsTable">
+                <thead id="pmxHead"></thead>
+                <tbody id="pmxBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <script type="application/json" id="rowsData">{{ rows_json | tojson }}</script>
+    {% else %}
+    <div class="parser-panel">
+        <h2>Немає товарів бренду</h2>
+        <p class="panel-lead">У фіді Cosmy немає товарів для «{{ brand }}». Перевірте синхронізацію в розділі «Товари».</p>
+    </div>
+    {% endif %}
+</div>
+<script>
+(function () {
+  var page = document.getElementById('parserBrandPage');
+  var slug = page ? page.getAttribute('data-brand-slug') : '';
+  var SITES = (page && page.getAttribute('data-sites') || '').split('||').filter(Boolean);
+  var dataEl = document.getElementById('rowsData');
+  var ROWS = dataEl ? JSON.parse(dataEl.textContent) : [];
+  var TOTAL = ROWS.length;
+  var LAST_AT = {{ (format_parsed_at(brand_info.last_parsed_at if brand_info else None)) | tojson }};
+  var state = { filter: 'all', q: '', sort: 'default', hideEmpty: true, open: {}, flash: {} };
+  var idIndex = {};
+  ROWS.forEach(function (r, i) { if (r.id != null) idIndex[String(r.id)] = i; });
+  var ORIGINAL = ROWS.map(function (_, i) { return i; });
+
+  var DATA_STATUSES = { match: 1, low_match: 1, other_volume: 1, out_of_stock: 1, odd_price: 1 };
+  var DEAD = { unavailable: 1, timeout: 1, error: 1 };
+  var STATUS_LABEL = {
+    match: 'збіг', low_match: 'слабкий збіг', other_volume: 'інший обʼєм', out_of_stock: 'немає в наявності',
+    odd_price: 'підозріла ціна', not_found: 'не знайдено', unavailable: 'сайт не відповів',
+    timeout: 'сайт не відповів', error: 'помилка', no_brand: 'немає бренду'
+  };
+  /* Ті самі пороги, що в catalog_report — UI перекваліфіковує старі звіти без репарсу. */
+  var PRICE_LOW_RATIO = 0.50;
+  var PRICE_HIGH_RATIO = 1.85;
+  var MIN_MATCH_FOR_STATS = 0.68;
+  var SUSPICIOUS_GAP_PCT = 30;
+  var MIN_SHOPS_STRONG = 2;
+
+  /* ——— утиліти ——— */
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function fmtPrice(v) {
+    if (v == null || v === '') return '';
+    return Math.round(Number(v)).toLocaleString('uk-UA').replace(/,/g, ' ').replace(/\u00a0/g, ' ');
+  }
+  function fmtPct(v, d) {
+    if (v == null || v === '' || isNaN(v)) return '—';
+    var n = Number(v);
+    return (n > 0 ? '+' : '') + n.toFixed(d == null ? 1 : d) + '%';
+  }
+  function median(arr) {
+    if (!arr.length) return null;
+    var s = arr.slice().sort(function (a, b) { return a - b; });
+    var m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+  function parsedRow(r) { return !!r.from_report; }
+
+  /* Перекваліфікація: битий URL/title, ×2 ціна, слабкий score → не в статистиці. */
+  function isJunkHit(info) {
+    if (!info) return true;
+    var title = String(info.title || '').trim().toLowerCase();
+    var url = String(info.url || '').toLowerCase();
+    if (/^пошук|^поиск|^search/.test(title)) return true;
+    if (/\/search\/?(\?|$)/.test(url) || url.indexOf('route=product/search') !== -1) return true;
+    return false;
+  }
+  function effectiveStatus(info, our) {
+    if (!info) return '';
+    var st = info.status || '';
+    if (st === 'match' && isJunkHit(info)) return 'not_found';
+    if (st !== 'match') return st;
+    var score = info.match != null ? Number(info.match) : null;
+    if (score != null && !isNaN(score) && score < MIN_MATCH_FOR_STATS) return 'low_match';
+    var price = info.price != null ? Number(info.price) : null;
+    if (our && price && !(our * PRICE_LOW_RATIO <= price && price <= our * PRICE_HIGH_RATIO)) {
+      return 'odd_price';
+    }
+    return 'match';
+  }
+
+  function derivePosition(our, an) {
+    if (!our) return { pos: 'немає нашої ціни', advice: '' };
+    if (an.found === 0) {
+      var weak = (an.odd || 0) + (an.weak || 0);
+      return {
+        pos: 'немає конкурентів',
+        advice: weak
+          ? 'є ' + weak + ' слабких/підозрілих збігів — не в статистиці'
+          : 'порівняти ні з ким — ціну тримаємо'
+      };
+    }
+    var low = an.min, med = an.med;
+    var diffMin = (our - low) / low * 100;
+    var pos, advice;
+    if (our < low * 0.97) {
+      pos = 'дешевше за всіх';
+      advice = 'найдешевші на ринку';
+      if (our < low * 0.9) advice += '; запас до ' + fmtPrice(low) + ' ₴';
+    } else if (diffMin <= 3) {
+      pos = 'на рівні мінімуму';
+      advice = 'ціна конкурентна';
+    } else if (med != null && our <= med * 1.03) {
+      pos = 'в ринку';
+      advice = 'мінімум нижче на ' + Math.round(our - low) + ' ₴ (' + diffMin.toFixed(1) + '%)';
+    } else {
+      pos = 'дорожче за ринок';
+      advice = 'дорожче мінімуму на ' + Math.round(our - low) + ' ₴ (' + diffMin.toFixed(1) + '%)';
+    }
+    if (Math.abs(diffMin) > SUSPICIOUS_GAP_PCT && pos === 'дешевше за всіх') {
+      pos = 'перевірте збіг';
+      advice += ' · великий розрив — перевірте обʼєм/фасовку';
+    }
+    if (an.found < MIN_SHOPS_STRONG && pos === 'дешевше за всіх') {
+      pos = 'умовно дешевше';
+      advice += ' · лише ' + an.found + ' магазин — слабке порівняння';
+    }
+    return { pos: pos, advice: advice };
+  }
+
+  /* ——— аналітика рядка ——— */
+  function analyze(r) {
+    if (r._an && r._an.src === r.shops) return r._an;
+    var matches = [], brandShops = 0, odd = 0, weak = 0;
+    var shops = r.shops || {};
+    var our = r.our_price != null ? Number(r.our_price) : null;
+    SITES.forEach(function (s) {
+      var i = shops[s];
+      if (!i) return;
+      var st = effectiveStatus(i, our);
+      if (st !== 'no_brand' && !DEAD[st]) brandShops++;
+      if (st === 'match' && i.price != null) matches.push({ site: s, price: Number(i.price), score: i.match });
+      else if (st === 'odd_price') odd++;
+      else if (st === 'low_match') weak++;
+    });
+    var prices = matches.map(function (m) { return m.price; });
+    var out = {
+      src: r.shops, matches: matches, found: matches.length, brandShops: brandShops,
+      odd: odd, weak: weak,
+      min: prices.length ? Math.min.apply(null, prices) : null,
+      max: prices.length ? Math.max.apply(null, prices) : null,
+      med: median(prices),
+      minSite: null
+    };
+    if (matches.length) {
+      var best = matches[0];
+      matches.forEach(function (m) { if (m.price < best.price) best = m; });
+      out.minSite = best.site;
+    }
+    out.delta = (our && out.min) ? (our - out.min) / out.min * 100 : null;
+    var derived = derivePosition(our, out);
+    out.position = derived.pos;
+    out.advice = derived.advice;
+    out.reliable = out.found >= MIN_SHOPS_STRONG;
+    r._an = out;
+    return out;
+  }
+
+  /* ——— кольори ——— */
+  function deltaStyle(d) {
+    // d = наша ціна відносно мінімуму ринку, %
+    if (d == null) return 'background:#f1f5f9;color:#94a3b8';
+    var a = Math.min(Math.abs(d) / 25, 1);
+    if (d < -0.5) return 'background:hsl(142 70% ' + (92 - a * 10) + '%);color:hsl(142 75% ' + (28 - a * 4) + '%)';
+    if (d <= 3) return 'background:hsl(214 90% 93%);color:hsl(214 75% 36%)';
+    if (d <= 10) return 'background:hsl(38 95% ' + (90 - a * 6) + '%);color:hsl(28 85% 32%)';
+    return 'background:hsl(0 88% ' + (92 - a * 12) + '%);color:hsl(0 70% ' + (38 - a * 6) + '%)';
+  }
+  function cellStyle(pct) {
+    // pct = ціна конкурента відносно нашої, %: мінус — конкурент дешевший (погано для нас)
+    var a = Math.min(Math.abs(pct) / 35, 1);
+    if (Math.abs(pct) <= 3) return 'background:hsl(214 90% 95%);color:hsl(214 70% 34%)';
+    if (pct < 0) return 'background:hsl(0 88% ' + (96 - a * 13) + '%);color:hsl(0 68% ' + (44 - a * 10) + '%)';
+    return 'background:hsl(142 65% ' + (95 - a * 14) + '%);color:hsl(142 70% ' + (30 - a * 4) + '%)';
+  }
+  function posClass(pos) {
+    if (pos === 'дешевше за всіх') return 'pmx-pos--best';
+    if (pos === 'умовно дешевше') return 'pmx-pos--soft';
+    if (pos === 'перевірте збіг') return 'pmx-pos--warn';
+    if (pos === 'на рівні мінімуму') return 'pmx-pos--min';
+    if (pos === 'в ринку') return 'pmx-pos--mid';
+    if (pos === 'дорожче за ринок') return 'pmx-pos--bad';
+    return 'pmx-pos--none';
+  }
+
+  /* ——— комірки ——— */
+  function shopCell(site, r, an) {
+    if (!parsedRow(r)) return '<td class="pmx-cell k-pending" title="Ще не парсилось">·</td>';
+    var info = (r.shops || {})[site];
+    if (!info) {
+      if (r.partial) return '<td class="pmx-cell k-pending" title="Шукаю в цьому магазині">…</td>';
+      return '<td class="pmx-cell k-empty" title="немає даних">—</td>';
+    }
+    var our = r.our_price != null ? Number(r.our_price) : null;
+    var st = effectiveStatus(info, our);
+    var price = info.price != null ? Number(info.price) : null;
+    var tip = esc((info.title || site) + (info.note ? ' · ' + info.note : '') + (info.match != null ? ' · збіг ' + Math.round(info.match * 100) + '%' : ''));
+    var link = function (txt, cls) {
+      return info.url ? '<a href="' + esc(info.url) + '" target="_blank" rel="noopener" class="' + cls + '">' + txt + '</a>' : '<span class="' + cls + '">' + txt + '</span>';
+    };
+    if (st === 'match' && price != null) {
+      var dp = our ? (price - our) / our * 100 : (info.diff_pct != null ? Number(info.diff_pct) : null);
+      var isMin = an.min != null && price === an.min && an.found > 1;
+      var style = dp != null ? cellStyle(dp) : 'background:#f1f5f9';
+      return '<td class="pmx-cell k-match' + (isMin ? ' is-min' : '') + '" style="' + style + '" title="' + tip + '">' +
+        link(fmtPrice(price), 'px') +
+        (dp != null ? '<span class="pd">' + fmtPct(dp, 0) + '</span>' : '') +
+        (isMin ? '<span class="star">★</span>' : '') +
+        (info.volume ? '<span class="pt">' + esc(info.volume) + '</span>' : '') + '</td>';
+    }
+    if (st === 'low_match') {
+      return '<td class="pmx-cell k-low" title="' + tip + '">' + (price != null ? link(fmtPrice(price), 'px') : '') + '<span class="pd">≈ збіг?</span></td>';
+    }
+    if (st === 'other_volume') {
+      return '<td class="pmx-cell k-vol" title="' + tip + '">' + (price != null ? link(fmtPrice(price), 'px') : '') + '<span class="pd">' + esc(info.volume || 'інший обʼєм') + '</span></td>';
+    }
+    if (st === 'out_of_stock') {
+      return '<td class="pmx-cell k-oos" title="' + tip + '">' + (price != null ? link(fmtPrice(price), 'px') : '') + '<span class="pd">немає</span></td>';
+    }
+    if (st === 'odd_price') {
+      var oddPct = our && price ? ' · ' + fmtPct((price - our) / our * 100, 0) + ' від нашої' : '';
+      return '<td class="pmx-cell k-odd" title="' + tip + ' · підозріла ціна (ймовірно інша фасовка)' + oddPct + '">' +
+        (price != null ? link(fmtPrice(price), 'px') : '') + '<span class="pd">ціна?</span></td>';
+    }
+    if (st === 'not_found') return '<td class="pmx-cell k-nf" title="' + esc(info.reason || 'не знайдено') + '">не знайдено</td>';
+    if (st === 'no_brand') return '<td class="pmx-cell k-nb" title="бренд не представлений у магазині">·</td>';
+    if (DEAD[st]) return '<td class="pmx-cell k-unav" title="' + esc(info.reason || 'магазин не відповів') + '">н/д</td>';
+    return '<td class="pmx-cell k-empty" title="' + esc(st) + '">—</td>';
+  }
+
+  function rangeCell(r, an) {
+    if (!parsedRow(r)) return '<td class="pmx-range"><span class="parser-muted">—</span></td>';
+    if (!an.found) return '<td class="pmx-range"><span class="parser-muted">немає порівняння</span></td>';
+    var our = r.our_price != null ? Number(r.our_price) : null;
+    var lo = an.min, hi = an.max;
+    if (our != null) { lo = Math.min(lo, our); hi = Math.max(hi, our); }
+    var span = hi - lo;
+    var pos = function (v) { return span > 0 ? ((v - lo) / span * 100) : 50; };
+    var dots = an.matches.map(function (m) { return '<i class="rb-comp" style="left:' + pos(m.price).toFixed(1) + '%" title="' + esc(m.site + ': ' + fmtPrice(m.price)) + '"></i>'; }).join('');
+    var cls = '';
+    if (our != null && an.min != null) cls = our <= an.min * 1.0 ? 'is-good' : (our <= an.min * 1.03 ? 'is-ok' : 'is-bad');
+    var ourMark = our != null ? '<i class="rb-our ' + cls + '" style="left:' + pos(our).toFixed(1) + '%" title="наша: ' + fmtPrice(our) + '"></i>' : '';
+    return '<td class="pmx-range"><div class="pmx-range-nums"><b>' + fmtPrice(an.min) + '</b><b>' + fmtPrice(an.max) + '</b></div>' +
+      '<div class="pmx-range-bar">' + dots + ourMark + '</div>' +
+      '<div class="pmx-range-med">медіана ' + fmtPrice(an.med) + '</div></td>';
+  }
+
+  function foundCell(r, an) {
+    if (!parsedRow(r)) return '<td><span class="pmx-found-badge f-none">—</span></td>';
+    var anyShop = SITES.some(function (s) { return (r.shops || {})[s]; });
+    if (r.partial && !anyShop) return '<td><span class="pmx-found-badge f-none">шукаю</span></td>';
+    var our = r.our_price != null ? Number(r.our_price) : null;
+    var cls = an.found >= 3 ? 'f-good' : (an.found >= 1 ? 'f-mid' : (an.brandShops > 0 ? 'f-zero' : 'f-none'));
+    var dots = SITES.map(function (s) {
+      var i = (r.shops || {})[s];
+      var st = i ? effectiveStatus(i, our) : '';
+      var c = st === 'match' ? 'd-match' : (st === 'low_match' || st === 'odd_price' ? 'd-weak' : (st === 'other_volume' ? 'd-vol' : (st === 'not_found' ? 'd-miss' : 'd-none')));
+      return '<i class="' + c + '" title="' + esc(s + ' — ' + (STATUS_LABEL[st] || '—')) + '"></i>';
+    }).join('');
+    var tip = 'надійних збігів: ' + an.found + ' · слабких: ' + an.weak + ' · підозріла ціна: ' + an.odd + ' · магазинів з брендом: ' + an.brandShops;
+    return '<td><div class="pmx-found"><span class="pmx-found-badge ' + cls + '" title="' + esc(tip) + '">' + an.found + ' / ' + an.brandShops + '</span><div class="pmx-dots">' + dots + '</div></div></td>';
+  }
+
+  function rowHtml(r, idx, visible) {
+    var an = analyze(r);
+    var pending = !parsedRow(r);
+    var our = r.our_price != null ? Number(r.our_price) : null;
+    var open = !!state.open[r.id];
+    var thumb = r.image_url
+      ? '<img class="pmx-thumb" src="' + esc(r.image_url) + '" alt="" loading="lazy" decoding="async" width="42" height="42" onerror="this.outerHTML=\'<span class=&quot;pmx-thumb pmx-thumb--empty&quot;></span>\'">'
+      : '<span class="pmx-thumb pmx-thumb--empty"></span>';
+    var meta = '';
+    if (r.model) meta += '<span class="pmx-tag">' + esc(r.model) + '</span>';
+    if (r.option_value) meta += '<span class="pmx-tag pmx-tag--vol">' + esc(r.option_value) + '</span>';
+    else if (r.ref_volume) meta += '<span class="pmx-tag pmx-tag--vol">' + esc(r.ref_volume) + '</span>';
+    if (r.partial) meta += '<span class="pmx-tag pmx-tag--pending">шукаю</span>';
+    else if (pending) meta += '<span class="pmx-tag pmx-tag--pending">очікує</span>';
+    var delta = pending || an.delta == null
+      ? '<span class="pmx-delta" style="background:#f1f5f9;color:#94a3b8">—</span>'
+      : '<span class="pmx-delta" style="' + deltaStyle(an.delta) + '">' + fmtPct(an.delta) + '<small>' + esc(an.minSite || r.min_site || '') + '</small></span>';
+    var pos = an.position || r.position || '';
+    var posHtml = pending ? '<span class="pmx-pos pmx-pos--none">не парсився</span>'
+      : '<span class="pmx-pos ' + posClass(pos) + '" title="' + esc(an.advice || r.advice || '') + '">' + esc(pos || '—') + '</span>';
+    var cells = '';
+    visible.forEach(function (s) { cells += shopCell(s, r, an); });
+    var flash = state.flash[r.id] ? ' is-live-flash' : '';
+    var html = '<tr class="pmx-row' + (pending ? ' is-pending' : '') + (open ? ' is-open' : '') + flash + '" data-i="' + idx + '" data-id="' + esc(r.id) + '">' +
+      '<td class="c-idx">' + (idx + 1) + '</td>' +
+      '<td class="c-name"><div class="pmx-product">' + thumb + '<div>' +
+      (r.product_url
+        ? '<a class="pmx-pname" href="' + esc(r.product_url) + '" target="_blank" rel="noopener" title="Відкрити товар на Cosmy">' + esc(r.name || r.query) + '</a>'
+        : '<span class="pmx-pname">' + esc(r.name || r.query) + '</span>') +
+      (r.name_uk ? '<div class="pmx-puk">' + esc(r.name_uk) + '</div>' : '') + '<div class="pmx-pmeta">' + meta + '</div></div></div></td>' +
+      '<td class="c-our pmx-our">' + (our ? fmtPrice(our) : '—') + '</td>' +
+      '<td class="c-delta">' + delta + '</td>' +
+      rangeCell(r, an) +
+      foundCell(r, an) + '<td>' + posHtml + '</td>' + cells + '</tr>';
+    if (open) html += detailHtml(r, an, visible.length + 7);
+    return html;
+  }
+
+  /* ——— інспектор мапінгу ——— */
+  function detailHtml(r, an, colspan) {
+    var shops = r.shops || {};
+    var our = r.our_price != null ? Number(r.our_price) : null;
+    var order = { match: 0, low_match: 1, other_volume: 2, out_of_stock: 3, odd_price: 4, not_found: 5, unavailable: 6, timeout: 6, error: 6 };
+    var list = [], noBrand = [];
+    SITES.forEach(function (s) {
+      var i = shops[s];
+      if (!i) return;
+      if (i.status === 'no_brand') { noBrand.push(s); return; }
+      list.push({ site: s, info: i, st: effectiveStatus(i, our) });
+    });
+    list.sort(function (a, b) {
+      var oa = order[a.st] != null ? order[a.st] : 9, ob = order[b.st] != null ? order[b.st] : 9;
+      if (oa !== ob) return oa - ob;
+      return (a.info.price || 1e12) - (b.info.price || 1e12);
+    });
+    var cls = { match: 's-match', low_match: 's-low', other_volume: 's-vol', out_of_stock: 's-oos', odd_price: 's-odd', not_found: 's-miss' };
+    var badge = {
+      match: 'background:#dcfce7;color:#166534', low_match: 'background:#ffedd5;color:#c2410c', other_volume: 'background:#ede9fe;color:#6d28d9',
+      out_of_stock: 'background:#e2e8f0;color:#475569', odd_price: 'background:#fce7f3;color:#9d174d', not_found: 'background:#fee2e2;color:#991b1b'
+    };
+    var rows = list.map(function (x) {
+      var i = x.info, st = x.st;
+      var rcls = cls[st] || 's-unav';
+      var near = (i.near || []).filter(function (n) { return n && n.title && n.title !== i.title; }).slice(0, 2)
+        .map(function (n) { return (n.url ? '<a href="' + esc(n.url) + '" target="_blank" rel="noopener">' + esc(n.title) + '</a>' : esc(n.title)) + (n.price ? ' — ' + fmtPrice(n.price) + ' ₴' : '') + (n.match != null ? ' (' + Math.round(n.match * 100) + '%)' : ''); });
+      var titleHtml = i.title ? (i.url ? '<a href="' + esc(i.url) + '" target="_blank" rel="noopener">' + esc(i.title) + '</a>' : esc(i.title)) : '<span class="parser-muted">' + esc(i.reason || '—') + '</span>';
+      var small = [];
+      if (st !== (i.status || '') && (i.status || '') === 'match') {
+        small.push(st === 'odd_price'
+          ? 'відсіяно: ціна поза ±65% від нашої'
+          : 'відсіяно: слабкий score збігу');
+      }
+      if (i.note) small.push(esc(i.note));
+      if (i.volume) small.push('обʼєм ' + esc(i.volume));
+      if (near.length) small.push('схожі: ' + near.join(' · '));
+      if (i.title && i.reason && st !== 'match') small.push(esc(i.reason));
+      var m = i.match != null ? Math.round(i.match * 100) : null;
+      var confColor = m == null ? '#cbd5e1' : (m >= 80 ? '#22c55e' : (m >= 60 ? '#f59e0b' : '#ef4444'));
+      var dp = i.diff_pct != null && st === 'match' ? ' <span style="font-size:.66rem;color:#64748b">' + fmtPct(i.diff_pct, 0) + '</span>' : '';
+      return '<div class="pmx-drow ' + rcls + '"><span class="d-shop">' + esc(x.site) + '</span>' +
+        '<span class="d-badge" style="' + (badge[st] || 'background:#fef9c3;color:#a16207') + '">' + esc(STATUS_LABEL[st] || st) + '</span>' +
+        '<div class="d-title">' + titleHtml + (small.length ? '<small>' + small.join(' · ') + '</small>' : '') + '</div>' +
+        '<div class="pmx-conf-wrap">' + (m != null ? m + '%<div class="pmx-conf"><i style="width:' + m + '%;background:' + confColor + '"></i></div>' : '') + '</div>' +
+        '<span class="d-price">' + (i.price != null ? fmtPrice(i.price) + ' ₴' + dp : '—') + '</span></div>';
+    }).join('');
+    return '<tr class="pmx-detail"><td colspan="' + colspan + '"><div class="pmx-detail-in">' +
+      '<h4>Інспектор мапінгу <span>надійних ' + an.found + ' · слабких ' + an.weak + ' · підозріла ціна ' + an.odd + ' · з брендом ' + an.brandShops + ' · «' + esc(r.query || r.name) + '»</span></h4>' +
+      '<div class="pmx-dgrid">' + (rows || '<span class="parser-muted">Немає даних по магазинах.</span>') +
+      (noBrand.length ? '<div class="pmx-sub" style="margin-top:.35rem">Бренду немає в асортименті: ' + esc(noBrand.join(', ')) + '</div>' : '') +
+      '</div></div></td></tr>';
+  }
+
+  /* ——— KPI ——— */
+  function seg(cls, n, total) {
+    return n > 0 ? '<i class="' + cls + '" style="width:' + (total ? (n / total * 100) : 0).toFixed(2) + '%"></i>' : '';
+  }
+  function renderKpis() {
+    var el = document.getElementById('pmxKpis');
+    if (!el) return;
+    var parsed = ROWS.filter(parsedRow);
+    var n = parsed.length;
+    var f0 = 0, f1 = 0, f2p = 0, sumFound = 0, sumOdd = 0, sumWeak = 0;
+    var cheaper = 0, softCheap = 0, at = 0, dearer = 0, nodata = 0, check = 0;
+    var sumD = 0, cntD = 0, ds = [], dsStrong = [];
+    var siteHits = {}, siteOdd = {};
+    var matchMedians = [], respondedPcts = [];
+    var COVERAGE_TARGET = 7;
+    parsed.forEach(function (r) {
+      var an = analyze(r);
+      matchMedians.push(an.found);
+      var responded = 0, marketSites = 0;
+      SITES.forEach(function (s) {
+        var i = (r.shops || {})[s];
+        if (!i) return;
+        var st = effectiveStatus(i, r.our_price != null ? Number(r.our_price) : null);
+        if (st === 'no_brand') return;
+        marketSites++;
+        if (!DEAD[st]) responded++;
+      });
+      if (marketSites) respondedPcts.push(responded / marketSites * 100);
+      sumFound += an.found;
+      sumOdd += an.odd;
+      sumWeak += an.weak;
+      if (an.found >= 2) f2p++; else if (an.found === 1) f1++; else f0++;
+      if (an.delta == null) nodata++;
+      else {
+        ds.push(an.delta); sumD += an.delta; cntD++;
+        if (an.reliable) dsStrong.push(an.delta);
+        if (an.position === 'перевірте збіг' || an.position === 'умовно дешевше') check++;
+        else if (an.delta < -0.5) { cheaper++; if (an.reliable) softCheap++; }
+        else if (an.delta <= 3) at++;
+        else dearer++;
+      }
+      an.matches.forEach(function (m) { siteHits[m.site] = (siteHits[m.site] || 0) + 1; });
+      var our = r.our_price != null ? Number(r.our_price) : null;
+      SITES.forEach(function (s) {
+        var i = (r.shops || {})[s];
+        if (i && effectiveStatus(i, our) === 'odd_price') siteOdd[s] = (siteOdd[s] || 0) + 1;
+      });
+    });
+    var avgFound = n ? sumFound / n : null;
+    var medMatches = median(matchMedians);
+    var avgResponded = respondedPcts.length ? respondedPcts.reduce(function (a, b) { return a + b; }, 0) / respondedPcts.length : null;
+    var geTarget = matchMedians.filter(function (f) { return f >= COVERAGE_TARGET; }).length;
+    var avgD = cntD ? sumD / cntD : null;
+    var medStrong = median(dsStrong);
+    var medD = median(ds);
+    var reliablePct = n ? Math.round(f2p / n * 100) : null;
+    var tops = Object.keys(siteHits).sort(function (a, b) { return siteHits[b] - siteHits[a]; });
+    var foundCls = avgFound == null ? '' : (avgFound >= 2 ? 'is-good' : (avgFound >= 1 ? 'is-warn' : 'is-bad'));
+    var dCls = medStrong == null && avgD == null ? '' : ((medStrong != null ? medStrong : avgD) < -0.5 ? 'is-good' : ((medStrong != null ? medStrong : avgD) <= 3 ? 'is-ok' : 'is-bad'));
+    var qualityN = sumOdd + sumWeak;
+    var html = '';
+    html += '<div class="pmx-card"><div class="pmx-card-head"><span>Моніторинг</span><span>' + (LAST_AT && LAST_AT !== '—' ? esc(LAST_AT) : 'ще не запускали') + '</span></div>' +
+      '<div class="pmx-big">' + n + '<small>/ ' + TOTAL + ' товарів</small></div>' +
+      '<div class="pmx-stack">' + seg('pmx-seg-blue', n, TOTAL) + '</div>' +
+      '<div class="pmx-sub">пропаршено <b>' + (TOTAL ? Math.round(n / TOTAL * 100) : 0) + '%</b> · відсічено підозрілих: <b>' + qualityN + '</b></div></div>';
+    var covCls = medMatches == null ? '' : (medMatches >= COVERAGE_TARGET ? 'is-good' : (medMatches >= 4 ? 'is-ok' : 'is-warn'));
+    html += '<div class="pmx-card"><div class="pmx-card-head"><span>Coverage ринку</span><span>ціль ≥' + COVERAGE_TARGET + ' збігів</span></div>' +
+      '<div class="pmx-big ' + covCls + '">' + (medMatches == null ? '—' : medMatches.toFixed(1)) + '<small>медіана збігів / SKU</small></div>' +
+      '<div class="pmx-sub">середнє <b>' + (avgFound == null ? '—' : avgFound.toFixed(1)) + '</b> · SKU з ≥' + COVERAGE_TARGET + ': <b>' +
+      (n ? Math.round(geTarget / n * 100) : '—') + '%</b> · магазини відповіли: <b>' +
+      (avgResponded == null ? '—' : avgResponded.toFixed(0) + '%') + '</b> (не «н/д»)</div></div>';
+    html += '<div class="pmx-card"><div class="pmx-card-head"><span>Надійні порівняння</span><span>≥2 магазини: ' + (reliablePct == null ? '—' : reliablePct + '%') + '</span></div>' +
+      '<div class="pmx-big ' + foundCls + '">' + (avgFound == null ? '—' : avgFound.toFixed(1)) + '<small>збігів / товар</small></div>' +
+      '<div class="pmx-stack">' + seg('pmx-seg-red', f0, n) + seg('pmx-seg-amber', f1, n) + seg('pmx-seg-green', f2p, n) + '</div>' +
+      '<div class="pmx-legend-inline"><span style="--dot:#ef4444">0: <b>' + f0 + '</b></span><span style="--dot:#f59e0b">1: <b>' + f1 + '</b></span><span style="--dot:#22c55e">≥2: <b>' + f2p + '</b></span></div>' +
+      '<div class="pmx-sub">слабкий score: <b>' + sumWeak + '</b> · підозріла ціна (±65%): <b>' + sumOdd + '</b></div></div>';
+    html += '<div class="pmx-card"><div class="pmx-card-head"><span>Ціни vs ринок</span><span>медіана (надійні) ' + (medStrong == null ? '—' : fmtPct(medStrong)) + '</span></div>' +
+      '<div class="pmx-big ' + dCls + '">' + (medStrong != null ? fmtPct(medStrong) : (avgD == null ? '—' : fmtPct(avgD))) + '<small>Δ до мін.</small></div>' +
+      '<div class="pmx-stack">' + seg('pmx-seg-green', cheaper, n) + seg('pmx-seg-violet', check, n) + seg('pmx-seg-blue', at, n) + seg('pmx-seg-red', dearer, n) + seg('pmx-seg-grey', nodata, n) + '</div>' +
+      '<div class="pmx-legend-inline"><span style="--dot:#22c55e">дешевші: <b>' + cheaper + '</b></span><span style="--dot:#8b5cf6">умовні: <b>' + check + '</b></span><span style="--dot:#3b82f6">≈ ринок: <b>' + at + '</b></span><span style="--dot:#ef4444">дорожчі: <b>' + dearer + '</b></span></div>' +
+      '<div class="pmx-sub">усі порівняння медіана ' + (medD == null ? '—' : fmtPct(medD)) + (softCheap ? ' · з ≥2 магазинами дешевші: <b>' + softCheap + '</b>' : '') + '</div></div>';
+    html += '<div class="pmx-card"><div class="pmx-card-head"><span>Якість по магазинах</span><span>' + tops.length + ' з надійними збігами</span></div>' +
+      '<div class="pmx-big">' + tops.length + '<small>/ ' + SITES.length + '</small></div>' +
+      '<div class="pmx-sub">' + (tops.length
+        ? tops.slice(0, 6).map(function (s) {
+            var oddN = siteOdd[s] || 0;
+            return esc(s) + ' <b>' + siteHits[s] + '</b>' + (oddN ? ' <span class="pmx-odd-hint">+' + oddN + '?</span>' : '');
+          }).join(' · ')
+        : (sumOdd ? 'надійних збігів немає — є ' + sumOdd + ' підозрілих цін (часто інша фасовка)' : 'після моніторингу тут зʼявиться рейтинг')) + '</div></div>';
+    el.innerHTML = html;
+  }
+
+  /* ——— фільтри, сортування, таблиця ——— */
+  function passes(r) {
+    var an = analyze(r);
+    var p = parsedRow(r);
+    if (state.q) {
+      var hay = ((r.name || '') + ' ' + (r.name_uk || '') + ' ' + (r.model || '') + ' ' + (r.query || '')).toLowerCase();
+      if (hay.indexOf(state.q) === -1) return false;
+    }
+    switch (state.filter) {
+      case 'found': return p && an.found >= 1;
+      case 'strong': return p && an.reliable;
+      case 'weak': return p && (an.found < 2 || an.odd > 0 || an.weak > 0 || an.position === 'перевірте збіг' || an.position === 'умовно дешевше');
+      case 'none': return p && an.found === 0;
+      case 'dearer': return p && an.delta != null && an.delta > 3 && an.position !== 'перевірте збіг';
+      case 'cheaper': return p && an.delta != null && an.delta < -0.5 && an.position === 'дешевше за всіх';
+      case 'pending': return !p;
+      default: return true;
+    }
+  }
+  var FILTERS = [
+    ['all', 'Усі'], ['strong', 'Надійні (≥2)'], ['found', 'Є збіги'], ['weak', 'Слабкі дані'],
+    ['none', 'Без збігів'], ['dearer', 'Ми дорожчі'], ['cheaper', 'Ми дешевші'], ['pending', 'Не парсились']
+  ];
+  function renderChips(emptyHidden) {
+    var el = document.getElementById('pmxChips');
+    if (!el) return;
+    var counts = {};
+    FILTERS.forEach(function (f) { counts[f[0]] = 0; });
+    var saved = state.filter, savedQ = state.q;
+    FILTERS.forEach(function (f) {
+      state.filter = f[0]; state.q = '';
+      ROWS.forEach(function (r) { if (passes(r)) counts[f[0]]++; });
+    });
+    state.filter = saved; state.q = savedQ;
+    var html = FILTERS.map(function (f) {
+      return '<button type="button" class="pmx-chip' + (state.filter === f[0] ? ' is-active' : '') + '" data-f="' + f[0] + '">' + f[1] + ' <em>' + counts[f[0]] + '</em></button>';
+    }).join('');
+    html += '<button type="button" class="pmx-chip pmx-chip--toggle' + (state.hideEmpty ? ' is-active' : '') + '" data-toggle="empty" title="Сховати магазини, де жодного разу нічого не знайдено">' +
+      (state.hideEmpty ? 'Порожні магазини сховано' + (emptyHidden ? ' (' + emptyHidden + ')' : '') : 'Показати всі магазини') + '</button>';
+    el.innerHTML = html;
+  }
+  function sortedIndexes() {
+    var idx = ORIGINAL.slice();
+    var val = function (i) { return analyze(ROWS[i]); };
+    var by = {
+      worst: function (a, b) { return (val(b).delta == null ? -1e9 : val(b).delta) - (val(a).delta == null ? -1e9 : val(a).delta); },
+      best: function (a, b) { return (val(a).delta == null ? 1e9 : val(a).delta) - (val(b).delta == null ? 1e9 : val(b).delta); },
+      found_asc: function (a, b) { return val(a).found - val(b).found; },
+      found_desc: function (a, b) { return val(b).found - val(a).found; },
+      price_desc: function (a, b) { return (ROWS[b].our_price || 0) - (ROWS[a].our_price || 0); },
+      price_asc: function (a, b) { return (ROWS[a].our_price || 1e12) - (ROWS[b].our_price || 1e12); },
+      name: function (a, b) { return String(ROWS[a].name || '').localeCompare(String(ROWS[b].name || ''), 'uk'); }
+    };
+    if (by[state.sort]) idx.sort(by[state.sort]);
+    return idx;
+  }
+  function visibleSites() {
+    var parsedN = ROWS.filter(parsedRow).length;
+    var stats = {};
+    SITES.forEach(function (s) { stats[s] = { data: 0, found: 0, odd: 0, weak: 0, noBrand: 0, miss: 0, dead: 0 }; });
+    ROWS.forEach(function (r) {
+      if (!parsedRow(r)) return;
+      var our = r.our_price != null ? Number(r.our_price) : null;
+      SITES.forEach(function (s) {
+        var i = (r.shops || {})[s];
+        if (!i) return;
+        var st = effectiveStatus(i, our);
+        if (DATA_STATUSES[st] || DATA_STATUSES[i.status]) stats[s].data++;
+        if (st === 'match') stats[s].found++;
+        else if (st === 'odd_price') stats[s].odd++;
+        else if (st === 'low_match') stats[s].weak++;
+        else if (st === 'no_brand') stats[s].noBrand++;
+        else if (st === 'not_found') stats[s].miss++;
+        else if (DEAD[st]) stats[s].dead++;
+      });
+    });
+    var hidden = 0;
+    var vis = SITES.filter(function (s) {
+      if (!state.hideEmpty || !parsedN) return true;
+      // no_brand на всіх рядках — магазин без бренду, ховаємо разом із порожніми
+      var keep = stats[s].data > 0 || stats[s].found > 0;
+      if (!keep) hidden++;
+      return keep;
+    });
+    return { vis: vis, stats: stats, hidden: hidden, parsedN: parsedN };
+  }
+  function renderTable() {
+    var head = document.getElementById('pmxHead');
+    var body = document.getElementById('pmxBody');
+    if (!head || !body) return;
+    var vs = visibleSites();
+    var h = '<tr><th class="c-idx">#</th><th class="c-name" style="text-align:left">Товар</th><th class="c-our">Наша</th>' +
+      '<th class="c-delta">Δ до мін.<span class="th-sub">лише надійні збіги</span></th>' +
+      '<th>Ринок<span class="th-sub">мін · наша ◆ · макс</span></th><th>Конкуренти<span class="th-sub">надійні / з брендом</span></th><th>Позиція</th>';
+    vs.vis.forEach(function (s) {
+      var st = vs.stats[s];
+      var pct = vs.parsedN ? Math.round(st.found / vs.parsedN * 100) : 0;
+      var sub, tip;
+      if (!vs.parsedN) { sub = '—'; tip = esc(s); }
+      else if (st.noBrand >= vs.parsedN * 0.9 && !st.found) {
+        sub = 'немає бренду';
+        tip = esc(s) + ': бренд відсутній в асортименті';
+      } else if (st.dead >= vs.parsedN * 0.5 && !st.found) {
+        sub = 'не відповів';
+        tip = esc(s) + ': сайт не відповів / Cloudflare / таймаут';
+      } else {
+        sub = st.found + ' ✓' + (st.odd || st.weak ? ' · ' + ((st.odd || 0) + (st.weak || 0)) + '?' : '') + ' / ' + vs.parsedN;
+        tip = esc(s) + ': надійних ' + st.found + ', підозріла ціна ' + st.odd + ', слабкий ' + st.weak +
+          ', не знайдено ' + st.miss + ', н/д ' + st.dead;
+      }
+      h += '<th class="th-shop' + (vs.parsedN && !st.found ? ' is-weak' : '') + '" title="' + tip + '">' + esc(s) +
+        '<span class="th-sub">' + sub + '</span><span class="th-bar"><i style="width:' + pct + '%"></i></span></th>';
+    });
+    head.innerHTML = h + '</tr>';
+    var html = '';
+    var shown = 0;
+    sortedIndexes().forEach(function (i) {
+      var r = ROWS[i];
+      if (!passes(r)) return;
+      html += rowHtml(r, i, vs.vis);
+      shown++;
+    });
+    if (!shown) html = '<tr><td colspan="' + (vs.vis.length + 7) + '" style="padding:2rem;color:#94a3b8">Нічого не знайдено за цими фільтрами.</td></tr>';
+    body.innerHTML = html;
+    state.flash = {};
+    renderChips(vs.hidden);
+  }
+  function renderAll() { renderKpis(); renderTable(); }
+
+  /* ——— події ——— */
+  var search = document.getElementById('pmxSearch');
+  if (search) search.addEventListener('input', function () { state.q = (search.value || '').trim().toLowerCase(); renderTable(); });
+  var sortEl = document.getElementById('pmxSort');
+  if (sortEl) sortEl.addEventListener('change', function () { state.sort = sortEl.value; renderTable(); });
+  var chips = document.getElementById('pmxChips');
+  if (chips) chips.addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    if (b.getAttribute('data-toggle') === 'empty') { state.hideEmpty = !state.hideEmpty; renderTable(); return; }
+    var f = b.getAttribute('data-f');
+    if (f) { state.filter = f; renderTable(); }
+  });
+  var tbody = document.getElementById('pmxBody');
+  if (tbody) tbody.addEventListener('click', function (e) {
+    if (e.target.closest('a')) return;
+    var tr = e.target.closest('tr.pmx-row');
+    if (!tr) return;
+    var i = Number(tr.getAttribute('data-i'));
+    var r = ROWS[i];
+    if (!r || !parsedRow(r)) return;
+    state.open[r.id] = !state.open[r.id];
+    renderTable();
+  });
+
+  /* ——— live ——— */
+  var seen = {};
+  function applyRow(row) {
+    var key = String(row.id != null ? row.id : row.model || '');
+    var i = idIndex[key];
+    if (i == null && row.model) {
+      for (var k = 0; k < ROWS.length; k++) if (ROWS[k].model && ROWS[k].model === row.model) { i = k; break; }
+    }
+    if (i == null) return false;
+    var sig = JSON.stringify(row.shops || {}) + (row.partial ? ':p' : ':d');
+    if (ROWS[i]._liveSig === sig) {
+      if (!row.partial) seen[key] = true;
+      return false;
+    }
+    var first = !ROWS[i].from_report;
+    var keepUrl = ROWS[i].product_url;
+    var merged = Object.assign({}, ROWS[i], row, { from_report: true });
+    if (!merged.product_url && keepUrl) merged.product_url = keepUrl;
+    delete merged._an;
+    merged._liveSig = sig;
+    ROWS[i] = merged;
+    if (row.partial) delete seen[key];
+    else seen[key] = true;
+    if (first) state.flash[merged.id] = true;
+    return true;
+  }
+  function fmtDur(sec) {
+    sec = Math.round(sec);
+    if (sec < 60) return sec + ' с';
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return m + ' хв ' + (s < 10 ? '0' : '') + s + ' с';
+  }
+  function showLive(st) {
+    var box = document.getElementById('parserLive');
+    var btn = document.getElementById('brandRunBtn');
+    var hint = document.getElementById('pendingHint');
+    if (!box) return;
+    box.hidden = false;
+    if (hint) hint.hidden = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'Парсинг…'; }
+    var cur = st.current || 0, total = st.total || 0;
+    var pct = total ? Math.min(100, Math.round(cur / total * 100)) : 0;
+    var bar = document.getElementById('liveBar');
+    if (bar) bar.style.width = pct + '%';
+    var title = document.getElementById('liveTitle');
+    var phase = st.phase || '';
+    if (title) title.textContent = phase === 'brand_check' ? 'Перевіряю магазини…' : (phase === 'starting' ? 'Запуск у фоні…' : (phase === 'done' ? 'Готово' : 'Збираю ціни…'));
+    var counts = document.getElementById('liveCounts');
+    var shown = st.visible || 0;
+    if (counts) {
+      var label = cur + ' готово / ' + (total || '—');
+      if (shown > cur) label += ' · у таблиці ' + shown;
+      counts.textContent = label + ' · ' + pct + '%';
+    }
+    var prod = document.getElementById('liveProduct');
+    if (prod) prod.textContent = st.product || '—';
+    var timeEl = document.getElementById('liveTime');
+    if (timeEl) {
+      var started = st.started_epoch ? Number(st.started_epoch) * 1000 : null;
+      if (started) {
+        var el = Math.max(0, (Date.now() - started) / 1000);
+        var txt = 'минуло ' + fmtDur(el);
+        if (cur > 0 && total > cur) txt += ' · залишилось ≈ ' + fmtDur(el / cur * (total - cur));
+        else if (cur === 0 && shown > 0) txt += ' · ціни вже з’являються в таблиці';
+        else if (cur === 0 && st.phase === 'products') txt += ' · шукаю перші магазини…';
+        else if (st.phase === 'brand_check' || st.phase === 'starting') txt += ' · збір іде у фоні';
+        timeEl.textContent = txt;
+      }
+    }
+  }
+  function hideLive() { var box = document.getElementById('parserLive'); if (box) box.hidden = true; }
+
+  var idleTries = 0;
+  var lastEpoch = 0;
+  var stagnantPolls = 0;
+  async function pollLive() {
+    if (!slug) return;
+    try {
+      var res = await fetch('/parser/api/brands/' + encodeURIComponent(slug) + '/live?known=' + encodeURIComponent(Object.keys(seen).join(',')), { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) { setTimeout(pollLive, 1500); return; }
+      var data = await res.json();
+      var st = data.status || {};
+      var errBox = document.getElementById('liveError');
+      var changed = false;
+      (data.rows || []).forEach(function (r) { if (applyRow(r)) changed = true; });
+      if (changed) renderAll();
+      var epoch = Number(st.updated_epoch || 0);
+      if (epoch && epoch === lastEpoch) stagnantPolls += 1;
+      else { stagnantPolls = 0; lastEpoch = epoch; }
+      if (st.state === 'running') {
+        idleTries = 0;
+        if (errBox) errBox.hidden = true;
+        showLive(st);
+        // Адаптивний інтервал: швидше коли є оновлення, повільніше коли тиша.
+        var delay = changed ? 700 : (stagnantPolls > 4 ? 1600 : 1000);
+        setTimeout(pollLive, delay);
+        return;
+      }
+      if (st.state === 'error') {
+        var msg = st.error || '';
+        // Короткий глітч «процес зупинився» під час старту — ще кілька спроб опитування.
+        if ((msg.indexOf('Фоновий процес зупинився') !== -1 || msg.indexOf('одразу після старту') !== -1) && idleTries < 8) {
+          idleTries += 1;
+          showLive({ current: st.current || 0, total: st.total || 0, phase: 'starting', product: 'очікую воркер…' });
+          setTimeout(pollLive, 1100);
+          return;
+        }
+        hideLive();
+        if (errBox) { errBox.hidden = false; errBox.textContent = 'Помилка парсингу: ' + (msg || 'невідома'); }
+        var btn = document.getElementById('brandRunBtn');
+        if (btn) { btn.disabled = false; btn.textContent = 'Запустити моніторинг'; }
+        return;
+      }
+      if (st.state === 'done') {
+        showLive({ current: st.current || st.total, total: st.total, product: 'готово', phase: 'done' });
+        var title = document.getElementById('liveTitle');
+        if (title) title.textContent = 'Готово';
+        setTimeout(function () { location.replace(location.pathname); }, 900);
+        return;
+      }
+      if (idleTries < 10) {
+        idleTries += 1;
+        showLive({ current: 0, total: st.total || 0, phase: 'starting', product: 'очікую воркер…' });
+        setTimeout(pollLive, 1000);
+        return;
+      }
+      hideLive();
+    } catch (e) {
+      setTimeout(pollLive, 2000);
+    }
+  }
+
+  if (location.search.indexOf('notice=started') !== -1) history.replaceState({}, '', location.pathname);
+
+  renderAll();
+
+  var initial = {{ report_status | tojson }};
+  var startNotice = {{ 'true' if notice == 'started' else 'false' }};
+  if ((initial && initial.state === 'running') || startNotice) {
+    showLive(initial && initial.state === 'running' ? initial : { current: 0, total: 0, phase: 'starting', product: 'запуск…' });
+    pollLive();
+  }
+})();
+</script>
+{% endblock %}

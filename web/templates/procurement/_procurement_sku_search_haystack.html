@@ -1,0 +1,20 @@
+{# Канонічний haystack для пошуку SKU — узгоджено з web.procurement_table_filters.catalog_row_search_text #}
+{% macro sku_search_haystack_value(product, option) -%}
+{{- (
+  (product.name or '') ~ ' ' ~
+  (product.model or '') ~ ' ' ~
+  (product.sku or '') ~ ' ' ~
+  (product.brand_name or '') ~
+  (
+    ' ' ~ (option.option_name or '') ~ ' ' ~
+    (option.option_value_name or '') ~ ' ' ~
+    (option.option_model or '') ~ ' ' ~
+    (option.dilovod_model or '')
+    if option else ''
+  )
+)|trim|lower -}}
+{%- endmacro %}
+
+{% macro sku_search_haystack_attr(product, option) -%}
+data-product-search="{{ sku_search_haystack_value(product, option) }}"
+{%- endmacro %}
