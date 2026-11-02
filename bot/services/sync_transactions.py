@@ -11,7 +11,7 @@ from aiogram import Bot
 
 from config import BOT_TOKEN, administrators
 from bot.database.models import Transaction, TransactionType, TransactionSource, TransactionStatus, FOP, Category
-from bot.services.classifier import TransactionClassifier
+from bot.services.classifier import TransactionClassifier, forced_expense_category
 from mono.api import (
     get_client_info_retried,
     get_all_statements,
@@ -78,6 +78,44 @@ class TransactionSyncService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.classifier = TransactionClassifier(session)
+
+    async def _confirm_if_forced(self, tx: Transaction, threshold: float, *, within_days: int = 14) -> bool:
+        """Підтвердити нещодавнє списання на картку, яке інакше лишається поза списком."""
+        if tx.status != TransactionStatus.PENDING or tx.transaction_type != TransactionType.EXPENSE:
+            return False
+        if not tx.date or tx.date < now_kyiv() - timedelta(days=within_days):
+            return False
+        if not forced_expense_category(tx.description, tx.counterparty, tx.comment):
+            return False
+        category_id, confidence = await self.classifier.classify(
+            tx.description or "",
+            tx.counterparty or "",
+            tx.comment or "",
+        )
+        if not category_id or confidence < threshold:
+            return False
+        tx.category_id = category_id
+        tx.status = TransactionStatus.CONFIRMED
+        return True
+
+    async def confirm_recent_card_debits(self, within_days: int = 14) -> int:
+        threshold = await self.classifier.get_confidence_threshold()
+        cutoff = now_kyiv() - timedelta(days=within_days)
+        result = await self.session.execute(
+            select(Transaction).where(
+                Transaction.status == TransactionStatus.PENDING,
+                Transaction.transaction_type == TransactionType.EXPENSE,
+                Transaction.date >= cutoff,
+            )
+        )
+        updated = 0
+        for tx in result.scalars().all():
+            if await self._confirm_if_forced(tx, threshold, within_days=within_days):
+                updated += 1
+        if updated:
+            await self.session.commit()
+            logger.info("Підтверджено карткові списання за %s дн.: %s", within_days, updated)
+        return updated
 
     async def sync_monobank(self, fop_name: str, days: int = 30):
         """Синхронізація транзакцій з Monobank"""
@@ -311,6 +349,8 @@ class TransactionSyncService:
         skipped_dup = 0
         skipped_no_id = 0
         migrated_ids = 0
+        confirmed_hidden = 0
+        threshold = await self.classifier.get_confidence_threshold()
         for p in importable:
             external_id = novapay_primary_external_id(p)
             if not external_id:
@@ -320,7 +360,10 @@ class TransactionSyncService:
             existing = await self.session.execute(
                 select(Transaction).where(Transaction.external_id == external_id)
             )
-            if existing.scalar_one_or_none():
+            existing_tx = existing.scalar_one_or_none()
+            if existing_tx:
+                if await self._confirm_if_forced(existing_tx, threshold):
+                    confirmed_hidden += 1
                 skipped_dup += 1
                 continue
 
@@ -333,6 +376,8 @@ class TransactionSyncService:
                 if legacy_tx:
                     if novapay_same_payment_record(legacy_tx, p):
                         legacy_tx.external_id = external_id
+                        if await self._confirm_if_forced(legacy_tx, threshold):
+                            confirmed_hidden += 1
                         migrated_ids += 1
                         skipped_dup += 1
                         continue
@@ -383,10 +428,11 @@ class TransactionSyncService:
 
         await self.session.commit()
         logger.info(
-            "NovaPay %s: додано %s, пропущено дублікатів %s (міграцій ID %s), "
+            "NovaPay %s: додано %s, підтверджено прихованих %s, пропущено дублікатів %s (міграцій ID %s), "
             "без ID %s, отримано %s, проведених %s, пропущено статусом %s",
             user_key,
             new_count,
+            confirmed_hidden,
             skipped_dup,
             migrated_ids,
             skipped_no_id,
@@ -399,6 +445,7 @@ class TransactionSyncService:
         """Синхронізувати всі джерела (Monobank + NovaPay) за останні days днів."""
         mono_keys = list(MONO_TOKENS.keys())
         nova_keys = list(NOVAPAY_TOKENS.keys())
+        await self.confirm_recent_card_debits()
         if not mono_keys and not nova_keys:
             logger.warning("Синхронізація: немає жодного джерела (MONO_TOKENS і NOVAPAY_TOKENS порожні)")
             return

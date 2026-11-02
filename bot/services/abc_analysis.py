@@ -667,6 +667,7 @@ class ProcurementReportsService:
                 status_distribution[status] = int(cnt or 0)
             st_opt = await session.execute(
                 select(ProductAnalytics.status, func.count(ProductAnalytics.id).label("count"))
+                .join(ProductOption, ProductOption.id == ProductAnalytics.product_option_id)
                 .where(option_level)
                 .group_by(ProductAnalytics.status)
             )
@@ -691,7 +692,8 @@ class ProcurementReportsService:
                         case((ProductAnalytics.status == "out_of_stock", 1), else_=0)
                     ).label("oos_sku"),
                 )
-                .where(option_level)
+                .join(Product, Product.id == ProductAnalytics.product_id)
+                .where(option_level, Product.has_options == 1)
                 .group_by(ProductAnalytics.product_id)
                 .subquery()
             )

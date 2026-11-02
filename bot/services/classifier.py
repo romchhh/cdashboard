@@ -31,6 +31,23 @@ DEFAULT_RULES = {
 }
 
 
+# Ці формулювання NovaPay інакше лишаються без категорії і не потрапляють у список фінансів.
+FORCED_EXPENSE_CATEGORIES = (
+    ("на чорну картку", "Переказ на картку"),
+    ("на білу картку", "Переказ на картку"),
+    ("купівля в торгівельно-сервісній мережі", "Оплата карткою"),
+)
+
+
+def forced_expense_category(*parts: str | None) -> str | None:
+    """Категорія, яку ставимо одразу, без ручного підтвердження."""
+    text = " ".join(p or "" for p in parts).lower()
+    for needle, category_name in FORCED_EXPENSE_CATEGORIES:
+        if needle in text:
+            return category_name
+    return None
+
+
 class TransactionClassifier:
     """Класифікатор транзакцій"""
 
@@ -49,6 +66,12 @@ class TransactionClassifier:
         confidence: 0.0-1.0, де 1.0 = 100% впевненість
         """
         text = f"{description or ''} {counterparty or ''} {comment or ''}".lower()
+
+        forced_name = forced_expense_category(text)
+        if forced_name:
+            category_id = await self._ensure_category(forced_name)
+            if category_id:
+                return category_id, 1.0
 
         # 1. Шукаємо точне співпадіння контрагента (найвища впевненість)
         if counterparty:
@@ -86,6 +109,22 @@ class TransactionClassifier:
                         return cat.id, 0.8  # 80% впевненість для дефолтних правил
 
         return None, 0.0  # Не вдалося класифікувати
+
+    async def _ensure_category(self, name: str) -> int | None:
+        cached = getattr(self, "_category_ids", None)
+        if cached is None:
+            cached = {}
+            self._category_ids = cached
+        if name in cached:
+            return cached[name]
+        result = await self.session.execute(select(Category).where(Category.name == name))
+        category = result.scalar_one_or_none()
+        if category is None:
+            category = Category(name=name, is_expense=True)
+            self.session.add(category)
+            await self.session.flush()
+        cached[name] = category.id
+        return category.id
 
     async def learn_from_confirmation(
         self,

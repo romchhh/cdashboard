@@ -7,7 +7,15 @@ import re
 from sqlalchemy import delete, select
 
 from bot.database.products_engine import AsyncProductsSessionLocal, init_products_db
-from bot.database.products_models import ProductCategory, ProductBrand, Product, ProductOption, ProcurementAlert
+from bot.database.products_models import (
+    ProductCategory,
+    ProductBrand,
+    Product,
+    ProductOption,
+    ProductAnalytics,
+    ProductSalesHistory,
+    ProcurementAlert,
+)
 from bot.utils.feed_download import stream_url_to_tempfile
 from bot.utils.text_normalize import normalize_product_text
 
@@ -141,6 +149,28 @@ def _earliest_date_for_stock(elem: Optional[ET.Element], stock_qty: Optional[int
 
 def _local_tag(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
+
+
+def _iter_feed_nodes(path):
+    """Категорія, бренд і товар — лише коли елемент уже зібраний.
+
+    Дочірні теги (product_id, name, options) не чіпаємо: інакше на end батька
+    вони вже стерті і товар зберігається порожнім.
+    """
+    for _event, elem in ET.iterparse(path, events=("end",)):
+        tag = _local_tag(elem.tag)
+        if tag not in ("category", "brand", "product"):
+            continue
+        yield tag, elem
+        elem.clear()
+
+
+def feed_contains_products(path) -> bool:
+    """Чи є у фіді хоч один товар з product_id. Порожній фід каталог не замінює."""
+    for tag, elem in _iter_feed_nodes(path):
+        if tag == "product" and _int(elem.find("product_id")) is not None:
+            return True
+    return False
 
 
 _PRODUCT_COMMIT_EVERY = 40
@@ -322,6 +352,11 @@ async def sync_cosmy_products() -> None:
 
     path = await stream_url_to_tempfile(FEED_URL, suffix=".xml", timeout_total=900.0)
     try:
+        if not feed_contains_products(path):
+            logger.error(
+                "❌ Фід продуктів порожній або без product_id — каталог не очищаємо"
+            )
+            return
         await _import_products_feed(path)
     finally:
         path.unlink(missing_ok=True)
@@ -332,42 +367,25 @@ async def _import_products_feed(path) -> None:
     async with AsyncProductsSessionLocal() as session:
         logger.info("🧹 Очищення старих даних продуктів...")
         await session.execute(delete(ProcurementAlert))
+        await session.execute(delete(ProductAnalytics))
+        await session.execute(delete(ProductSalesHistory))
         await session.execute(delete(ProductOption))
         await session.execute(delete(Product))
         await session.execute(delete(ProductCategory))
         await session.execute(delete(ProductBrand))
-        await session.commit()
 
         cat_ids: dict[int, int] = {}
         brand_ids: dict[int, int] = {}
         products_count = 0
         options_count = 0
         pending = 0
-        stack: list[ET.Element] = []
-
-        def _drop(elem: ET.Element) -> None:
-            elem.clear()
-            if not stack:
-                return
-            parent = stack[-1]
-            try:
-                parent.remove(elem)
-            except ValueError:
-                pass
 
         try:
-            for event, elem in ET.iterparse(path, events=("start", "end")):
-                if event == "start":
-                    stack.append(elem)
-                    continue
-                if stack:
-                    stack.pop()
-                tag = _local_tag(elem.tag)
+            for tag, elem in _iter_feed_nodes(path):
                 if tag == "category":
                     try:
                         ext_id = int(elem.attrib.get("id"))
                     except (TypeError, ValueError):
-                        _drop(elem)
                         continue
                     try:
                         parent_ext_id = int(elem.attrib.get("parent_id")) if elem.attrib.get("parent_id") else None
@@ -389,7 +407,6 @@ async def _import_products_feed(path) -> None:
                     try:
                         ext_id = int(elem.attrib.get("id"))
                     except (TypeError, ValueError):
-                        _drop(elem)
                         continue
                     brand = ProductBrand(
                         external_id=ext_id,
@@ -411,7 +428,6 @@ async def _import_products_feed(path) -> None:
                             await session.commit()
                             session.expunge_all()
                             pending = 0
-                _drop(elem)
         except ET.ParseError as exc:
             logger.error("❌ Помилка парсингу XML фіда продуктів: %s", exc)
             raise

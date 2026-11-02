@@ -349,6 +349,29 @@ CATEGORIES = [
         "counterparty_patterns": [],
         "priority": 8,
     },
+    # Списання з рахунку ФОП на власну картку. Це витрата, її видно в адмінці.
+    {
+        "name": "Переказ на картку",
+        "group": "finance",
+        "keywords": [
+            "на чорну картку",
+            "на білу картку",
+        ],
+        "counterparty_patterns": [],
+        "priority": 12,
+        "confidence": 1.0,
+    },
+    # Оплата фізичною карткою NovaPay у торговій мережі.
+    {
+        "name": "Оплата карткою",
+        "group": "finance",
+        "keywords": [
+            "купівля в торгівельно-сервісній мережі",
+        ],
+        "counterparty_patterns": [],
+        "priority": 12,
+        "confidence": 1.0,
+    },
 ]
 
 
