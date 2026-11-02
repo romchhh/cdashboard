@@ -154,11 +154,20 @@ def _local_tag(tag: str) -> str:
 def _iter_feed_nodes(path):
     """Категорія, бренд і товар — лише коли елемент уже зібраний.
 
-    Дочірні теги (product_id, name, options) не чіпаємо: інакше на end батька
-    вони вже стерті і товар зберігається порожнім.
+    `<brand>` і `<category>` всередині товару не чіпаємо: інакше назва бренду
+    стирається до запису, і весь каталог зливається в один порожній бренд.
     """
-    for _event, elem in ET.iterparse(path, events=("end",)):
+    stack: list[str] = []
+    for event, elem in ET.iterparse(path, events=("start", "end")):
         tag = _local_tag(elem.tag)
+        if event == "start":
+            stack.append(tag)
+            continue
+        if stack:
+            stack.pop()
+        parent = stack[-1] if stack else ""
+        if tag in ("category", "brand") and parent == "product":
+            continue
         if tag not in ("category", "brand", "product"):
             continue
         yield tag, elem

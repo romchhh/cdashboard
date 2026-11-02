@@ -674,13 +674,16 @@ async def load_catalog_from_feed() -> list[dict]:
     async with AsyncProductsSessionLocal() as session:
         result = await session.execute(
             select(Product)
-            .options(selectinload(Product.options))
+            .options(selectinload(Product.options), selectinload(Product.brand))
             .order_by(Product.brand_name, Product.name, Product.product_id)
         )
         products = result.scalars().all()
 
     for product in products:
-        brand = (product.brand_name or "").strip() or "—"
+        brand = (product.brand_name or "").strip()
+        if not brand and product.brand is not None:
+            brand = (product.brand.name or "").strip()
+        brand = brand or "—"
         en_name, uk_name = _split_feed_name(product.name or "")
         options = list(product.options or [])
         use_options = bool(product.has_options and options)

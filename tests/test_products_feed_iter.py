@@ -20,6 +20,7 @@ _FEED = """<?xml version="1.0" encoding="UTF-8"?>
       <product_id>42</product_id>
       <name>Крем</name>
       <brand_id>9</brand_id>
+      <brand>Academie</brand>
       <options>
         <option>
           <product_option_value_id>7</product_option_value_id>
@@ -49,6 +50,7 @@ def test_feed_keeps_product_children(tmp_path):
                     "product",
                     _text(elem.find("product_id")),
                     _text(elem.find("name")),
+                    _text(elem.find("brand")),
                     _text(option.find("stock_qty")) if option is not None else "",
                 )
             )
@@ -56,7 +58,7 @@ def test_feed_keeps_product_children(tmp_path):
     assert seen == [
         ("category", "5", "Догляд"),
         ("brand", "9", "Academie"),
-        ("product", "42", "Крем", "3"),
+        ("product", "42", "Крем", "Academie", "3"),
     ]
     assert feed_contains_products(path) is True
 
