@@ -78,7 +78,7 @@ async def ensure_novapay_jwt_sessions() -> None:
     for user_key in list(NOVAPAY_TOKENS.keys()):
         try:
             session_file = get_session_file(user_key)
-            jwt = ensure_jwt_session(user_key, session_file=session_file)
+            jwt = await asyncio.to_thread(ensure_jwt_session, user_key, session_file)
             if jwt:
                 logger.info("NovaPay JWT готовий для %s", user_key)
             else:
@@ -143,7 +143,7 @@ async def refresh_novapay_tokens():
         try:
             session_file = get_session_file(user_key)
             if credentials_for_fop(user_key):
-                jwt = ensure_jwt_session(user_key, session_file=session_file)
+                jwt = await asyncio.to_thread(ensure_jwt_session, user_key, session_file)
                 if jwt:
                     logger.info("✅ JWT для %s актуальний", user_key)
                 else:
@@ -154,16 +154,16 @@ async def refresh_novapay_tokens():
                     )
                 continue
 
-            client = create_client()
-            principal, expiration = load_session(session_file=session_file)
+            client = await asyncio.to_thread(create_client)
+            principal, expiration = await asyncio.to_thread(load_session, session_file)
             if not principal:
                 logger.warning("⚠️ Немає legacy-сесії для %s", user_key)
                 continue
 
             new_principal = None
             for attempt in range(1, 3):
-                new_principal = try_refresh_session(
-                    client, principal, session_file=session_file
+                new_principal = await asyncio.to_thread(
+                    try_refresh_session, client, principal, session_file
                 )
                 if new_principal:
                     logger.info("✅ Legacy-токен оновлено для %s (спроба %s)", user_key, attempt)

@@ -1,5 +1,7 @@
 # Отримання балансів з Monobank та NovaPay в реальному часі
 
+import asyncio
+
 from config import INACTIVE_FOP_NAMES, mono_iban_for_fop
 from mono.config import MONO_TOKENS
 from mono.api import get_client_info, format_amount
@@ -11,11 +13,16 @@ from novapay.accounts import get_clients_list, get_accounts_list, get_account_re
 async def get_all_balances() -> dict:
     """
     Отримати баланси всіх рахунків з Mono та NovaPay.
+    Мережа йде в окремому потоці, щоб не зупиняти відповіді сайту.
     Повертає: {
         "monobank": [{"fop": "...", "balance": 123.45, "currency": "UAH"}, ...],
         "novapay": [{"fop": "...", "balance": 123.45, "currency": "UAH"}, ...]
     }
     """
+    return await asyncio.to_thread(_get_all_balances_sync)
+
+
+def _get_all_balances_sync() -> dict:
     mono_balances = []
     nova_balances = []
 

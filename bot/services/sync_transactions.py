@@ -41,6 +41,85 @@ from novapay.config import NOVAPAY_TOKENS, get_session_file
 logger = logging.getLogger(__name__)
 
 
+def _load_novapay_payments(user_key: str, days: int) -> dict:
+    """Мережа NovaPay. Лише з окремого потоку, інакше сайт не відповідає, поки банк мовчить."""
+    from novapay.menu import _parse_payments_xml, is_importable_novapay_payment
+
+    session_file = get_session_file(user_key)
+    try:
+        client = create_client()
+        principal = ensure_jwt_session(user_key, session_file=session_file)
+        if not principal:
+            principal, _ = load_session(session_file=session_file)
+        if not principal:
+            return {
+                "ok": False,
+                "error": "no-session",
+                "session_file": session_file,
+                "notify": (
+                    f"❌ NovaPay: немає активного токена/сесії для ключа <b>{user_key}</b> "
+                    f"(файл {session_file}). Увійдіть у NovaPay через бота або оновіть токени."
+                ),
+            }
+
+        clients_resp = get_clients_list(client, principal)
+        auth_err = novapay_response_error(clients_resp)
+        if auth_err and novapay_session_rejected(auth_err):
+            renewed = renew_jwt_for_fop(user_key, session_file=session_file)
+            if renewed.get("ok") and renewed.get("jwt"):
+                principal = renewed["jwt"]
+                clients_resp = get_clients_list(client, principal)
+                auth_err = novapay_response_error(clients_resp)
+        if auth_err:
+            short = auth_err.split("\n", 1)[0]
+            return {
+                "ok": False,
+                "error": short,
+                "session_file": session_file,
+                "notify": f"❌ NovaPay <b>{user_key}</b>: {short}",
+            }
+
+        clients = unwrap_zeep_list(getattr(clients_resp, "clients", None), ["Clients", "item", "Item"])
+        if not clients:
+            return {"ok": False, "error": "no-clients", "session_file": session_file}
+
+        first_client = clients[0]
+        client_id = getattr(first_client, "id", None) or getattr(first_client, "Id", None)
+        acc_resp = get_accounts_list(client, principal, client_id)
+        accounts = unwrap_zeep_list(getattr(acc_resp, "accounts", None), ["Account", "Accounts", "item", "Item"])
+        if not accounts:
+            return {"ok": False, "error": "no-accounts", "session_file": session_file}
+
+        first_account = accounts[0]
+        account_id = getattr(first_account, "id", None) or getattr(first_account, "Id", None)
+        date_to = now_kyiv()
+        date_from = date_to - timedelta(days=days)
+        payments_resp = get_payments_list(
+            client,
+            principal,
+            account_id=account_id,
+            date_from=date_from.strftime("%d.%m.%Y"),
+            date_to=date_to.strftime("%d.%m.%Y"),
+        )
+        payments_raw = getattr(payments_resp, "payments", None)
+        payments = _parse_payments_xml(payments_raw) if payments_raw else []
+        importable = [p for p in payments if is_importable_novapay_payment(p)]
+        return {
+            "ok": True,
+            "payments": importable,
+            "skipped_status": len(payments) - len(importable),
+            "received": len(payments),
+            "session_file": session_file,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": str(exc),
+            "session_file": session_file,
+            "notify": f"❌ NovaPay: помилка при отриманні платежів для ключа <b>{user_key}</b>: {exc}",
+        }
+
+
 async def _notify_admins(text: str) -> None:
     """
     Відправляє службове повідомлення всім адміністраторам через Telegram-бота.
@@ -258,87 +337,22 @@ class TransactionSyncService:
         if not fop:
             return
 
-        client = create_client()
-        session_file = get_session_file(user_key)
-        principal = ensure_jwt_session(user_key, session_file=session_file)
-        if not principal:
-            principal, _ = load_session(session_file=session_file)
-
-        if not principal:
-            logger.warning(
-                "NovaPay %s: немає JWT-сесії (файл %s). Оновіть refresh/login/certificate у /fops.",
-                user_key, session_file
-            )
-            await _notify_admins(
-                f"❌ NovaPay: немає активного токена/сесії для ключа <b>{user_key}</b> "
-                f"(файл {session_file}). Увійдіть у NovaPay через бота або оновіть токени."
-            )
-            return
-
-        clients_resp = get_clients_list(client, principal)
-        auth_err = novapay_response_error(clients_resp)
-        if auth_err and novapay_session_rejected(auth_err):
-            logger.warning("NovaPay %s: сесію відхилено (%s) — випускаю новий JWT", user_key, auth_err)
-            renewed = renew_jwt_for_fop(user_key, session_file=session_file)
-            if renewed.get("ok") and renewed.get("jwt"):
-                principal = renewed["jwt"]
-                clients_resp = get_clients_list(client, principal)
-                auth_err = novapay_response_error(clients_resp)
-        if auth_err:
-            logger.warning("NovaPay %s: %s", user_key, auth_err.split("\n", 1)[0])
-            await _notify_admins(
-                f"❌ NovaPay <b>{user_key}</b>: {auth_err.split(chr(10), 1)[0]}"
-            )
-            return
-        raw_clients = getattr(clients_resp, "clients", None)
-        clients = unwrap_zeep_list(raw_clients, ["Clients", "item", "Item"])
-
-        if not clients:
-            logger.warning("NovaPay %s: клієнти не отримані", user_key)
-            return
-
-        first_client = clients[0]
-        client_id = getattr(first_client, "id", None) or getattr(first_client, "Id", None)
-
-        acc_resp = get_accounts_list(client, principal, client_id)
-        raw_accounts = getattr(acc_resp, "accounts", None)
-        accounts = unwrap_zeep_list(raw_accounts, ["Account", "Accounts", "item", "Item"])
-
-        if not accounts:
-            logger.warning("NovaPay %s: рахунки не отримані", user_key)
-            return
-
-        first_account = accounts[0]
-        account_id = getattr(first_account, "id", None) or getattr(first_account, "Id", None)
-
-        date_to = now_kyiv()
-        date_from = date_to - timedelta(days=days)
-        date_from_str = date_from.strftime("%d.%m.%Y")
-        date_to_str = date_to.strftime("%d.%m.%Y")
-
-        try:
-            payments_resp = get_payments_list(
-                client, principal, account_id=account_id,
-                date_from=date_from_str, date_to=date_to_str
-            )
-        except Exception as e:
-            logger.exception("NovaPay %s: помилка get_payments_list: %s", user_key, e)
-            await _notify_admins(
-                f"❌ NovaPay: помилка при отриманні платежів для ключа <b>{user_key}</b>: {e}"
-            )
+        fetched = await asyncio.to_thread(_load_novapay_payments, user_key, days)
+        if not fetched.get("ok"):
+            error = fetched.get("error") or "невідома помилка"
+            logger.warning("NovaPay %s: %s", user_key, error)
+            if fetched.get("notify"):
+                await _notify_admins(fetched["notify"])
             return
 
         from novapay.menu import (
-            _parse_payments_xml,
-            is_importable_novapay_payment,
             novapay_legacy_external_id,
             novapay_primary_external_id,
             novapay_same_payment_record,
         )
-        payments_raw = getattr(payments_resp, "payments", None)
-        payments = _parse_payments_xml(payments_raw) if payments_raw else []
-        importable = [p for p in payments if is_importable_novapay_payment(p)]
-        skipped_status = len(payments) - len(importable)
+        importable = fetched.get("payments") or []
+        skipped_status = int(fetched.get("skipped_status") or 0)
+        received_n = int(fetched.get("received") or 0)
 
         # Вхідні = продаж, без розподілу
         sales_row = await self.session.execute(select(Category).where(Category.name == "Продаж"))
@@ -436,7 +450,7 @@ class TransactionSyncService:
             skipped_dup,
             migrated_ids,
             skipped_no_id,
-            len(payments),
+            received_n,
             len(importable),
             skipped_status,
         )
