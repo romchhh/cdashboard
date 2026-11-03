@@ -30,12 +30,12 @@ BRANDS_DIR = DATA_DIR / "brands"
 REPORT_XLSX = DATA_DIR / "price_report.xlsx"
 JOBS_DIR = DATA_DIR / "jobs"
 JOB_LOG = JOBS_DIR / "job.log"
-# Усі увімкнені бренди оновлюються за 14 днів: кожної ночі своя частка, по одному бренду.
+# Усі увімкнені бренди оновлюються за 14 днів: щодня своя частка, по одному бренду.
 CYCLE_DAYS = 14
 KYIV_TZ = ZoneInfo("Europe/Kiev")
-# Автопарсинг лише вночі (Київ): доробити чергу з 01:00, нова черга після синку ~03:00.
-ROTATION_NIGHT_START_HOUR = 1   # з 01:00
-ROTATION_NIGHT_END_HOUR = 7     # до 07:00 (не включно) — ~6 год на 5–10 брендів
+# Автопарсинг у будні (Київ): черга після синку ~03:00 і далі весь день до 22:00.
+ROTATION_NIGHT_START_HOUR = 1   # з 01:00 — доробка вчорашньої черги
+ROTATION_NIGHT_END_HOUR = 22    # до 22:00 (не включно), включно з днем
 ROTATION_QUEUE_HOUR = 3
 MAX_HISTORY = 40
 # option SKU ids must not collide with product_id from the Cosmy feed
@@ -2007,13 +2007,13 @@ def is_weekend_kyiv(now: datetime | None = None) -> bool:
 
 
 def in_rotation_night(now: datetime | None = None) -> bool:
-    """Нічне вікно 01:00–07:00 за Києвом (без урахування вихідних)."""
+    """Вікно автопарсингу 01:00–22:00 за Києвом (без урахування вихідних)."""
     moment = _kyiv_moment(now)
     return ROTATION_NIGHT_START_HOUR <= moment.hour < ROTATION_NIGHT_END_HOUR
 
 
 def parser_auto_rotation_allowed(now: datetime | None = None) -> bool:
-    """Автопарсинг: нічне вікно в будні (пн–пт)."""
+    """Автопарсинг: вікно 01:00–22:00 у будні (пн–пт), включно з днем."""
     return in_rotation_night(now) and not is_weekend_kyiv(now)
 
 
@@ -2163,7 +2163,7 @@ def next_rotation_info(
             "kind": "drain",
             "at": moment,
             "at_label": "протягом ~10 хв",
-            "summary": f"Наступний уночі: «{pending[0]}»",
+            "summary": f"Наступний у вікні: «{pending[0]}»",
             "brands": pending[:8],
             "pending_count": len(pending),
         }
@@ -2176,7 +2176,7 @@ def next_rotation_info(
             "kind": "build",
             "at": at,
             "at_label": _format_kyiv(at),
-            "summary": f"Сьогодні вночі черга дня {today.toordinal() % CYCLE_DAYS + 1}",
+            "summary": f"Сьогодні черга дня {today.toordinal() % CYCLE_DAYS + 1}",
             "brands": planned[:8],
             "pending_count": len(planned),
         }
@@ -2206,7 +2206,7 @@ def next_rotation_info(
             "at_label": _format_kyiv(at),
             "summary": (
                 f"Наступне автооновлення {at.strftime('%d.%m.%Y')} о {at.strftime('%H:%M')} "
-                f"(ніч {night_label})"
+                f"(вікно {night_label})"
             ),
             "brands": planned[:8],
             "pending_count": len(planned),
@@ -2215,19 +2215,19 @@ def next_rotation_info(
     brand_info = None
     if brand and brand_slot is not None and brand_next_day is not None:
         brand_at = night_start_on(brand_next_day)
-        # Якщо бренд уже в сьогоднішній незавершеній черзі — він ще цієї ночі.
+        # Якщо бренд уже в сьогоднішній незавершеній черзі — він ще в цьому вікні.
         if brand in pending or (running and current and current.lower() == brand.lower()):
             brand_summary = (
-                f"«{brand}» у нічній черзі"
+                f"«{brand}» у сьогоднішній черзі"
                 + (" — зараз іде" if running and current and current.lower() == brand.lower() else "")
             )
-            brand_at_label = "цієї ночі"
+            brand_at_label = "сьогодні"
         elif brand_next_day == today and auto_allowed and moment.hour < ROTATION_NIGHT_END_HOUR:
-            brand_summary = f"«{brand}» заплановано на цю ніч"
+            brand_summary = f"«{brand}» заплановано на сьогодні"
             brand_at_label = _format_kyiv(brand_at)
         else:
             brand_summary = (
-                f"«{brand}» у циклі раз на {CYCLE_DAYS} дн. — наступна ніч "
+                f"«{brand}» у циклі раз на {CYCLE_DAYS} дн. — наступний день "
                 f"{brand_next_day.strftime('%d.%m.%Y')} після {ROTATION_QUEUE_HOUR:02d}:20"
             )
             brand_at_label = _format_kyiv(brand_at)
@@ -2499,7 +2499,7 @@ def rotation_overview(*, brand: str | None = None) -> dict:
 
 
 def advance_parser_rotation() -> dict:
-    """Лише вночі (пн–пт): черга дня і один бренд, коли парсер вільний."""
+    """Будні 01:00–22:00: черга дня і один бренд, коли парсер вільний."""
     try:
         return _advance_parser_rotation_locked()
     except Exception as exc:
@@ -2574,7 +2574,7 @@ def _advance_parser_rotation_locked() -> dict:
             _save_rotation(state)
             pending_n = len(state.get("pending") or [])
             msg = (
-                f"Нічна черга на {today.isoformat()}: день {state['day'] + 1} з {CYCLE_DAYS}, "
+                f"Черга парсера на {today.isoformat()}: день {state['day'] + 1} з {CYCLE_DAYS}, "
                 f"брендів {pending_n} (вікно {ROTATION_NIGHT_START_HOUR:02d}:00–"
                 f"{ROTATION_NIGHT_END_HOUR:02d}:00)"
             )
@@ -2597,7 +2597,7 @@ def _advance_parser_rotation_locked() -> dict:
                     level="info",
                     kind="schedule",
                     brand=brand,
-                    message=f"Нічний автозапуск «{brand}». У черзі ще {len(pending)}",
+                    message=f"Автозапуск «{brand}». У черзі ще {len(pending)}",
                 )
                 return {"action": "started", "brand": brand, "left": len(pending)}
             if code == 409:

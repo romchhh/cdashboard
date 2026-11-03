@@ -30,7 +30,7 @@ Cron-задачі для планувальника (APScheduler).
                                                   (якщо архів > ліміту — кількома частинами).
 
 Парсер цін:
-  rotate_parser_brands         — лише вночі пн–пт (01:00–07:00): черга з ~03:05, drain кожну хв + ланцюжок після бренда;
+  rotate_parser_brands         — будні 01:00–22:00 (і вдень): черга з ~03:05, drain кожну хв + ланцюжок після бренда;
                                   цикл 14 днів (~5–10 брендів на ніч).
 
 Примітка:
@@ -414,7 +414,7 @@ async def refresh_ad_cache_recent():
 
 
 async def rotate_parser_brands():
-    """Один бренд з нічної черги. Удень/вихідні no-op. Цикл 14 днів, 5–10 брендів/ніч."""
+    """Один бренд із денної черги. Поза 01:00–22:00 і на вихідних no-op. Цикл 14 днів."""
     try:
         from web import parser_service as ps
 
@@ -422,18 +422,18 @@ async def rotate_parser_brands():
         action = (result or {}).get("action")
         if action == "started":
             logger.info(
-                "Парсер: нічний автозапуск «%s», у черзі ще %s",
+                "Парсер: автозапуск «%s», у черзі ще %s",
                 result.get("brand"),
                 result.get("left"),
             )
         elif action == "busy":
             logger.info("Парсер: черга чекає, зараз іде «%s»", result.get("brand") or "прогін")
         elif action == "skipped":
-            logger.warning("Парсер: нічні бренди пропущено після помилок старту")
+            logger.warning("Парсер: бренди пропущено після помилок старту")
         elif action == "empty":
-            logger.debug("Парсер: нічна черга порожня")
+            logger.debug("Парсер: черга порожня")
         elif action == "daytime":
-            logger.debug("Парсер: день — автооновлення брендів пропущено")
+            logger.debug("Парсер: поза вікном 01:00–22:00 — автооновлення пропущено")
         elif action == "weekend":
             logger.debug("Парсер: вихідні — автооновлення брендів пропущено")
         elif action == "error":

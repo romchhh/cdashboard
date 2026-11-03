@@ -93,6 +93,8 @@ def _persist_snapshot(job: dict) -> None:
             "query": job.get("query"),
             "current": job.get("current"),
             "total": job.get("total"),
+            "retry_current": job.get("retry_current"),
+            "retry_total": job.get("retry_total"),
             "product": job.get("product"),
             "error": job.get("error"),
             "live_count": job.get("live_count") or len(job.get("rows") or []),
@@ -387,6 +389,8 @@ def _run_catalog(job_id: str, products: list[dict], settings: dict, brand: str |
                 "current": current,
                 "total": status.get("total") or len(products),
                 "product": status.get("product"),
+                "retry_current": status.get("retry_current"),
+                "retry_total": status.get("retry_total"),
             }
             if brand:
                 patch["brand"] = brand

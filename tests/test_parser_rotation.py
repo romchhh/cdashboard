@@ -92,8 +92,11 @@ def test_new_day_builds_only_that_days_brands():
 def test_rotation_night_window_kyiv():
     night = datetime(2026, 10, 13, 2, 30, tzinfo=KYIV_TZ)
     day = datetime(2026, 10, 13, 14, 0, tzinfo=KYIV_TZ)
+    late = datetime(2026, 10, 13, 23, 0, tzinfo=KYIV_TZ)
     assert in_rotation_night(night) is True
-    assert in_rotation_night(day) is False
+    assert in_rotation_night(day) is True
+    assert parser_auto_rotation_allowed(day) is True
+    assert in_rotation_night(late) is False
 
 
 def test_weekend_blocks_auto_rotation():
@@ -130,9 +133,10 @@ def test_next_rotation_info_daytime_points_to_tonight(monkeypatch):
         state={"pending": [], "built_for": "2026-10-13"},
         names=["Academie", "Sesderma", "Abril"],
     )
-    assert info["in_night"] is False
+    assert info["in_night"] is True
+    assert info["auto_rotation_allowed"] is True
     assert info["next"]["kind"] == "next_night"
-    assert "01:00–07:00" in info["night_label"]
+    assert "01:00–22:00" in info["night_label"]
     assert info["next"]["at_label"]
 
 
@@ -142,7 +146,7 @@ def test_advance_parser_rotation_skips_during_day(monkeypatch):
     monkeypatch.setattr(
         ps,
         "_kyiv_now",
-        lambda: datetime(2026, 10, 13, 15, 0, tzinfo=ZoneInfo("Europe/Kiev")),
+        lambda: datetime(2026, 10, 13, 23, 0, tzinfo=ZoneInfo("Europe/Kiev")),
     )
     monkeypatch.setattr(ps, "_load_rotation", lambda: {"pending": ["Sesderma"], "current": None})
     monkeypatch.setattr(ps, "_rotation_busy", lambda: False)

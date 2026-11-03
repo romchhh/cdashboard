@@ -7,15 +7,15 @@
         <span class="parser-schedule-card__summary">{{ rotation.next.summary }}</span>
     </div>
     <div class="parser-schedule-card__meta">
-        <span>Ніч пн–пт, {{ rotation.night_label }} (Київ)</span>
+        <span>Будні пн–пт, {{ rotation.night_label }} (Київ), включно з днем</span>
         {% if rotation.weekend %}
         <span class="parser-muted">вихідні — автозапуск вимкнено</span>
         {% elif rotation.auto_rotation_allowed %}
-        <span class="parser-status parser-status--ok">зараз нічне вікно</span>
+        <span class="parser-status parser-status--ok">зараз вікно автозапуску</span>
         {% elif rotation.in_night %}
-        <span class="parser-muted">ніч, але не будній день</span>
+        <span class="parser-muted">вікно є, але не будній день</span>
         {% else %}
-        <span class="parser-muted">удень автозапуск вимкнено</span>
+        <span class="parser-muted">зараз поза вікном автозапуску</span>
         {% endif %}
         {% if rotation.next.brands %}
         <span class="parser-muted">· {{ rotation.next.brands|join(", ") }}{% if rotation.next.pending_count and rotation.next.pending_count > rotation.next.brands|length %}…{% endif %}</span>

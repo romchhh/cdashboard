@@ -259,6 +259,8 @@ def poll_catalog_job(
                             "phase": data.get("phase") or "products",
                             "current": data.get("current") or 0,
                             "total": data.get("total") or products_total,
+                            "retry_current": data.get("retry_current"),
+                            "retry_total": data.get("retry_total"),
                             "product": data.get("product") or "",
                             "brand": brand or data.get("brand"),
                             "row": row,
@@ -273,6 +275,8 @@ def poll_catalog_job(
                         "phase": data.get("phase") or "products",
                         "current": data.get("current") or 0,
                         "total": data.get("total") or products_total,
+                        "retry_current": data.get("retry_current"),
+                        "retry_total": data.get("retry_total"),
                         "product": data.get("product") or "",
                         "brand": brand or data.get("brand"),
                     }

@@ -207,12 +207,12 @@ def setup_scheduler() -> AsyncIOScheduler:
     )
     logger.info("✅ Задача: Резервна копія БД → Telegram (01:30 щодня)")
 
-    # Парсер: автооновлення вночі пн–пт (01:00–07:00). Черга дня після синку ~03:05, drain кожну хв.
+    # Парсер: автооновлення у будні 01:00–22:00, включно з днем. Черга після синку ~03:05, drain кожну хв.
     scheduler.add_job(
         _guard(rotate_parser_brands),
         trigger=CronTrigger(hour=3, minute=5),
         id="parser_brand_rotation",
-        name="Парсер: нічна черга брендів (цикл 14 днів)",
+        name="Парсер: черга брендів (цикл 14 днів)",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
@@ -222,7 +222,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         _guard(rotate_parser_brands),
         trigger=CronTrigger(hour=1, minute=5),
         id="parser_brand_rotation_early",
-        name="Парсер: доробка нічної черги (01:05)",
+        name="Парсер: доробка черги (01:05)",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
@@ -232,14 +232,14 @@ def setup_scheduler() -> AsyncIOScheduler:
         _guard(rotate_parser_brands),
         trigger=IntervalTrigger(minutes=1),
         id="parser_brand_rotation_drain",
-        name="Парсер: наступний бренд з нічної черги",
+        name="Парсер: наступний бренд із черги",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
         misfire_grace_time=300,
     )
     logger.info(
-        "✅ Задача: Парсер брендів (ніч пн–пт 01:00–07:00, черга з 03:05, drain 1 хв + ланцюжок)"
+        "✅ Задача: Парсер брендів (будні 01:00–22:00, і вдень; черга з 03:05, drain 1 хв + ланцюжок)"
     )
 
     # Запустити планувальник

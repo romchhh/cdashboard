@@ -757,18 +757,26 @@
     box.hidden = false;
     if (hint) hint.hidden = true;
     if (btn) { btn.disabled = true; btn.textContent = 'Парсинг…'; }
+    var phase = st.phase || '';
     var cur = st.current || 0, total = st.total || 0;
     var pct = total ? Math.min(100, Math.round(cur / total * 100)) : 0;
     var bar = document.getElementById('liveBar');
     if (bar) bar.style.width = pct + '%';
     var title = document.getElementById('liveTitle');
-    var phase = st.phase || '';
-    if (title) title.textContent = phase === 'brand_check' ? 'Перевіряю магазини…' : (phase === 'starting' ? 'Запуск у фоні…' : (phase === 'done' ? 'Готово' : 'Збираю ціни…'));
+    if (title) {
+      title.textContent = phase === 'brand_check' ? 'Перевіряю магазини…'
+        : (phase === 'starting' ? 'Запуск у фоні…'
+        : (phase === 'done' ? 'Готово'
+        : (phase === 'retry' ? 'Товари зібрані · повторюю магазини, що не відповіли'
+        : 'Збираю ціни…')));
+    }
     var counts = document.getElementById('liveCounts');
     var shown = st.visible || 0;
     if (counts) {
       var label = cur + ' готово / ' + (total || '—');
-      if (shown > cur) label += ' · у таблиці ' + shown;
+      if (phase === 'retry' && st.retry_total) {
+        label += ' · повтор магазинів ' + (st.retry_current || 0) + ' / ' + st.retry_total;
+      } else if (shown > cur) label += ' · у таблиці ' + shown;
       counts.textContent = label + ' · ' + pct + '%';
     }
     var prod = document.getElementById('liveProduct');
@@ -779,7 +787,9 @@
       if (started) {
         var el = Math.max(0, (Date.now() - started) / 1000);
         var txt = 'минуло ' + fmtDur(el);
-        if (cur > 0 && total > cur) txt += ' · залишилось ≈ ' + fmtDur(el / cur * (total - cur));
+        var retryLeft = phase === 'retry' && st.retry_total && (st.retry_current || 0) > 0 && st.retry_total > st.retry_current;
+        if (retryLeft) txt += ' · повтор магазинів, не нові товари';
+        else if (cur > 0 && total > cur && phase !== 'retry') txt += ' · залишилось ≈ ' + fmtDur(el / cur * (total - cur));
         else if (cur === 0 && shown > 0) txt += ' · ціни вже з’являються в таблиці';
         else if (cur === 0 && st.phase === 'products') txt += ' · шукаю перші магазини…';
         else if (st.phase === 'brand_check' || st.phase === 'starting') txt += ' · збір іде у фоні';

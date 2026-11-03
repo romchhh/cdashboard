@@ -108,6 +108,8 @@ async def job_status(job_id: str, since_rows: int = 0, since_sites: int = 0):
                     "query": snap.get("query"),
                     "current": snap.get("current"),
                     "total": snap.get("total"),
+                    "retry_current": snap.get("retry_current"),
+                    "retry_total": snap.get("retry_total"),
                     "product": snap.get("product"),
                     "error": (
                         "Worker перезапустився під час scrape (часто OOM «Killed»). "
@@ -131,6 +133,8 @@ async def job_status(job_id: str, since_rows: int = 0, since_sites: int = 0):
         "query": job.get("query"),
         "current": job.get("current"),
         "total": job.get("total"),
+        "retry_current": job.get("retry_current"),
+        "retry_total": job.get("retry_total"),
         "product": job.get("product"),
         "error": job.get("error"),
         "started_epoch": job.get("started_epoch"),
