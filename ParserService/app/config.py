@@ -47,7 +47,7 @@ MAX_JOBS_KEPT = 4
 # TTL завершеного job (сек) — потім викидаємо з памʼяті.
 JOB_TTL_SEC = 45 * 60
 # Чекати вільний scrape-gate (сек), замість миттєвого 409.
-SCRAPE_GATE_WAIT_SEC = 15
+SCRAPE_GATE_WAIT_SEC = 120
 # Макс. товарів у одному catalog-запиті (захист від гігантського payload).
 MAX_CATALOG_PRODUCTS = 500
 # Watchdog: пауза перед рестартом після падіння.

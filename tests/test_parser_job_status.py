@@ -138,6 +138,10 @@ def test_pick_lane_uses_local_when_remote_is_busy(tmp_path, monkeypatch):
         "web.parser_worker_client.worker_reachable",
         lambda url, timeout=None: (True, "ok"),
     )
+    monkeypatch.setattr(
+        "web.parser_worker_client.settle_worker_slot",
+        lambda url, timeout=4, **_kw: ("free", ""),
+    )
     lane, why = ps._pick_lane()
     assert lane == "local"
     assert why == ""
@@ -302,3 +306,74 @@ def test_advance_retries_transient_start_failure(tmp_path, monkeypatch):
     assert result["brand"] == "Abril et Nature"
     assert calls["n"] == 2
     assert state["start_retries"].get("Abril et Nature") == 1
+
+
+def test_settle_drops_orphan_and_keeps_tracked(monkeypatch):
+    from web import parser_worker_client as client
+
+    jobs = [
+        {
+            "id": "orphan",
+            "kind": "catalog",
+            "state": "running",
+            "brand": "Atache",
+            "started_epoch": time.time() - 3600,
+        },
+        {
+            "id": "live",
+            "kind": "catalog",
+            "state": "running",
+            "brand": "Academie",
+            "started_epoch": time.time() - 120,
+        },
+    ]
+    monkeypatch.setattr(client, "list_worker_jobs", lambda *_a, **_k: jobs)
+    cancelled: list[str] = []
+    monkeypatch.setattr(
+        client,
+        "cancel_catalog_job",
+        lambda job_id, base_url=None: cancelled.append(job_id) or True,
+    )
+    monkeypatch.setattr(client, "_tracked_remote_ids", lambda: set())
+    slot, _detail = client.settle_worker_slot("http://127.0.0.1:8091")
+    assert slot == "free"
+    assert cancelled == ["orphan", "live"]
+
+    cancelled.clear()
+    monkeypatch.setattr(client, "_tracked_remote_ids", lambda: {"live"})
+    slot, detail = client.settle_worker_slot("http://127.0.0.1:8091")
+    assert slot == "busy"
+    assert "Academie" in detail
+    assert cancelled == ["orphan"]
+
+
+def test_cancelled_job_does_not_occupy_worker_slot():
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "ParserService"
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from app import jobs
+
+    jobs._JOBS.clear()
+    jobs._JOBS["old"] = {
+        "id": "old",
+        "kind": "catalog",
+        "state": "running",
+        "brand": "Atache",
+        "cancel_requested": True,
+        "started_epoch": time.time() - 3600,
+    }
+    assert jobs.running_job_count() == 0
+    ok, _reason = jobs._can_accept_job()
+    assert ok is True
+    jobs._JOBS["fresh"] = {
+        "id": "fresh",
+        "kind": "catalog",
+        "state": "running",
+        "brand": "Atache",
+        "started_epoch": time.time(),
+    }
+    assert jobs._recent_same_catalog("Atache") == "fresh"
+    jobs._JOBS.clear()

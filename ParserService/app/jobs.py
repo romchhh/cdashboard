@@ -180,7 +180,11 @@ def job_cancel_requested(job_id: str) -> bool:
 
 def running_job_count() -> int:
     with _LOCK:
-        return sum(1 for j in _JOBS.values() if j.get("state") == "running")
+        return sum(
+            1
+            for job in _JOBS.values()
+            if job.get("state") == "running" and not job.get("cancel_requested")
+        )
 
 
 def get_job(job_id: str) -> dict[str, Any] | None:
@@ -287,6 +291,42 @@ def _can_accept_job() -> tuple[bool, str]:
     return True, "ok"
 
 
+def list_jobs() -> list[dict[str, Any]]:
+    with _LOCK:
+        return [
+            {
+                "id": job.get("id"),
+                "kind": job.get("kind"),
+                "state": job.get("state"),
+                "phase": job.get("phase"),
+                "brand": job.get("brand"),
+                "current": job.get("current"),
+                "total": job.get("total"),
+                "started_epoch": job.get("started_epoch"),
+                "updated_epoch": job.get("updated_epoch"),
+            }
+            for job in _JOBS.values()
+        ]
+
+
+def _recent_same_catalog(brand: str | None, *, max_age: float = 20.0) -> str | None:
+    """Повторний POST того самого старту (таймаут клієнта) чіпляється до щойно створеного job."""
+    wanted = (brand or "").strip().lower()
+    now = time.time()
+    with _LOCK:
+        for job in _JOBS.values():
+            if job.get("state") != "running" or job.get("cancel_requested"):
+                continue
+            if (job.get("kind") or "catalog") != "catalog":
+                continue
+            if (job.get("brand") or "").strip().lower() != wanted:
+                continue
+            started = float(job.get("started_epoch") or 0)
+            if started and now - started <= max_age:
+                return str(job.get("id") or "")
+    return None
+
+
 class _site_workers_cap:
     """Патч ThreadPoolExecutor на час scrape — навіть старий runtime без SITE_SEARCH_WORKERS."""
 
@@ -348,6 +388,9 @@ def start_catalog_job(
         raise RuntimeError(
             f"Занадто багато товарів ({len(products)}). Ліміт worker: {config.MAX_CATALOG_PRODUCTS}."
         )
+    existing = _recent_same_catalog(brand)
+    if existing:
+        return existing
     ok, reason = _can_accept_job()
     if not ok:
         raise RuntimeError(reason)

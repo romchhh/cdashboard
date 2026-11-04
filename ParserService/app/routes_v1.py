@@ -90,6 +90,11 @@ async def parse_catalog(payload: dict[str, Any]):
         return JSONResponse({"error": msg}, status_code=409 if busy else 500)
 
 
+@router.get("/jobs")
+async def jobs_list():
+    return {"jobs": jobs.list_jobs()}
+
+
 @router.post("/jobs/{job_id}/cancel")
 async def job_cancel(job_id: str):
     """Зупинити scrape. Job вийде на наступному оновленні прогресу."""

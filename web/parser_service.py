@@ -477,15 +477,22 @@ def _pick_lane(running: list[dict] | None = None) -> tuple[str | None, str]:
         if len(running) > 1:
             return None, f"Обидва парсери зайняті: {brands}."
         return None, f"Парсер зайнятий: {brands}."
+    from web.parser_worker_client import settle_worker_slot
+
     notes = []
     for lane in candidates:
         url = _lane_base_url(lane)
         if not url:
             return lane, ""
         ok, reason = worker_reachable(url, timeout=4)
-        if ok:
-            return lane, ""
-        notes.append(f"{LANE_LABELS.get(lane, lane)}: {reason}")
+        if not ok:
+            notes.append(f"{LANE_LABELS.get(lane, lane)}: {reason}")
+            continue
+        slot, detail = settle_worker_slot(url, timeout=4)
+        if slot == "busy":
+            notes.append(f"{LANE_LABELS.get(lane, lane)}: {detail}")
+            continue
+        return lane, ""
     return None, "Вільний парсер недоступний. " + "; ".join(notes)
 
 
@@ -2902,11 +2909,15 @@ def start_report(*, brand: str | None = None, lane: str | None = None) -> tuple[
             picked, why = lane, ""
             url = _lane_base_url(lane)
             if url:
-                from web.parser_worker_client import worker_reachable
+                from web.parser_worker_client import settle_worker_slot, worker_reachable
 
                 ok, reason = worker_reachable(url, timeout=4)
                 if not ok:
                     picked, why = None, f"{LANE_LABELS.get(lane, lane)}: {reason}"
+                else:
+                    slot, detail = settle_worker_slot(url, timeout=4)
+                    if slot == "busy":
+                        picked, why = None, f"{LANE_LABELS.get(lane, lane)}: {detail}"
         else:
             picked, why = _pick_lane(running)
         if not picked:
