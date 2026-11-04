@@ -25,7 +25,6 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from cosmy_parse import (
-    RETRY_SEARCH_DEADLINE,
     SITES,
     clear_brand_presence_cache,
     ensure_brand_in_query,
@@ -496,84 +495,8 @@ def run_catalog(
                     "row": row,
                 })
 
-    retry_queue: list[tuple[int, dict, str]] = []
-    for idx, row in enumerate(rows):
-        if not row:
-            continue
-        product = catalog[idx]
-        for site_name, info in (row.get("shops") or {}).items():
-            if _shop_needs_retry(info):
-                retry_queue.append((idx, product, site_name))
-
-    raw_retry_n = len(retry_queue)
-    retry_queue = trim_retry_queue(retry_queue, total)
-
-    def _retry_progress(ridx: int, product: dict, site_name: str, row: dict | None) -> None:
-        if not progress:
-            return
-        name = product.get("name") or product.get("query") or ""
-        progress({
-            "state": "running",
-            "phase": "retry",
-            "current": done,
-            "total": total,
-            "retry_current": ridx,
-            "retry_total": len(retry_queue),
-            "product": f"повтор {site_name}: {name}",
-            "started_at": started,
-            "started_epoch": started_epoch,
-            "row": row,
-        })
-
-    def _retry_one(idx: int, product: dict, site_name: str):
-        brand = extract_brand(product["query"])
-        set_search_feed_model(product.get("model"))
-        try:
-            patch = search_all(
-                product["query"],
-                our_price=product.get("our_price"),
-                samples=samples_by_brand.get(brand, ()),
-                deadline=RETRY_SEARCH_DEADLINE,
-                max_workers=1,
-                site_names=(site_name,),
-            )
-        except Exception:
-            patch = None
-        finally:
-            set_search_feed_model(None)
-        return idx, product, site_name, patch
-
-    if retry_queue:
-        note = f"товари зібрані · повтор {len(retry_queue)} відповідей магазинів"
-        if raw_retry_n > len(retry_queue):
-            note += f" (було {raw_retry_n}, магазини що мовчали на більшості — не по кожному товару)"
-        _beat("retry", note)
-        retry_workers = max(1, min(workers, 4))
-        with ThreadPoolExecutor(max_workers=retry_workers) as pool:
-            futs = [
-                pool.submit(_retry_one, idx, product, site_name)
-                for idx, product, site_name in retry_queue
-            ]
-            for ridx, fut in enumerate(as_completed(futs), start=1):
-                try:
-                    idx, product, site_name, patch = fut.result()
-                except Exception:
-                    continue
-                row = rows[idx]
-                if patch and row:
-                    base_raw = row.get("raw") if isinstance(row, dict) else {}
-                    if not isinstance(base_raw, dict) or not base_raw:
-                        base_raw = {
-                            "query": product["query"],
-                            "our_price": product.get("our_price"),
-                            "results": [],
-                            "misses": [],
-                        }
-                    rows[idx] = build_row(product, merge_search_payload(base_raw, patch))
-                    row = rows[idx]
-                if ridx == 1 or ridx % 15 == 0 or ridx == len(retry_queue):
-                    _retry_progress(ridx, product, site_name, row if isinstance(row, dict) else None)
-
+    # Другого кола немає: магазин, який не відповів, лишається «н/д».
+    # Повтор по кожному товару виглядав як новий прогін на тисячі позицій.
     report = _write_partial(final=True)
     report["total"] = total
     report["partial"] = False

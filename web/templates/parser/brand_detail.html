@@ -35,6 +35,10 @@
                 <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
                 <button type="submit" class="btn btn-primary" id="brandRunBtn" {% if not brand_enabled %}disabled title="Спочатку увімкніть бренд"{% endif %}>{{ ui_icon('refresh') }} {% if report %}Оновити моніторинг{% else %}Запустити моніторинг{% endif %}</button>
             </form>
+            <form method="post" action="/parser/brands/{{ brand_info.slug if brand_info else brand }}/stop" id="brandStopForm" {% if not report_status or report_status.state != 'running' %}hidden{% endif %} onsubmit="return confirm('Зупинити парсинг? Уже зібрані ціни лишаться в таблиці.');">
+                <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                <button type="submit" class="btn btn-secondary" id="brandStopBtn">Зупинити парсер</button>
+            </form>
             {% if report %}
             <a class="btn btn-secondary" href="/parser/api/report/download?brand={{ brand_info.slug if brand_info else brand }}">Завантажити Excel</a>
             {% endif %}
@@ -57,6 +61,8 @@
 
     {% if notice == 'started' %}
     <div class="parser-alert parser-alert--ok" id="startedNotice">{{ ui_icon('info') }} Моніторинг запущено — таблиця оновлюється в реальному часі.</div>
+    {% elif notice == 'stopped' %}
+    <div class="parser-alert parser-alert--ok">{{ ui_icon('info') }} Парсинг зупинено. Зібрані ціни збережено.</div>
     {% endif %}
     {% if error == 'disabled' %}
     <div class="parser-alert parser-alert--warn">{{ ui_icon('warning') }} Бренд вимкнено з парсингу. Увімкніть його, щоб запускати моніторинг.</div>
@@ -757,6 +763,8 @@
     box.hidden = false;
     if (hint) hint.hidden = true;
     if (btn) { btn.disabled = true; btn.textContent = 'Парсинг…'; }
+    var stopForm = document.getElementById('brandStopForm');
+    if (stopForm) stopForm.hidden = false;
     var phase = st.phase || '';
     var cur = st.current || 0, total = st.total || 0;
     var pct = total ? Math.min(100, Math.round(cur / total * 100)) : 0;
@@ -774,6 +782,7 @@
     var shown = st.visible || 0;
     if (counts) {
       var label = cur + ' готово / ' + (total || '—');
+      if (st.lane_label) label += ' · ' + st.lane_label;
       if (phase === 'retry' && st.retry_total) {
         label += ' · повтор магазинів ' + (st.retry_current || 0) + ' / ' + st.retry_total;
       } else if (shown > cur) label += ' · у таблиці ' + shown;
@@ -823,6 +832,16 @@
         // Адаптивний інтервал: швидше коли є оновлення, повільніше коли тиша.
         var delay = changed ? 700 : (stagnantPolls > 4 ? 1600 : 1000);
         setTimeout(pollLive, delay);
+        return;
+      }
+      if (st.state === 'cancelled') {
+        hideLive();
+        var stopFormDone = document.getElementById('brandStopForm');
+        if (stopFormDone) stopFormDone.hidden = true;
+        if (errBox) { errBox.hidden = false; errBox.className = 'parser-alert parser-alert--ok'; errBox.textContent = 'Парсинг зупинено.'; }
+        var stopBtn = document.getElementById('brandRunBtn');
+        if (stopBtn) { stopBtn.disabled = false; stopBtn.textContent = 'Запустити моніторинг'; }
+        setTimeout(function () { location.replace(location.pathname); }, 600);
         return;
       }
       if (st.state === 'error') {

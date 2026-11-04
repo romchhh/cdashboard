@@ -286,6 +286,27 @@ async def parser_brand_run(
     )
 
 
+@router.post("/brands/{brand_slug}/stop")
+async def parser_brand_stop(
+    brand_slug: str,
+    _csrf: None = Depends(verify_csrf_dependency),
+):
+    brand = ps.brand_from_slug(unquote(brand_slug))
+    if not brand:
+        return RedirectResponse(url="/parser/brands?error=not_found", status_code=302)
+    status, code = await asyncio.to_thread(ps.stop_report, brand=brand)
+    if code >= 400:
+        err = quote(status.get("error") or "Не вдалося зупинити парсер", safe="")
+        return RedirectResponse(
+            url=f"/parser/brands/{ps.brand_slug(brand)}?error={err}",
+            status_code=302,
+        )
+    return RedirectResponse(
+        url=f"/parser/brands/{ps.brand_slug(brand)}?notice=stopped",
+        status_code=302,
+    )
+
+
 @router.post("/brands/{brand_slug}/toggle")
 async def parser_brand_toggle(
     brand_slug: str,

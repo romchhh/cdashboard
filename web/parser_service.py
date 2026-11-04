@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import re
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -52,6 +53,8 @@ _REMOTE_POLL_THREADS: dict[str, threading.Thread] = {}
 _REPORT_STATUS: dict[str, Any] = {"state": "idle"}
 _LIVE_ROWS: dict[Any, dict] = {}  # id → slim row під час поточного прогону
 _LIVE_BRAND: str | None = None
+_ACTIVE_LANE = "remote"
+LANE_LABELS = {"remote": "віддалений", "local": "локальний"}
 _LAST_FLUSH = 0.0
 _LAST_LIVE_FLUSH = 0.0
 _JOB_LOG_HANDLE = None
@@ -200,16 +203,18 @@ def _ensure_remote_poller(job: dict) -> None:
         if existing and existing.is_alive():
             return
         brand = job.get("brand")
+        lane = job.get("lane") or "remote"
         total = int(job.get("total") or 0)
         seen = int(job.get("live_count") or 0)
 
         def _reattach() -> None:
             try:
-                from web.parser_worker_client import poll_catalog_job, worker_enabled
+                from web.parser_worker_client import poll_catalog_job
 
-                if not worker_enabled():
+                base = _lane_base_url(lane)
+                if not base:
                     return
-                logger.info("Reattach remote parser job %s brand=%s", remote_id, brand)
+                logger.info("Reattach parser job %s brand=%s lane=%s", remote_id, brand, lane)
 
                 def progress(status: dict) -> None:
                     status = dict(status)
@@ -217,6 +222,7 @@ def _ensure_remote_poller(job: dict) -> None:
                     if brand:
                         status["brand"] = brand
                     status["remote_job_id"] = remote_id
+                    status["lane"] = lane
                     _publish_status(status, row=row if isinstance(row, dict) else None)
 
                 report = poll_catalog_job(
@@ -225,6 +231,7 @@ def _ensure_remote_poller(job: dict) -> None:
                     brand=brand,
                     on_progress=progress,
                     since_rows=seen,
+                    base_url=base,
                 )
                 # Фіналізація як у _run_report_job (мінімум — зберегти звіт і done).
                 try:
@@ -317,11 +324,14 @@ def _ensure_remote_poller(job: dict) -> None:
 
 
 def _write_job_status(status: dict) -> None:
-    store.save_job({k: v for k, v in status.items() if k != "row"})
+    lane = status.get("lane") or _ACTIVE_LANE
+    body = {k: v for k, v in status.items() if k != "row"}
+    body["lane"] = lane
+    store.save_job(body, lane=lane)
 
 
 def _write_live_rows() -> None:
-    store.save_live_rows(list(_LIVE_ROWS.values()))
+    store.save_live_rows(list(_LIVE_ROWS.values()), lane=_ACTIVE_LANE)
 
 
 def _write_job_files(status: dict) -> None:
@@ -336,7 +346,7 @@ def _merge_running_job_fields(status: dict) -> dict:
         return status
     prev = _REPORT_STATUS if isinstance(_REPORT_STATUS, dict) else {}
     if prev.get("state") != "running":
-        disk = store.load_job() or {}
+        disk = store.load_job(status.get("lane") or _ACTIVE_LANE) or {}
         if disk.get("state") == "running":
             prev = disk
     if prev.get("state") != "running":
@@ -387,21 +397,96 @@ def _publish_status(status: dict, *, row: dict | None = None, force: bool = Fals
             _write_live_rows()
 
 
-def _job_from_disk() -> dict | None:
-    data = store.load_job()
+def _job_from_disk(lane: str | None = None) -> dict | None:
+    data = store.load_job(lane)
     if not isinstance(data, dict) or not data.get("state"):
         return None
     state = data.get("state")
     age = time.time() - float(data.get("updated_epoch") or 0)
     if state == "running":
         return _resolve_job_payload(data, persist=True)
-    if state in ("done", "error") and age < 90:
+    if state in ("done", "error", "cancelled") and age < 90:
         return data
     return None
 
 
-def _live_rows_from_disk() -> list[dict]:
-    return [r for r in store.load_live_rows() if isinstance(r, dict)]
+def _live_rows_from_disk(lane: str | None = None) -> list[dict]:
+    return [r for r in store.load_live_rows(lane) if isinstance(r, dict)]
+
+
+def _lane_base_url(lane: str) -> str:
+    from config import PARSER_LOCAL_URL, PARSER_SERVICE_URL
+
+    if lane == "local":
+        return PARSER_LOCAL_URL
+    return PARSER_SERVICE_URL
+
+
+def _running_parser_jobs() -> list[dict]:
+    """Живі прогони на віддаленому і локальному парсері."""
+    now = time.time()
+    out = []
+    for job in store.load_all_jobs():
+        if job.get("state") != "running":
+            continue
+        fresh = now - float(job.get("updated_epoch") or 0) < 25
+        if (
+            _parser_process_alive(job.get("pid"))
+            or fresh
+            or (job.get("remote_job_id") or "").strip()
+        ):
+            out.append(job)
+    return out
+
+
+def _configured_lanes() -> list[str]:
+    from config import PARSER_LOCAL_URL, PARSER_SERVICE_URL
+
+    lanes = []
+    if PARSER_SERVICE_URL:
+        lanes.append("remote")
+    if PARSER_LOCAL_URL:
+        lanes.append("local")
+    if not lanes:
+        lanes.append("local")
+    return lanes
+
+
+def _free_lane_name(running: list[dict] | None = None) -> str | None:
+    """Вільний слот без мережевої перевірки. Спочатку віддалений, потім локальний."""
+    running = _running_parser_jobs() if running is None else running
+    busy = {(job.get("lane") or "remote") for job in running}
+    for lane in _configured_lanes():
+        if lane not in busy:
+            return lane
+    return None
+
+
+def _pick_lane(running: list[dict] | None = None) -> tuple[str | None, str]:
+    """Вільний і живий парсер: спочатку віддалений API, потім локальний ParserService."""
+    from web.parser_worker_client import worker_reachable
+
+    running = _running_parser_jobs() if running is None else running
+    busy = {(job.get("lane") or "remote") for job in running}
+    candidates = [lane for lane in _configured_lanes() if lane not in busy]
+    if not candidates:
+        brands = ", ".join(
+            f"«{job.get('brand') or 'каталог'}» ({LANE_LABELS.get(job.get('lane') or 'remote', '')})"
+            for job in running
+        )
+        if len(running) > 1:
+            return None, f"Обидва парсери зайняті: {brands}."
+        return None, f"Парсер зайнятий: {brands}."
+    notes = []
+    for lane in candidates:
+        url = _lane_base_url(lane)
+        if not url:
+            return lane, ""
+        ok, reason = worker_reachable(url, timeout=4)
+        if ok:
+            return lane, ""
+        notes.append(f"{LANE_LABELS.get(lane, lane)}: {reason}")
+    return None, "Вільний парсер недоступний. " + "; ".join(notes)
 
 
 def brand_slug(name: str) -> str:
@@ -1050,9 +1135,11 @@ def _reconcile_brand_status(
     job_error: str | None = None,
 ) -> None:
     """Скидає залиплі running/error, якщо у SQLite уже є звіт або job не активний."""
-    job = report_status()
-    job_state = job.get("state")
-    job_brand = (job.get("brand") or "").strip().lower()
+    running_brands = {
+        (job.get("brand") or "").strip().lower()
+        for job in _running_parser_jobs()
+        if (job.get("brand") or "").strip()
+    }
     targets = brands if brands is not None else list(catalog_counts.keys())
 
     def _apply(status: dict) -> None:
@@ -1064,12 +1151,7 @@ def _reconcile_brand_status(
                 continue
             rep = report_index.get(brand) or {}
             parsed = int(rep.get("parsed_count") or st.get("total") or 0)
-            if (
-                prev_state == "running"
-                and job_state == "running"
-                and job_brand
-                and job_brand == brand.strip().lower()
-            ):
+            if prev_state == "running" and brand.strip().lower() in running_brands:
                 continue
             eff = _effective_brand_state(
                 st, rep, catalog_count=count, parsed_count=parsed
@@ -1413,12 +1495,47 @@ def slim_row(row: dict) -> dict:
 _slim_live_row = slim_row
 
 
+def _resolved_jobs() -> list[dict]:
+    jobs = []
+    for raw in store.load_all_jobs():
+        lane = raw.get("lane") or "remote"
+        payload = _resolve_job_payload({k: v for k, v in raw.items() if k != "row"})
+        payload["lane"] = lane
+        payload["lane_label"] = LANE_LABELS.get(lane, lane)
+        if payload.get("state"):
+            jobs.append(payload)
+    return jobs
+
+
+def _jobs_brief(jobs: list[dict]) -> list[dict]:
+    return [
+        {
+            "brand": job.get("brand"),
+            "state": job.get("state"),
+            "lane": job.get("lane"),
+            "lane_label": job.get("lane_label"),
+            "current": job.get("current"),
+            "total": job.get("total"),
+            "product": job.get("product"),
+            "phase": job.get("phase"),
+            "started_epoch": job.get("started_epoch"),
+            "error": job.get("error"),
+            "pid": job.get("pid"),
+            "remote_job_id": job.get("remote_job_id"),
+        }
+        for job in jobs
+    ]
+
+
 def report_status() -> dict:
     global _REPORT_STATUS
-    disk = _job_from_disk()
-    if disk is not None:
-        payload = _resolve_job_payload({k: v for k, v in disk.items() if k != "row"})
-        if payload.get("state") in ("done", "error"):
+    jobs = _resolved_jobs()
+    running = [job for job in jobs if job.get("state") == "running"]
+    if running:
+        payload = dict(running[0])
+    elif jobs:
+        payload = dict(jobs[0])
+        if payload.get("state") in ("done", "error", "cancelled"):
             _REPORT_STATUS = dict(payload)
     else:
         payload = {k: v for k, v in _REPORT_STATUS.items() if k != "row"}
@@ -1427,10 +1544,10 @@ def report_status() -> dict:
             payload["brand"] = payload.get("brand") or _LIVE_BRAND
         payload = _resolve_job_payload(payload)
         if payload.get("state") == "error" and "Фоновий процес зупинився" in (payload.get("error") or ""):
-            # У памʼяті без актуального файлу — просто idle, щоб не блокувати новий запуск.
             payload = {**payload, "state": "idle"}
             payload.pop("error", None)
             _REPORT_STATUS = dict(payload)
+    payload["jobs"] = _jobs_brief(jobs)
     payload["has_file"] = REPORT_XLSX.exists()
     if payload.get("state") != "running":
         data = store.load_report(store.FULL_SCOPE) or {}
@@ -1441,17 +1558,18 @@ def report_status() -> dict:
 
 
 def report_status_for_brand(brand: str | None) -> dict:
-    """Статус для сторінки бренду: чужий прогін/помилку не показуємо як свої."""
+    """Статус для сторінки бренду: чужий прогін не показуємо як свій."""
     status = report_status()
     if not brand:
         return status
+    needle = brand.strip().lower()
+    for job in status.get("jobs") or []:
+        if (job.get("brand") or "").strip().lower() == needle and job.get("state") == "running":
+            full = dict(status)
+            full.update(job)
+            return full
     job_brand = (status.get("brand") or "").strip()
-    if not job_brand:
-        return status
-    if job_brand.lower() == brand.strip().lower():
-        return status
-    # Інший бренд (авторотація чи ручний прогін) — на цій сторінці idle.
-    if status.get("state") in ("running", "error", "done"):
+    if job_brand and job_brand.lower() != needle and status.get("state") in ("running", "error", "done", "cancelled"):
         clean = {**status, "state": "idle"}
         clean.pop("error", None)
         clean.pop("phase", None)
@@ -1471,9 +1589,9 @@ def live_brand_snapshot(brand: str, known: set | None = None) -> dict:
     except Exception:
         sites = []
 
-    job_brand = (report_status().get("brand") or "").strip().lower()
-    disk_rows = _live_rows_from_disk()
-    if status.get("state") == "running" and disk_rows and (not job_brand or job_brand == brand_l):
+    lane = (status.get("lane") or "remote") if status.get("state") == "running" else None
+    disk_rows = _live_rows_from_disk(lane) if lane else []
+    if status.get("state") == "running" and disk_rows:
         rows = [
             r for r in disk_rows
             if not (r.get("brand") or "").strip() or (r.get("brand") or "").strip().lower() == brand_l
@@ -1730,8 +1848,9 @@ def start_search(query: str, our_price: Any = None) -> tuple[dict, int]:
         return dict(status), 200
 
 
-def _run_report_job(*, brand: str | None = None) -> None:
-    global _REPORT_STATUS, _LIVE_ROWS, _LIVE_BRAND
+def _run_report_job(*, brand: str | None = None, lane: str = "remote") -> None:
+    global _REPORT_STATUS, _LIVE_ROWS, _LIVE_BRAND, _ACTIVE_LANE
+    _ACTIVE_LANE = lane if lane in ("remote", "local") else "remote"
     _LIVE_ROWS.clear()
     settings = load_settings()
     try:
@@ -1857,17 +1976,17 @@ def _run_report_job(*, brand: str | None = None) -> None:
             _rotation_mark_finished(brand, ok=False, error=str(exc))
         _schedule_night_chain()
 
-    # --- remote scrape worker (БД лишається тут) ---
+    # --- scrape через ParserService API (віддалений або локальний). БД лишається тут. ---
+    lane_url = _lane_base_url(_ACTIVE_LANE)
     try:
         from config import PARSER_FALLBACK_LOCAL
         from web.parser_worker_client import (
             run_catalog_on_worker,
-            worker_enabled,
             worker_reachable,
         )
 
-        if worker_enabled():
-            ok, reason = worker_reachable()
+        if lane_url:
+            ok, reason = worker_reachable(lane_url)
             if not ok:
                 append_parse_event(
                     level="error",
@@ -1897,6 +2016,7 @@ def _run_report_job(*, brand: str | None = None) -> None:
                                 "phase": "products",
                                 "brand": brand,
                                 "remote_job_id": job_id,
+                                "lane": _ACTIVE_LANE,
                                 "current": 0,
                                 "total": len(job_catalog),
                                 "product": "worker scrape…",
@@ -1910,6 +2030,7 @@ def _run_report_job(*, brand: str | None = None) -> None:
                             status["brand"] = brand
                         if remote_job_holder.get("id"):
                             status["remote_job_id"] = remote_job_holder["id"]
+                        status["lane"] = _ACTIVE_LANE
                         progress(status)
 
                     report = run_catalog_on_worker(
@@ -1918,6 +2039,7 @@ def _run_report_job(*, brand: str | None = None) -> None:
                         brand=brand,
                         on_progress=progress_remote,
                         on_started=on_started,
+                        base_url=lane_url,
                     )
                 except Exception as exc:
                     logger.exception("Remote catalog worker failed")
@@ -2125,13 +2247,15 @@ def next_rotation_info(
     night = in_rotation_night(moment)
     weekend = is_weekend_kyiv(moment)
     auto_allowed = parser_auto_rotation_allowed(moment)
-    running = _rotation_busy()
+    live_jobs = _running_parser_jobs()
+    running = bool(live_jobs)
     current = (rot.get("current") or "").strip() or None
-    # Ручний старт не завжди пише rotation.current — беремо бренд з активного job.
     if running:
-        job_brand = (report_status().get("brand") or "").strip()
-        if job_brand:
-            current = job_brand
+        labels = [
+            f"«{job.get('brand') or 'прогін'}» ({LANE_LABELS.get(job.get('lane') or 'remote', '')})"
+            for job in live_jobs
+        ]
+        current = ", ".join(labels)
     night_label = f"{ROTATION_NIGHT_START_HOUR:02d}:00–{ROTATION_NIGHT_END_HOUR:02d}:00"
 
     def night_start_on(day: date) -> datetime:
@@ -2154,7 +2278,7 @@ def next_rotation_info(
             "kind": "running",
             "at": None,
             "at_label": "зараз",
-            "summary": f"Зараз іде «{current or 'прогін'}»",
+            "summary": f"Зараз іде {current or 'прогін'}",
             "brands": pending[:8],
             "pending_count": len(pending),
         }
@@ -2337,11 +2461,8 @@ def _enabled_brand_names() -> list[str]:
 
 
 def _rotation_busy() -> bool:
-    """Чи реально йде прогін. Чужий/мертвий PID не блокує нічну чергу."""
-    current = report_status()
-    if current.get("state") != "running":
-        return False
-    return _parser_process_alive(current.get("pid"))
+    """Немає вільного слота. Мережу тут не чіпаємо — це ще й прапорець для сторінок."""
+    return _free_lane_name() is None and bool(_running_parser_jobs())
 
 
 def _rotation_mark_finished(brand: str, *, ok: bool, error: str | None = None) -> None:
@@ -2353,9 +2474,6 @@ def _rotation_mark_finished(brand: str, *, ok: bool, error: str | None = None) -
         with _ROTATION_LOCK:
             state = _load_rotation()
             current = (state.get("current") or "").strip()
-            if current and current.lower() != brand.lower():
-                # Ручний прогін іншого бренду — ротацію не чіпаємо.
-                return
             pending = [
                 b for b in (state.get("pending") or [])
                 if (b or "").strip().lower() != brand.lower()
@@ -2374,7 +2492,9 @@ def _rotation_mark_finished(brand: str, *, ok: bool, error: str | None = None) -
                 ]
                 state["done"] = done
                 state["skipped"] = skipped
-            elif error:
+            elif error and current.lower() == brand.lower():
+                state["current"] = None
+            if ok and current.lower() == brand.lower():
                 state["current"] = None
             _save_rotation(state)
     except Exception:
@@ -2597,8 +2717,14 @@ def _advance_parser_rotation_locked() -> dict:
                     level="info",
                     kind="schedule",
                     brand=brand,
-                    message=f"Автозапуск «{brand}». У черзі ще {len(pending)}",
+                    message=(
+                        f"Автозапуск «{brand}» ({LANE_LABELS.get(status.get('lane') or '', '')}). "
+                        f"У черзі ще {len(pending)}"
+                    ),
                 )
+                more, _why = _pick_lane()
+                if more and pending:
+                    continue
                 return {"action": "started", "brand": brand, "left": len(pending)}
             if code == 409:
                 pending.insert(0, brand)
@@ -2636,32 +2762,157 @@ def _advance_parser_rotation_locked() -> dict:
         return {"action": "skipped"}
 
 
-def start_report(*, brand: str | None = None) -> tuple[dict, int]:
-    """Запускає парсинг окремим процесом: перезапуск сайту і закриття вкладки його не зупиняють."""
+def _kill_parser_process(pid: int | None) -> None:
+    """Зупинити фоновий run_brand_job. Чужий процес не чіпаємо."""
+    if not pid or int(pid) == os.getpid() or not _parser_process_alive(pid):
+        return
+    pid = int(pid)
+    try:
+        pgid = os.getpgid(pid)
+    except OSError:
+        pgid = pid
+    same_group = False
+    try:
+        same_group = pgid == os.getpgrp()
+    except OSError:
+        same_group = True
+    sig = signal.SIGTERM
+    try:
+        if same_group:
+            os.kill(pid, sig)
+        else:
+            os.killpg(pgid, sig)
+    except OSError:
+        return
+    deadline = time.time() + 2.0
+    while time.time() < deadline and _pid_alive(pid):
+        time.sleep(0.1)
+    if not _pid_alive(pid):
+        return
+    try:
+        if same_group:
+            os.kill(pid, signal.SIGKILL)
+        else:
+            os.killpg(pgid, signal.SIGKILL)
+    except OSError:
+        pass
+
+
+def _save_stopped_brand_report(brand: str | None, lane: str | None = None) -> None:
+    """Зберегти вже зібрані ціни, щоб зупинка не стирала таблицю."""
+    if not brand:
+        return
+    rows = [r for r in store.load_live_rows(lane) if isinstance(r, dict) and not r.get("partial")]
+    if not rows:
+        rows = [r for r in store.load_live_rows(lane) if isinstance(r, dict)]
+    if not rows:
+        return
+    generated = datetime.now(KYIV_TZ).isoformat(timespec="seconds")
+    report = {
+        "generated_at": generated,
+        "total": len(rows),
+        "catalog_total": len(rows),
+        "rows": rows,
+        "partial": False,
+        "stopped": True,
+    }
+    store.save_report(brand_slug(brand), report)
+    _update_brand_status(
+        brand,
+        state="done",
+        last_parsed_at=generated,
+        total=len(rows),
+        source="brand_report",
+        error=None,
+    )
+
+
+def stop_report(*, brand: str | None = None) -> tuple[dict, int]:
+    """Зупинити поточний прогін: локальний процес і scrape на worker."""
+    jobs = [job for job in store.load_all_jobs() if job.get("state") == "running"]
+    if brand:
+        jobs = [job for job in jobs if (job.get("brand") or "").strip().lower() == brand.strip().lower()]
+    if not jobs:
+        return {"state": "idle", "error": "Парсер зараз не працює"}, 409
+    job = jobs[0]
+    job_brand = (job.get("brand") or "").strip()
+    lane = job.get("lane") or "remote"
+
+    # Спочатку гасимо локальний процес, щоб він не встиг запустити наступний бренд.
+    _kill_parser_process(job.get("pid"))
+    remote_id = (job.get("remote_job_id") or "").strip()
+    if remote_id:
+        try:
+            from web.parser_worker_client import cancel_catalog_job
+
+            cancel_catalog_job(remote_id, base_url=_lane_base_url(lane) or None)
+        except Exception:
+            logger.exception("Failed to cancel remote parser job %s", remote_id)
+    stopped = {
+        **{k: v for k, v in job.items() if k != "row"},
+        "state": "cancelled",
+        "phase": "cancelled",
+        "error": "Зупинено вручну",
+        "product": "зупинено",
+        "lane": lane,
+        "updated_epoch": time.time(),
+    }
+    store.save_job(stopped, lane=lane)
+    global _REPORT_STATUS
+    _REPORT_STATUS = dict(stopped)
+    try:
+        _save_stopped_brand_report(job_brand or brand, lane)
+    except Exception:
+        logger.exception("Failed to save report after parser stop")
+    try:
+        rot = _load_rotation()
+        current = (rot.get("current") or "").strip()
+        if not job_brand or current.lower() == job_brand.lower():
+            rot["current"] = None
+            _save_rotation(rot)
+    except Exception:
+        logger.exception("Failed to clear rotation after parser stop")
+    append_parse_event(
+        level="warn",
+        kind="job",
+        brand=job_brand or brand,
+        message="Парсинг зупинено вручну",
+    )
+    return dict(stopped), 200
+
+
+def start_report(*, brand: str | None = None, lane: str | None = None) -> tuple[dict, int]:
+    """Запускає парсинг окремим процесом. Віддалений і локальний парсери можуть іти разом."""
     global _REPORT_STATUS, _LIVE_ROWS, _LIVE_BRAND, _JOB_LOG_HANDLE
     with _REPORT_LOCK:
-        current = report_status()
-        if current.get("state") == "running" and _parser_process_alive(current.get("pid")):
-            other = (current.get("brand") or "").strip() or "весь каталог"
-            message = (
-                f"Зараз уже йде збір «{other}» "
-                f"({current.get('current') or 0} з {current.get('total') or '?'}). "
-                "Одночасно може працювати лише один прогін."
-            )
-            append_parse_event(level="warn", kind="job", brand=brand, message=message)
-            return {**current, "error": message}, 409
-        # Свіжий running без живого pid (ще не встиг піднятися / глітч) — не стартуємо другий.
-        if (
-            current.get("state") == "running"
-            and (time.time() - float(current.get("updated_epoch") or 0)) < 25
-        ):
-            other = (current.get("brand") or "").strip() or "весь каталог"
-            message = (
-                f"Зараз уже йде збір «{other}» "
-                f"({current.get('current') or 0} з {current.get('total') or '?'}). "
-                "Одночасно може працювати лише один прогін."
-            )
-            return {**current, "error": message}, 409
+        running = _running_parser_jobs()
+        if brand is None and running:
+            message = "Повний каталог не запускається, поки вже йде збір бренду."
+            return {"state": "running", "error": message}, 409
+        if any(not (job.get("brand") or "").strip() for job in running):
+            message = "Зараз іде повний каталог. Зачекайте, поки він завершиться."
+            return {"state": "running", "error": message}, 409
+        if brand and any((job.get("brand") or "").strip().lower() == brand.strip().lower() for job in running):
+            message = f"«{brand}» уже парситься."
+            return {"state": "running", "error": message, "brand": brand}, 409
+        if lane:
+            if any((job.get("lane") or "remote") == lane for job in running):
+                message = f"Парсер «{LANE_LABELS.get(lane, lane)}» уже зайнятий."
+                return {"state": "running", "error": message}, 409
+            picked, why = lane, ""
+            url = _lane_base_url(lane)
+            if url:
+                from web.parser_worker_client import worker_reachable
+
+                ok, reason = worker_reachable(url, timeout=4)
+                if not ok:
+                    picked, why = None, f"{LANE_LABELS.get(lane, lane)}: {reason}"
+        else:
+            picked, why = _pick_lane(running)
+        if not picked:
+            append_parse_event(level="warn", kind="job", brand=brand, message=why)
+            return {"state": "running", "error": why or "Немає вільного парсера"}, 409
+        lane = picked
         catalog = load_catalog(force=True)
         disabled = disabled_brand_set()
         if brand:
@@ -2691,6 +2942,8 @@ def start_report(*, brand: str | None = None) -> tuple[dict, int]:
             "current": 0,
             "total": total,
             "brand": brand,
+            "lane": lane,
+            "lane_label": LANE_LABELS.get(lane, lane),
             "product": "запуск у фоні…",
             "visible": 0,
             "live_count": 0,
@@ -2699,7 +2952,7 @@ def start_report(*, brand: str | None = None) -> tuple[dict, int]:
         }
         try:
             JOBS_DIR.mkdir(parents=True, exist_ok=True)
-            store.clear_live_rows()
+            store.clear_live_rows(lane)
             _trim_job_log()
             if _JOB_LOG_HANDLE is not None:
                 try:
@@ -2710,7 +2963,7 @@ def start_report(*, brand: str | None = None) -> tuple[dict, int]:
             _JOB_LOG_HANDLE.write(f"\n--- start {datetime.now().isoformat(timespec='seconds')} brand={brand or '*'} ---\n")
             _JOB_LOG_HANDLE.flush()
             proc = subprocess.Popen(
-                [sys.executable, "-u", str(script), brand or ""],
+                [sys.executable, "-u", str(script), brand or "", lane],
                 cwd=str(ROOT),
                 start_new_session=True,
                 stdout=_JOB_LOG_HANDLE,
@@ -2730,7 +2983,7 @@ def start_report(*, brand: str | None = None) -> tuple[dict, int]:
         _LIVE_ROWS = {}
         _LIVE_BRAND = brand
         _REPORT_STATUS = dict(status)
-        boot_error = _confirm_worker_started(proc, status)
+        boot_error = _confirm_worker_started(proc, status, lane=lane)
         if boot_error:
             err_status = {
                 **status,
@@ -2766,14 +3019,14 @@ def _job_log_tail(lines: int = 40) -> str:
         return ""
 
 
-def _confirm_worker_started(proc: subprocess.Popen, status: dict, *, timeout: float = 5.0) -> str | None:
+def _confirm_worker_started(proc: subprocess.Popen, status: dict, *, timeout: float = 5.0, lane: str | None = None) -> str | None:
     """None = воркер живий. Інакше текст помилки (процес упав під час буту)."""
     expected_pid = int(status.get("pid") or 0)
     deadline = time.time() + timeout
     while time.time() < deadline:
         if proc.poll() is not None:
             break
-        disk = store.load_job() or {}
+        disk = store.load_job(lane or status.get("lane")) or {}
         disk_pid = int(disk.get("pid") or 0)
         if disk.get("state") == "error" and disk_pid == expected_pid:
             return str(disk.get("error") or "Воркер завершився з помилкою під час старту")

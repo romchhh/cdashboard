@@ -11,7 +11,7 @@
     <div class="page-header page-header-with-actions">
         <div>
             <h1 class="dash-title-with-icon">{{ ui_icon('search', 'dash-title-icon-svg') }}<span>Парсер цін</span></h1>
-            <p class="subtitle">Каталог з фіда Cosmy. Автооновлення лише вночі: за 10 ночей усі увімкнені бренди, щоночі своя частка, по одному.</p>
+            <p class="subtitle">Каталог з фіда Cosmy. Два парсери можуть іти разом: віддалений API і локальний ParserService.</p>
         </div>
         <div class="page-header-actions parser-actions-row">
             <button type="button" class="btn btn-primary" id="parserFullReportBtn">{{ ui_icon('refresh') }} Парсити весь каталог</button>
@@ -212,7 +212,13 @@
     var res = await fetch('/parser/api/report/status');
     var st = await res.json();
     if (st.state === 'running') {
-      hint.textContent = '· Йде збір: ' + (st.current || 0) + ' / ' + (st.total || '—') + (st.product ? ' · ' + st.product : '');
+      var jobs = (st.jobs || []).filter(function (j) { return j.state === 'running'; });
+      var hintText = jobs.length
+        ? jobs.map(function (j) {
+            return (j.brand || 'каталог') + ' (' + (j.lane_label || j.lane || '') + ') ' + (j.current || 0) + '/' + (j.total || '—');
+          }).join(' · ')
+        : ((st.current || 0) + ' / ' + (st.total || '—') + (st.product ? ' · ' + st.product : ''));
+      hint.textContent = '· Йде збір: ' + hintText;
       timer = setTimeout(poll, 1600);
       return;
     }

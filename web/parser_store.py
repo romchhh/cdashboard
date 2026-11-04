@@ -22,6 +22,7 @@ DB_PATH = ROOT / "databases" / "parser.db"
 JSON_DIR = ROOT / "databases" / "parser"
 
 LIVE_SCOPE = "__live__"
+LIVE_LOCAL_SCOPE = "__live_local__"
 FULL_SCOPE = "full"
 
 _SCHEMA = """
@@ -762,8 +763,8 @@ def load_stat_reports() -> list[dict]:
         scopes = [
             r["scope"]
             for r in conn.execute(
-                "SELECT scope FROM reports WHERE scope != ? ORDER BY CASE WHEN scope = ? THEN 1 ELSE 0 END, scope",
-                (LIVE_SCOPE, FULL_SCOPE),
+                "SELECT scope FROM reports WHERE scope != ? AND scope != ? ORDER BY CASE WHEN scope = ? THEN 1 ELSE 0 END, scope",
+                (LIVE_SCOPE, LIVE_LOCAL_SCOPE, FULL_SCOPE),
             )
         ]
         return [report for scope in scopes if (report := _tag_scope(conn, scope))]
@@ -779,20 +780,24 @@ def _tag_scope(conn: sqlite3.Connection, scope: str) -> dict | None:
     return report
 
 
-def save_live_rows(rows: list[dict]) -> None:
-    save_report(LIVE_SCOPE, {"rows": rows, "partial": True, "generated_at": None})
+def live_scope_for(lane: str | None = None) -> str:
+    return LIVE_LOCAL_SCOPE if (lane or "") == "local" else LIVE_SCOPE
 
 
-def load_live_rows() -> list[dict]:
-    report = load_report(LIVE_SCOPE)
+def save_live_rows(rows: list[dict], lane: str | None = None) -> None:
+    save_report(live_scope_for(lane), {"rows": rows, "partial": True, "generated_at": None})
+
+
+def load_live_rows(lane: str | None = None) -> list[dict]:
+    report = load_report(live_scope_for(lane))
     if not report:
         return []
     return list(report.get("rows") or [])
 
 
-def clear_live_rows() -> None:
+def clear_live_rows(lane: str | None = None) -> None:
     with transaction() as conn:
-        _clear_scope(conn, LIVE_SCOPE)
+        _clear_scope(conn, live_scope_for(lane))
 
 
 # ---------------------------------------------------------------- history
@@ -930,18 +935,38 @@ def _replace_kv(conn: sqlite3.Connection, namespace: str, payload: dict) -> None
         )
 
 
-def load_job() -> dict | None:
+def _job_namespace(lane: str | None) -> str:
+    return "job_local" if (lane or "") == "local" else "job"
+
+
+def load_job(lane: str | None = None) -> dict | None:
     conn = connect()
     try:
-        data = _load_kv(conn, "job")
+        data = _load_kv(conn, _job_namespace(lane))
+        if data:
+            data.setdefault("lane", "local" if lane == "local" else "remote")
         return data or None
     finally:
         conn.close()
 
 
-def save_job(payload: dict) -> None:
+def load_all_jobs() -> list[dict]:
+    jobs = []
+    for lane in ("remote", "local"):
+        job = load_job(lane)
+        if job and job.get("state"):
+            jobs.append(job)
+    return jobs
+
+
+def save_job(payload: dict, lane: str | None = None) -> None:
+    lane = lane or payload.get("lane") or "remote"
+    if lane not in ("remote", "local"):
+        lane = "remote"
+    body = dict(payload)
+    body["lane"] = lane
     with transaction() as conn:
-        _replace_kv(conn, "job", payload)
+        _replace_kv(conn, _job_namespace(lane), body)
 
 
 def load_search() -> dict:

@@ -46,6 +46,9 @@ def _emergency_fail(brand: str | None, message: str) -> None:
 
 def main() -> None:
     brand = (sys.argv[1] if len(sys.argv) > 1 else "").strip() or None
+    lane = (sys.argv[2] if len(sys.argv) > 2 else "remote").strip() or "remote"
+    if lane not in ("remote", "local"):
+        lane = "remote"
     try:
         from web.parser_service import _publish_status, _run_report_job
     except Exception as exc:
@@ -60,6 +63,7 @@ def main() -> None:
                 "state": "running",
                 "phase": "starting",
                 "brand": brand,
+                "lane": lane,
                 "product": "воркер стартував…",
                 "current": 0,
             },
@@ -71,7 +75,7 @@ def main() -> None:
         raise SystemExit(1) from exc
 
     try:
-        _run_report_job(brand=brand)
+        _run_report_job(brand=brand, lane=lane)
     except Exception as exc:
         traceback.print_exc()
         try:

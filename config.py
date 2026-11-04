@@ -272,6 +272,9 @@ MARKETING_API_KEY = getenv("MARKETING_API_KEY", "").strip()
 # --- Парсер цін: scrape-worker на іншому сервері (опційно) ---
 # У .env лише URL і ключ. Таймаути/ретраї — константи нижче.
 PARSER_SERVICE_URL = getenv("PARSER_SERVICE_URL", "").strip().rstrip("/")
+# Другий парсер на цій машині (ParserService). Порожньо = вимкнено.
+# Разом із PARSER_SERVICE_URL можна вести два бренди одночасно: віддалений API і локальний.
+PARSER_LOCAL_URL = getenv("PARSER_LOCAL_URL", "http://127.0.0.1:8091").strip().rstrip("/")
 PARSER_API_KEY = getenv("PARSER_API_KEY", "").strip()
 # Старт job / health (сек).
 PARSER_SERVICE_TIMEOUT = 45.0

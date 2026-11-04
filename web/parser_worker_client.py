@@ -68,8 +68,12 @@ def _headers() -> dict[str, str]:
     return h
 
 
-def _url(path: str) -> str:
-    return f"{PARSER_SERVICE_URL.rstrip('/')}{path}"
+def _base(base_url: str | None = None) -> str:
+    return (base_url or PARSER_SERVICE_URL or "").rstrip("/")
+
+
+def _url(path: str, base_url: str | None = None) -> str:
+    return f"{_base(base_url)}{path}"
 
 
 def _err_detail(resp: requests.Response) -> str:
@@ -102,12 +106,17 @@ def _is_transient(exc_or_msg: Exception | str) -> bool:
     return any(x in msg for x in ("HTTP 502", "HTTP 503", "HTTP 504", "Bad Gateway", "Connection"))
 
 
-def worker_reachable() -> tuple[bool, str]:
+def worker_reachable(base_url: str | None = None, timeout: float | None = None) -> tuple[bool, str]:
     """Швидка перевірка перед стартом job."""
-    if not worker_enabled():
+    base = _base(base_url)
+    if not base:
         return False, "PARSER_SERVICE_URL не задано"
     try:
-        resp = _SESSION.get(_url("/v1/health"), headers=_headers(), timeout=min(_START_TIMEOUT, 12))
+        resp = _SESSION.get(
+            _url("/v1/health", base),
+            headers=_headers(),
+            timeout=timeout if timeout is not None else min(_START_TIMEOUT, 12),
+        )
         if resp.status_code == 200:
             data = resp.json() if resp.content else {}
             eng = data.get("engine") if isinstance(data, dict) else None
@@ -117,6 +126,25 @@ def worker_reachable() -> tuple[bool, str]:
         return False, _err_detail(resp)
     except requests.RequestException as exc:
         return False, f"Worker недоступний: {exc}"
+
+
+def cancel_catalog_job(job_id: str, base_url: str | None = None) -> bool:
+    """Попросити worker зупинити scrape. False, якщо ендпоінта ще немає або job уже завершився."""
+    if not job_id or not _base(base_url):
+        return False
+    try:
+        resp = _SESSION.post(
+            _url(f"/v1/jobs/{job_id}/cancel", base_url),
+            headers=_headers(),
+            timeout=_START_TIMEOUT,
+        )
+    except (requests.Timeout, requests.ConnectionError) as exc:
+        logger.warning("Worker cancel %s: %s", job_id, exc)
+        return False
+    if resp.status_code == 200:
+        return True
+    logger.warning("Worker cancel %s HTTP %s", job_id, resp.status_code)
+    return False
 
 
 def health_on_worker() -> dict:
@@ -134,13 +162,14 @@ def start_catalog_job(
     products: list[dict],
     settings: dict | None = None,
     brand: str | None = None,
+    base_url: str | None = None,
 ) -> str:
     """Старт catalog на worker → job_id. Скрейп триває навіть якщо клієнт відвалиться."""
     last_err: Exception | None = None
     for attempt in range(1, 4):
         try:
             resp = _SESSION.post(
-                _url("/v1/parse/catalog"),
+                _url("/v1/parse/catalog", base_url),
                 headers=_headers(),
                 json={
                     "products": products,
@@ -170,9 +199,9 @@ def start_catalog_job(
     raise RuntimeError(f"Не вдалося стартувати catalog на worker: {last_err}")
 
 
-def get_job(job_id: str, *, since_rows: int = 0, timeout: float | None = None) -> dict:
+def get_job(job_id: str, *, since_rows: int = 0, timeout: float | None = None, base_url: str | None = None) -> dict:
     st = _SESSION.get(
-        _url(f"/v1/jobs/{job_id}"),
+        _url(f"/v1/jobs/{job_id}", base_url),
         headers=_headers(),
         params={"since_rows": since_rows},
         timeout=timeout if timeout is not None else _POLL_TIMEOUT,
@@ -197,6 +226,7 @@ def poll_catalog_job(
     on_progress: Callable[[dict], None] | None = None,
     poll_interval: float = 1.2,
     since_rows: int = 0,
+    base_url: str | None = None,
 ) -> dict:
     """Дочитує вже запущений catalog job до done/error.
 
@@ -211,7 +241,7 @@ def poll_catalog_job(
         if time.time() > deadline:
             raise RuntimeError(f"Worker job {job_id} перевищив ліміт очікування ({int(_JOB_MAX_WAIT)}с)")
         try:
-            data = get_job(job_id, since_rows=seen)
+            data = get_job(job_id, since_rows=seen, base_url=base_url)
             fail_streak = 0
         except RuntimeError as exc:
             msg = str(exc)
@@ -303,8 +333,9 @@ def run_catalog_on_worker(
     on_progress: Callable[[dict], None] | None = None,
     on_started: Callable[[str], None] | None = None,
     poll_interval: float = 1.2,
+    base_url: str | None = None,
 ) -> dict:
-    job_id = start_catalog_job(products=products, settings=settings, brand=brand)
+    job_id = start_catalog_job(products=products, settings=settings, brand=brand, base_url=base_url)
     if on_started:
         on_started(job_id)
     return poll_catalog_job(
@@ -313,6 +344,7 @@ def run_catalog_on_worker(
         brand=brand,
         on_progress=on_progress,
         poll_interval=poll_interval,
+        base_url=base_url,
     )
 
 

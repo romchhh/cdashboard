@@ -90,6 +90,14 @@ async def parse_catalog(payload: dict[str, Any]):
         return JSONResponse({"error": msg}, status_code=409 if busy else 500)
 
 
+@router.post("/jobs/{job_id}/cancel")
+async def job_cancel(job_id: str):
+    """Зупинити scrape. Job вийде на наступному оновленні прогресу."""
+    if not jobs.cancel_job(job_id):
+        return JSONResponse({"ok": False, "error": "job not running"}, status_code=404)
+    return {"ok": True, "id": job_id}
+
+
 @router.get("/jobs/{job_id}")
 async def job_status(job_id: str, since_rows: int = 0, since_sites: int = 0):
     """Статус job. Catalog: rows[since_rows:]. Search: results/misses."""

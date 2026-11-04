@@ -157,6 +157,27 @@ def _trim_jobs() -> None:
         _delete_snapshot(jid)
 
 
+class ParserJobCancelled(Exception):
+    """Ручна зупинка з сайту."""
+
+
+def cancel_job(job_id: str) -> bool:
+    """Позначити job на зупинку. Прогін вийде на наступному progress."""
+    with _LOCK:
+        job = _JOBS.get(job_id)
+        if not job or job.get("state") != "running":
+            return False
+        job["cancel_requested"] = True
+        job["updated_epoch"] = time.time()
+        return True
+
+
+def job_cancel_requested(job_id: str) -> bool:
+    with _LOCK:
+        job = _JOBS.get(job_id)
+        return bool(job and job.get("cancel_requested"))
+
+
 def running_job_count() -> int:
     with _LOCK:
         return sum(1 for j in _JOBS.values() if j.get("state") == "running")
@@ -381,6 +402,8 @@ def _run_catalog(job_id: str, products: list[dict], settings: dict, brand: str |
         def progress(status: dict) -> None:
             nonlocal last_clear_at
             status = dict(status)
+            if job_cancel_requested(job_id):
+                raise ParserJobCancelled()
             row = status.pop("row", None)
             current = int(status.get("current") or 0)
             patch = {
@@ -427,6 +450,9 @@ def _run_catalog(job_id: str, products: list[dict], settings: dict, brand: str |
                 "rows": rows,
             },
         )
+    except ParserJobCancelled:
+        logger.info("Worker catalog job %s stopped", job_id)
+        _update(job_id, state="error", phase="cancelled", error="Зупинено вручну", product="зупинено")
     except Exception as exc:
         logger.exception("Worker catalog job %s failed", job_id)
         _update(job_id, state="error", phase="error", error=str(exc))

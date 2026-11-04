@@ -7,7 +7,7 @@
         <span class="parser-schedule-card__summary">{{ rotation.next.summary }}</span>
     </div>
     <div class="parser-schedule-card__meta">
-        <span>Будні пн–пт, {{ rotation.night_label }} (Київ), включно з днем</span>
+        <span>Будні пн–пт, {{ rotation.night_label }} (Київ). Два парсери одночасно: віддалений і локальний</span>
         {% if rotation.weekend %}
         <span class="parser-muted">вихідні — автозапуск вимкнено</span>
         {% elif rotation.auto_rotation_allowed %}

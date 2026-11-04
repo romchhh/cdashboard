@@ -111,6 +111,63 @@ def test_rotation_busy_ignores_foreign_pid(tmp_path, monkeypatch):
     assert ps._rotation_busy() is False
 
 
+def test_two_lanes_do_not_overwrite(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    ps.store.save_job({"state": "running", "brand": "Atache", "lane": "remote"}, lane="remote")
+    ps.store.save_job({"state": "running", "brand": "Academie", "lane": "local"}, lane="local")
+    brands = {job["brand"] for job in ps.store.load_all_jobs()}
+    assert brands == {"Atache", "Academie"}
+    assert ps.store.load_job("remote")["brand"] == "Atache"
+    assert ps.store.load_job("local")["brand"] == "Academie"
+
+
+def test_pick_lane_uses_local_when_remote_is_busy(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    ps.store.save_job(
+        {
+            "state": "running",
+            "brand": "Atache",
+            "lane": "remote",
+            "pid": 7,
+            "updated_epoch": time.time(),
+        },
+        lane="remote",
+    )
+    monkeypatch.setattr(ps, "_parser_process_alive", lambda _pid: True)
+    monkeypatch.setattr(
+        "web.parser_worker_client.worker_reachable",
+        lambda url, timeout=None: (True, "ok"),
+    )
+    lane, why = ps._pick_lane()
+    assert lane == "local"
+    assert why == ""
+
+
+def test_stop_report_marks_job_cancelled(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    ps.store.save_job(
+        {
+            "state": "running",
+            "brand": "Atache",
+            "pid": 4242,
+            "phase": "retry",
+            "current": 150,
+            "total": 1771,
+            "updated_epoch": time.time(),
+        }
+    )
+    monkeypatch.setattr(ps, "_kill_parser_process", lambda _pid: None)
+    monkeypatch.setattr(ps, "_load_rotation", lambda: {"current": "Atache", "pending": []})
+    saved = {}
+    monkeypatch.setattr(ps, "_save_rotation", lambda state: saved.update(state))
+    monkeypatch.setattr(ps, "append_parse_event", lambda **_kw: None)
+    status, code = ps.stop_report(brand="Atache")
+    assert code == 200
+    assert status["state"] == "cancelled"
+    assert ps.store.load_job()["state"] == "cancelled"
+    assert saved.get("current") is None
+
+
 def test_requeue_failed_night_brand_once(tmp_path, monkeypatch):
     _paths(tmp_path, monkeypatch)
     events = []
@@ -181,8 +238,8 @@ def test_status_heartbeat_skips_live_rewrite(tmp_path, monkeypatch):
     monkeypatch.setattr(ps, "_REPORT_STATUS", {"state": "running", "total": 10, "started_epoch": 1.0})
     monkeypatch.setattr(ps, "_LAST_FLUSH", 0.0)
     monkeypatch.setattr(ps, "_LAST_LIVE_FLUSH", 0.0)
-    monkeypatch.setattr(ps.store, "save_job", lambda _p: job_calls.__setitem__("n", job_calls["n"] + 1))
-    monkeypatch.setattr(ps.store, "save_live_rows", lambda _rows: live_calls.__setitem__("n", live_calls["n"] + 1))
+    monkeypatch.setattr(ps.store, "save_job", lambda *_a, **_k: job_calls.__setitem__("n", job_calls["n"] + 1))
+    monkeypatch.setattr(ps.store, "save_live_rows", lambda *_a, **_k: live_calls.__setitem__("n", live_calls["n"] + 1))
 
     ps._publish_status(
         {"state": "running", "phase": "starting", "product": "воркер стартував…", "current": 0},
