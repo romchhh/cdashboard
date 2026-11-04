@@ -303,6 +303,23 @@ async def parser_stop_job(
     return RedirectResponse(url="/parser/brands?notice=stopped", status_code=302)
 
 
+@router.post("/restart")
+async def parser_restart_job(
+    brand: str = Form(""),
+    lane: str = Form(""),
+    _csrf: None = Depends(verify_csrf_dependency),
+):
+    status, code = await asyncio.to_thread(
+        ps.restart_report,
+        brand=(brand or "").strip() or None,
+        lane=(lane or "").strip() or None,
+    )
+    if code >= 400:
+        err = quote(status.get("error") or "Не вдалося перезапустити парсер", safe="")
+        return RedirectResponse(url=f"/parser/brands?error={err}", status_code=302)
+    return RedirectResponse(url="/parser/brands?notice=restarted", status_code=302)
+
+
 @router.post("/brands/{brand_slug}/stop")
 async def parser_brand_stop(
     brand_slug: str,

@@ -1,6 +1,8 @@
-{# Блок наступного автооновлення. Очікує rotation з rotation_overview(). #}
-{% if rotation and rotation.next %}
+{# Блок наступного автооновлення і живих job-ів. #}
+{% set active_jobs = (report_status.jobs or [])|selectattr('state', 'equalto', 'running')|list if report_status is defined else [] %}
+{% if (rotation and rotation.next) or active_jobs %}
 <div class="parser-schedule-card">
+    {% if rotation and rotation.next %}
     <div class="parser-schedule-card__main">
         <span class="parser-schedule-card__label">Наступне автооновлення</span>
         <strong class="parser-schedule-card__when">{{ rotation.next.at_label }}</strong>
@@ -23,6 +25,35 @@
     </div>
     {% if rotation.brand_schedule %}
     <div class="parser-schedule-card__brand">{{ rotation.brand_schedule.summary }}</div>
+    {% endif %}
+    {% endif %}
+    {% if active_jobs %}
+    <div class="parser-schedule-jobs" id="activeParserJobs">
+        <span class="parser-schedule-card__label">Активні парсинги</span>
+        {% for job in active_jobs %}
+        <div class="parser-live-job" data-live-brand="{{ (job.brand or '')|lower }}" data-live-lane="{{ job.lane or 'remote' }}">
+            <div>
+                <strong>{{ job.brand or 'Весь каталог' }}</strong>
+                <span class="parser-muted">· {{ job.lane_label or job.lane or 'парсер' }}</span>
+                <div class="parser-muted js-live-progress">{{ job.current or 0 }} / {{ job.total or '—' }}{% if job.product %} · {{ job.product }}{% endif %}</div>
+            </div>
+            <div class="parser-actions-row">
+                <form method="post" action="/parser/restart" onsubmit="return confirm('Перезапустити цей парсинг? Поточний прогін зупиниться і почнеться знову.');">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <input type="hidden" name="brand" value="{{ job.brand or '' }}">
+                    <input type="hidden" name="lane" value="{{ job.lane or '' }}">
+                    <button type="submit" class="btn btn-primary btn-sm">Перезапустити</button>
+                </form>
+                <form method="post" action="/parser/stop" onsubmit="return confirm('Зупинити цей парсинг? Уже зібрані ціни лишаться.');">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <input type="hidden" name="brand" value="{{ job.brand or '' }}">
+                    <input type="hidden" name="lane" value="{{ job.lane or '' }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">Зупинити</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
     {% endif %}
 </div>
 {% endif %}

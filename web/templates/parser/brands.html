@@ -3,7 +3,7 @@
 {% block title %}Парсер — бренди — Cosmy Agent{% endblock %}
 {% block mobile_title %}Парсер{% endblock %}
 {% block head %}
-<link rel="stylesheet" href="/static/css/parser.css?v=20261104a">
+<link rel="stylesheet" href="/static/css/parser.css?v=20261104b">
 {% endblock %}
 {% block content %}
 {% set enabled_n = brands|selectattr('enabled')|list|length %}
@@ -31,34 +31,13 @@
     {% if notice == 'stopped' %}
     <div class="parser-alert parser-alert--ok">{{ ui_icon('info') }} Парсинг зупинено. Уже зібрані ціни збережені.</div>
     {% endif %}
+    {% if notice == 'restarted' %}
+    <div class="parser-alert parser-alert--ok">{{ ui_icon('info') }} Парсинг перезапущено.</div>
+    {% endif %}
     {% if error == 'not_found' %}
     <div class="parser-alert parser-alert--err">{{ ui_icon('warning') }} Бренд не знайдено в каталозі.</div>
     {% elif error %}
     <div class="parser-alert parser-alert--err">{{ ui_icon('warning') }} {{ error }}</div>
-    {% endif %}
-
-    {% set active_jobs = (report_status.jobs or [])|selectattr('state', 'equalto', 'running')|list %}
-    {% if active_jobs %}
-    <div class="parser-panel" id="activeParserJobs">
-        <h2 style="margin-top:0">Активні парсинги</h2>
-        <div class="parser-live-jobs">
-            {% for job in active_jobs %}
-            <div class="parser-live-job" data-live-brand="{{ (job.brand or '')|lower }}" data-live-lane="{{ job.lane or 'remote' }}">
-                <div>
-                    <strong>{{ job.brand or 'Весь каталог' }}</strong>
-                    <span class="parser-muted">· {{ job.lane_label or job.lane or 'парсер' }}</span>
-                    <div class="parser-muted js-live-progress">{{ job.current or 0 }} / {{ job.total or '—' }}{% if job.product %} · {{ job.product }}{% endif %}</div>
-                </div>
-                <form method="post" action="/parser/stop" onsubmit="return confirm('Зупинити цей парсинг? Уже зібрані ціни лишаться.');">
-                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
-                    <input type="hidden" name="brand" value="{{ job.brand or '' }}">
-                    <input type="hidden" name="lane" value="{{ job.lane or '' }}">
-                    <button type="submit" class="btn btn-secondary btn-sm">Зупинити</button>
-                </form>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
     {% endif %}
 
     <div class="parser-panel">

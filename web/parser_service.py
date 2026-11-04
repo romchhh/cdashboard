@@ -2911,6 +2911,18 @@ def stop_report(*, brand: str | None = None, lane: str | None = None) -> tuple[d
     return dict(stopped), 200
 
 
+def restart_report(*, brand: str | None = None, lane: str | None = None) -> tuple[dict, int]:
+    """Зупинити поточний прогін цього бренда і одразу запустити його знову."""
+    status, code = stop_report(brand=brand, lane=lane)
+    if code >= 500 or (code >= 400 and code != 409):
+        return status, code
+    return start_report(
+        brand=brand or (status.get("brand") or None),
+        lane=lane,
+        replace_busy=True,
+    )
+
+
 def _release_running_for_new_start() -> bool:
     """Зняти живі прогони, щоб ручний старт не впирався в зайнятий worker."""
     from web.parser_worker_client import cancel_catalog_job

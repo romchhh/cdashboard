@@ -347,6 +347,40 @@ def test_settle_drops_orphan_and_keeps_tracked(monkeypatch):
     assert cancelled == ["orphan"]
 
 
+def test_restart_report_stops_then_starts(monkeypatch):
+    calls = []
+
+    def _stop(**kw):
+        calls.append(("stop", kw))
+        return {"state": "cancelled", "brand": "Atache"}, 200
+
+    def _start(**kw):
+        calls.append(("start", kw))
+        return {"state": "running", "brand": "Atache"}, 200
+
+    monkeypatch.setattr(ps, "stop_report", _stop)
+    monkeypatch.setattr(ps, "start_report", _start)
+    status, code = ps.restart_report(brand="Atache", lane="remote")
+    assert code == 200
+    assert status["state"] == "running"
+    assert calls[0] == ("stop", {"brand": "Atache", "lane": "remote"})
+    assert calls[1][0] == "start"
+    assert calls[1][1]["replace_busy"] is True
+    assert calls[1][1]["brand"] == "Atache"
+
+
+def test_restart_report_does_not_start_when_stop_fails(monkeypatch):
+    monkeypatch.setattr(
+        ps,
+        "stop_report",
+        lambda **_kw: ({"state": "running", "error": "воркер зайнятий"}, 502),
+    )
+    monkeypatch.setattr(ps, "start_report", lambda **_kw: (_ for _ in ()).throw(AssertionError("start")))
+    status, code = ps.restart_report(brand="Atache")
+    assert code == 502
+    assert "воркер" in status["error"]
+
+
 def test_cancelled_job_does_not_occupy_worker_slot():
     import sys
     from pathlib import Path
