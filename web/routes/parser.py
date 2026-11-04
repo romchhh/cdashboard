@@ -255,7 +255,7 @@ async def parser_report_run(
     brand: str | None = Form(None),
 ):
     brand_name = (brand or "").strip() or None
-    status, code = await asyncio.to_thread(ps.start_report, brand=brand_name)
+    status, code = await asyncio.to_thread(ps.start_report, brand=brand_name, replace_busy=True)
     return JSONResponse(status, status_code=code)
 
 
@@ -267,7 +267,7 @@ async def parser_brand_run(
     brand = ps.brand_from_slug(unquote(brand_slug))
     if not brand:
         return RedirectResponse(url="/parser/brands?error=not_found", status_code=302)
-    status, code = await asyncio.to_thread(ps.start_report, brand=brand)
+    status, code = await asyncio.to_thread(ps.start_report, brand=brand, replace_busy=True)
     if code == 409 and (status.get("brand") or "").strip().lower() == (brand or "").strip().lower():
         return RedirectResponse(
             url=f"/parser/brands/{ps.brand_slug(brand)}?notice=started",
@@ -284,6 +284,23 @@ async def parser_brand_run(
         url=f"/parser/brands/{ps.brand_slug(brand)}?notice=started",
         status_code=302,
     )
+
+
+@router.post("/stop")
+async def parser_stop_job(
+    brand: str = Form(""),
+    lane: str = Form(""),
+    _csrf: None = Depends(verify_csrf_dependency),
+):
+    status, code = await asyncio.to_thread(
+        ps.stop_report,
+        brand=(brand or "").strip() or None,
+        lane=(lane or "").strip() or None,
+    )
+    if code >= 400:
+        err = quote(status.get("error") or "Не вдалося зупинити парсер", safe="")
+        return RedirectResponse(url=f"/parser/brands?error={err}", status_code=302)
+    return RedirectResponse(url="/parser/brands?notice=stopped", status_code=302)
 
 
 @router.post("/brands/{brand_slug}/stop")

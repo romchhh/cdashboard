@@ -375,5 +375,8 @@ def test_cancelled_job_does_not_occupy_worker_slot():
         "brand": "Atache",
         "started_epoch": time.time(),
     }
-    assert jobs._recent_same_catalog("Atache") == "fresh"
+    assert jobs._release_catalog_slot("Atache") == "fresh"
+    assert jobs._JOBS["fresh"]["state"] == "running"
+    assert jobs._release_catalog_slot("Academie") is None
+    assert jobs._JOBS["fresh"]["state"] == "error"
     jobs._JOBS.clear()

@@ -127,6 +127,28 @@
   border: 1px solid rgba(217, 119, 6, 0.25);
 }
 
+.parser-live-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.parser-live-job {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: #fffbeb;
+  border: 1px solid rgba(217, 119, 6, 0.28);
+}
+
+.parser-live-job form {
+  margin: 0;
+}
+
 .parser-status {
   display: inline-flex;
   align-items: center;

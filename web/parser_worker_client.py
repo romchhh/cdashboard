@@ -202,7 +202,12 @@ def settle_worker_slot(
     """
     jobs = list_worker_jobs(base_url, timeout=timeout)
     if jobs is None:
-        return "unknown", ""
+        running, limit = _health_job_slot(base_url, timeout)
+        if running is None:
+            return "unknown", ""
+        if running >= limit:
+            return "busy", "уже виконує збір"
+        return "free", ""
     wanted = (brand or "").strip().lower()
     tracked = _tracked_remote_ids()
     running = [
@@ -233,90 +238,46 @@ def settle_worker_slot(
     return "free", ""
 
 
-def list_worker_jobs(base_url: str | None = None, timeout: float = 4) -> list | None:
-    """Список job на worker. None, якщо ендпоінта ще немає."""
+def _health_job_slot(base_url: str | None, timeout: float) -> tuple[int | None, int]:
+    """Скільки job зараз на worker. None, якщо health не відповів."""
     try:
         resp = _SESSION.get(
-            _url("/v1/jobs", base_url),
+            _url("/v1/health", base_url),
             headers=_headers(),
             timeout=timeout,
         )
     except (requests.Timeout, requests.ConnectionError):
-        return None
+        return None, 1
     if resp.status_code != 200:
-        return None
+        return None, 1
     try:
         data = resp.json()
     except Exception:
-        return None
-    jobs = data.get("jobs") if isinstance(data, dict) else None
-    return jobs if isinstance(jobs, list) else None
+        return None, 1
+    if not isinstance(data, dict):
+        return None, 1
+    try:
+        running = int(data.get("running_jobs") or 0)
+    except (TypeError, ValueError):
+        running = 0
+    limits = data.get("limits") if isinstance(data.get("limits"), dict) else {}
+    try:
+        limit = max(1, int(limits.get("max_running_jobs") or 1))
+    except (TypeError, ValueError):
+        limit = 1
+    return running, limit
 
 
-def _tracked_remote_ids() -> set[str]:
+def _cancel_stored_remote_jobs(base_url: str | None) -> None:
+    """Скасувати job, id яких сайт уже знає. Працює і без GET /v1/jobs."""
     try:
         from web.parser_store import load_all_jobs
     except Exception:
-        return set()
-    ids: set[str] = set()
+        return
     for job in load_all_jobs():
-        if job.get("state") != "running":
-            continue
         remote_id = str(job.get("remote_job_id") or "").strip()
         if remote_id:
-            ids.add(remote_id)
-    return ids
-
-
-def _job_age(job: dict) -> float:
-    started = float(job.get("started_epoch") or job.get("updated_epoch") or 0)
-    if started <= 0:
-        return 10**9
-    return max(0.0, time.time() - started)
-
-
-def settle_worker_slot(
-    base_url: str | None = None,
-    *,
-    brand: str | None = None,
-    adopt_recent: bool = False,
-    timeout: float = 4,
-) -> tuple[str, str]:
-    """Зняти завислі catalog-job, про які сайт уже не знає.
-
-    Повертає (free|adopt|busy|unknown, деталь).
-    """
-    jobs = list_worker_jobs(base_url, timeout=timeout)
-    if jobs is None:
-        return "unknown", ""
-    wanted = (brand or "").strip().lower()
-    tracked = _tracked_remote_ids()
-    running = [
-        job
-        for job in jobs
-        if isinstance(job, dict)
-        and job.get("state") == "running"
-        and (job.get("kind") or "catalog") != "search"
-    ]
-    if adopt_recent and wanted:
-        for job in running:
-            if (job.get("brand") or "").strip().lower() != wanted:
-                continue
-            if _job_age(job) < 45 and job.get("id"):
-                return "adopt", str(job["id"])
-    still: list[dict] = []
-    for job in running:
-        job_id = str(job.get("id") or "")
-        if not job_id:
-            continue
-        if job_id in tracked or _job_age(job) < 20:
-            still.append(job)
-            continue
-        cancel_catalog_job(job_id, base_url)
-    if still:
-        name = (still[0].get("brand") or "").strip() or "інший бренд"
-        return "busy", f"уже збирає «{name}»"
-    return "free", ""
+            cancel_catalog_job(remote_id, base_url)
 
 
 def health_on_worker() -> dict:
@@ -338,15 +299,10 @@ def start_catalog_job(
 ) -> str:
     """Старт catalog на worker → job_id. Скрейп триває навіть якщо клієнт відвалиться."""
     last_err: Exception | None = None
-    for attempt in range(1, 4):
+    for attempt in range(1, 3):
         slot, detail = settle_worker_slot(base_url, brand=brand, adopt_recent=attempt > 1)
         if slot == "adopt" and detail:
             return detail
-        if slot == "busy" and attempt >= 3:
-            raise RuntimeError(detail or "Парсер зайнятий іншим збором")
-        if slot == "busy":
-            time.sleep(1.2 * attempt)
-            continue
         try:
             resp = _SESSION.post(
                 _url("/v1/parse/catalog", base_url),
@@ -365,9 +321,13 @@ def start_catalog_job(
                 continue
             if resp.status_code == 409:
                 logger.warning("Worker catalog start busy attempt=%s", attempt)
-                if attempt >= 3:
-                    raise RuntimeError(detail or "Парсер ще зайнятий попереднім збором. Спробуйте ще раз за хвилину.")
-                time.sleep(1.2 * attempt)
+                _cancel_stored_remote_jobs(base_url)
+                if attempt >= 2:
+                    raise RuntimeError(
+                        "На парсері ще висить попередній збір. "
+                        "Зупиніть його над списком брендів або перезапустіть ParserService."
+                    )
+                time.sleep(0.8)
                 continue
             if resp.status_code not in (200, 202):
                 raise RuntimeError(_err_detail(resp))
@@ -378,7 +338,7 @@ def start_catalog_job(
         except (requests.Timeout, requests.ConnectionError) as exc:
             last_err = exc
             logger.warning("Worker catalog start conn attempt=%s: %s", attempt, exc)
-            if attempt >= 3:
+            if attempt >= 2:
                 break
             time.sleep(1.2 * attempt)
             _reset_session()

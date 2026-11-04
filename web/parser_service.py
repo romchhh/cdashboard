@@ -496,6 +496,20 @@ def _pick_lane(running: list[dict] | None = None) -> tuple[str | None, str]:
     return None, "Вільний парсер недоступний. " + "; ".join(notes)
 
 
+def _first_reachable_lane() -> str | None:
+    """Перший живий парсер, навіть якщо на ньому вже висить job. Новий старт його замінить."""
+    from web.parser_worker_client import worker_reachable
+
+    for lane in _configured_lanes():
+        url = _lane_base_url(lane)
+        if not url:
+            return lane
+        ok, _reason = worker_reachable(url, timeout=4)
+        if ok:
+            return lane
+    return None
+
+
 def brand_slug(name: str) -> str:
     raw = (name or "").strip() or "unknown"
     slug = re.sub(r"[^\w\-]+", "-", raw, flags=re.UNICODE).strip("-").lower()
@@ -1529,6 +1543,7 @@ def _jobs_brief(jobs: list[dict]) -> list[dict]:
             "error": job.get("error"),
             "pid": job.get("pid"),
             "remote_job_id": job.get("remote_job_id"),
+            "slug": brand_slug(job.get("brand") or "") if (job.get("brand") or "").strip() else "",
         }
         for job in jobs
     ]
@@ -2834,27 +2849,35 @@ def _save_stopped_brand_report(brand: str | None, lane: str | None = None) -> No
     )
 
 
-def stop_report(*, brand: str | None = None) -> tuple[dict, int]:
+def stop_report(*, brand: str | None = None, lane: str | None = None) -> tuple[dict, int]:
     """Зупинити поточний прогін: локальний процес і scrape на worker."""
     jobs = [job for job in store.load_all_jobs() if job.get("state") == "running"]
     if brand:
         jobs = [job for job in jobs if (job.get("brand") or "").strip().lower() == brand.strip().lower()]
+    elif lane:
+        jobs = [job for job in jobs if (job.get("lane") or "remote") == lane]
     if not jobs:
         return {"state": "idle", "error": "Парсер зараз не працює"}, 409
     job = jobs[0]
     job_brand = (job.get("brand") or "").strip()
     lane = job.get("lane") or "remote"
 
-    # Спочатку гасимо локальний процес, щоб він не встиг запустити наступний бренд.
-    _kill_parser_process(job.get("pid"))
     remote_id = (job.get("remote_job_id") or "").strip()
     if remote_id:
         try:
             from web.parser_worker_client import cancel_catalog_job
 
-            cancel_catalog_job(remote_id, base_url=_lane_base_url(lane) or None)
+            cancelled_remote = cancel_catalog_job(remote_id, base_url=_lane_base_url(lane) or None)
         except Exception:
             logger.exception("Failed to cancel remote parser job %s", remote_id)
+            cancelled_remote = False
+        if not cancelled_remote:
+            return {
+                "state": "running",
+                "error": "Воркер не зупинив job. Перезапустіть ParserService і натисніть «Зупинити» ще раз.",
+                "brand": job_brand,
+            }, 502
+    _kill_parser_process(job.get("pid"))
     stopped = {
         **{k: v for k, v in job.items() if k != "row"},
         "state": "cancelled",
@@ -2888,7 +2911,41 @@ def stop_report(*, brand: str | None = None) -> tuple[dict, int]:
     return dict(stopped), 200
 
 
-def start_report(*, brand: str | None = None, lane: str | None = None) -> tuple[dict, int]:
+def _release_running_for_new_start() -> bool:
+    """Зняти живі прогони, щоб ручний старт не впирався в зайнятий worker."""
+    from web.parser_worker_client import cancel_catalog_job
+
+    freed = False
+    for job in list(store.load_all_jobs()):
+        if job.get("state") != "running":
+            continue
+        remote_id = (job.get("remote_job_id") or "").strip()
+        lane = job.get("lane") or "remote"
+        cancelled = False
+        if remote_id:
+            cancelled = cancel_catalog_job(remote_id, base_url=_lane_base_url(lane) or None)
+        if not cancelled and not remote_id:
+            cancelled = True
+        if not cancelled:
+            continue
+        _kill_parser_process(job.get("pid"))
+        store.save_job(
+            {
+                **{k: v for k, v in job.items() if k != "row"},
+                "state": "cancelled",
+                "phase": "cancelled",
+                "error": "Зупинено перед новим запуском",
+                "product": "зупинено",
+                "lane": lane,
+                "updated_epoch": time.time(),
+            },
+            lane=lane,
+        )
+        freed = True
+    return freed
+
+
+def start_report(*, brand: str | None = None, lane: str | None = None, replace_busy: bool = False) -> tuple[dict, int]:
     """Запускає парсинг окремим процесом. Віддалений і локальний парсери можуть іти разом."""
     global _REPORT_STATUS, _LIVE_ROWS, _LIVE_BRAND, _JOB_LOG_HANDLE
     with _REPORT_LOCK:
@@ -2920,6 +2977,12 @@ def start_report(*, brand: str | None = None, lane: str | None = None) -> tuple[
                         picked, why = None, f"{LANE_LABELS.get(lane, lane)}: {detail}"
         else:
             picked, why = _pick_lane(running)
+        if not picked and replace_busy:
+            released = _release_running_for_new_start()
+            running = _running_parser_jobs()
+            picked, why = _pick_lane(running)
+            if not picked and (released or not running):
+                picked = _first_reachable_lane()
         if not picked:
             append_parse_event(level="warn", kind="job", brand=brand, message=why)
             return {"state": "running", "error": why or "Немає вільного парсера"}, 409

@@ -309,8 +309,8 @@ def list_jobs() -> list[dict[str, Any]]:
         ]
 
 
-def _recent_same_catalog(brand: str | None, *, max_age: float = 20.0) -> str | None:
-    """Повторний POST того самого старту (таймаут клієнта) чіпляється до щойно створеного job."""
+def _release_catalog_slot(brand: str | None, *, max_age: float = 20.0) -> str | None:
+    """Свіжий job того самого бренда повертаємо як є. Інший catalog звільняє слот."""
     wanted = (brand or "").strip().lower()
     now = time.time()
     with _LOCK:
@@ -324,6 +324,15 @@ def _recent_same_catalog(brand: str | None, *, max_age: float = 20.0) -> str | N
             started = float(job.get("started_epoch") or 0)
             if started and now - started <= max_age:
                 return str(job.get("id") or "")
+        for job in _JOBS.values():
+            if job.get("state") != "running" or (job.get("kind") or "catalog") != "catalog":
+                continue
+            job["cancel_requested"] = True
+            job["state"] = "error"
+            job["phase"] = "cancelled"
+            job["error"] = "Замінено новим прогоном"
+            job["product"] = "зупинено"
+            job["updated_epoch"] = now
     return None
 
 
@@ -388,7 +397,7 @@ def start_catalog_job(
         raise RuntimeError(
             f"Занадто багато товарів ({len(products)}). Ліміт worker: {config.MAX_CATALOG_PRODUCTS}."
         )
-    existing = _recent_same_catalog(brand)
+    existing = _release_catalog_slot(brand)
     if existing:
         return existing
     ok, reason = _can_accept_job()
