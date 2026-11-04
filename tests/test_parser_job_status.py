@@ -95,6 +95,35 @@ def test_publish_keeps_total_from_parent(tmp_path, monkeypatch):
     assert job["product"] == "воркер стартував…"
 
 
+def test_stale_remote_job_releases_the_lane(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    ps.store.save_job(
+        {
+            "state": "running",
+            "brand": "Atache",
+            "lane": "remote",
+            "remote_job_id": "stuck",
+            "pid": 9,
+            "updated_epoch": time.time() - 3600,
+        },
+        lane="remote",
+    )
+    monkeypatch.setattr(ps, "_parser_process_alive", lambda _pid: False)
+    assert ps._running_parser_jobs() == []
+    ps.store.save_job(
+        {
+            "state": "running",
+            "brand": "Atache",
+            "lane": "remote",
+            "remote_job_id": "live",
+            "pid": 9,
+            "updated_epoch": time.time(),
+        },
+        lane="remote",
+    )
+    assert len(ps._running_parser_jobs()) == 1
+
+
 def test_rotation_busy_ignores_foreign_pid(tmp_path, monkeypatch):
     _paths(tmp_path, monkeypatch)
     ps.store.save_job(

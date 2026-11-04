@@ -83,7 +83,7 @@ def _save_report(scope: str, report: dict) -> None:
 def _load_saved_report(scope: str) -> dict | None:
     return _parser_store().load_report(scope)
 
-SKU_WORKERS = 2  # більше = OOM на малому VPS (кожний SKU ще парсить усі магазини)
+SKU_WORKERS = 8
 # Ціна конкурента поза цим діапазоном відносно нашої — майже завжди інший товар/фасовка.
 # 2× (типовий промах Krasota/набори) має бути odd_price, не «збіг».
 # Реальний розкид роздріб/салон; ×2+ майже завжди інша фасовка або битий збіг (Krasota «Пошук»).

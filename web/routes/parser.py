@@ -169,7 +169,7 @@ async def parser_brand_detail(request: Request, brand_slug: str):
 @router.post("/settings")
 async def parser_save_settings(
     _csrf: None = Depends(verify_csrf_dependency),
-    sku_workers: int = Form(4),
+    sku_workers: int = Form(8),
     price_low_ratio: float = Form(0.45),
     price_high_ratio: float = Form(2.2),
     at_market_pct: float = Form(3.0),
@@ -255,7 +255,7 @@ async def parser_report_run(
     brand: str | None = Form(None),
 ):
     brand_name = (brand or "").strip() or None
-    status, code = await asyncio.to_thread(ps.start_report, brand=brand_name, replace_busy=True)
+    status, code = await asyncio.to_thread(ps.start_report, brand=brand_name)
     return JSONResponse(status, status_code=code)
 
 
@@ -267,7 +267,7 @@ async def parser_brand_run(
     brand = ps.brand_from_slug(unquote(brand_slug))
     if not brand:
         return RedirectResponse(url="/parser/brands?error=not_found", status_code=302)
-    status, code = await asyncio.to_thread(ps.start_report, brand=brand, replace_busy=True)
+    status, code = await asyncio.to_thread(ps.start_report, brand=brand)
     if code == 409 and (status.get("brand") or "").strip().lower() == (brand or "").strip().lower():
         return RedirectResponse(
             url=f"/parser/brands/{ps.brand_slug(brand)}?notice=started",

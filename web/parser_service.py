@@ -64,8 +64,17 @@ _JOB_FLUSH_INTERVAL = 0.6
 _LIVE_FLUSH_INTERVAL = 1.25
 _JOB_LOG_MAX_BYTES = 2_000_000
 
+def _parse_sku_workers(settings: dict | None) -> int:
+    """Не менше 8 товарів паралельно, навіть якщо в налаштуваннях лишилось старе 4."""
+    try:
+        raw = int((settings or {}).get("sku_workers") or 8)
+    except (TypeError, ValueError):
+        raw = 8
+    return max(8, min(raw, 12))
+
+
 _DEFAULT_SETTINGS = {
-    "sku_workers": 4,
+    "sku_workers": 8,
     "price_low_ratio": 0.45,
     "price_high_ratio": 2.2,
     "at_market_pct": 3.0,
@@ -423,18 +432,15 @@ def _lane_base_url(lane: str) -> str:
 
 
 def _running_parser_jobs() -> list[dict]:
-    """Живі прогони на віддаленому і локальному парсері."""
+    """Живі прогони. Старий remote id без пульсу слот не тримає — інакше черга стоїть всю ніч."""
     now = time.time()
     out = []
     for job in store.load_all_jobs():
         if job.get("state") != "running":
             continue
-        fresh = now - float(job.get("updated_epoch") or 0) < 25
-        if (
-            _parser_process_alive(job.get("pid"))
-            or fresh
-            or (job.get("remote_job_id") or "").strip()
-        ):
+        age = now - float(job.get("updated_epoch") or 0)
+        alive = _parser_process_alive(job.get("pid"))
+        if alive or age < 25 or ((job.get("remote_job_id") or "").strip() and age < 8 * 60):
             out.append(job)
     return out
 
@@ -476,7 +482,7 @@ def _pick_lane(running: list[dict] | None = None) -> tuple[str | None, str]:
         )
         if len(running) > 1:
             return None, f"Обидва парсери зайняті: {brands}."
-        return None, f"Парсер зайнятий: {brands}."
+        return None, f"Зараз іде {brands}. Другий парсер не налаштований."
     from web.parser_worker_client import settle_worker_slot
 
     notes = []
@@ -493,6 +499,12 @@ def _pick_lane(running: list[dict] | None = None) -> tuple[str | None, str]:
             notes.append(f"{LANE_LABELS.get(lane, lane)}: {detail}")
             continue
         return lane, ""
+    busy_txt = ", ".join(
+        f"«{job.get('brand') or 'каталог'}» ({LANE_LABELS.get(job.get('lane') or 'remote', '')})"
+        for job in running
+    )
+    if busy_txt:
+        return None, f"Зараз іде {busy_txt}. Другий парсер не відповів: " + "; ".join(notes)
     return None, "Вільний парсер недоступний. " + "; ".join(notes)
 
 
@@ -1528,6 +1540,31 @@ def _resolved_jobs() -> list[dict]:
     return jobs
 
 
+def _lane_board(jobs: list[dict]) -> list[dict]:
+    """Обидва парсери: хто зараз зайнятий і хто вільний."""
+    running = {
+        (job.get("lane") or "remote"): job
+        for job in jobs
+        if job.get("state") == "running"
+    }
+    board = []
+    for lane in _configured_lanes():
+        job = running.get(lane) or {}
+        board.append(
+            {
+                "lane": lane,
+                "lane_label": LANE_LABELS.get(lane, lane),
+                "state": "running" if job else "free",
+                "brand": job.get("brand"),
+                "current": job.get("current"),
+                "total": job.get("total"),
+                "product": job.get("product"),
+                "slug": brand_slug(job.get("brand") or "") if (job.get("brand") or "").strip() else "",
+            }
+        )
+    return board
+
+
 def _jobs_brief(jobs: list[dict]) -> list[dict]:
     return [
         {
@@ -1570,6 +1607,7 @@ def report_status() -> dict:
             payload.pop("error", None)
             _REPORT_STATUS = dict(payload)
     payload["jobs"] = _jobs_brief(jobs)
+    payload["lanes"] = _lane_board(jobs)
     payload["has_file"] = REPORT_XLSX.exists()
     if payload.get("state") != "running":
         data = store.load_report(store.FULL_SCOPE) or {}
@@ -1642,7 +1680,7 @@ def _apply_runtime_settings(settings: dict) -> None:
     import catalog_report as cr  # type: ignore
     import cosmy_parse as cp  # type: ignore
 
-    cr.SKU_WORKERS = int(settings.get("sku_workers") or cr.SKU_WORKERS)
+    cr.SKU_WORKERS = _parse_sku_workers(settings)
     cr.PRICE_LOW_RATIO = float(settings.get("price_low_ratio") or cr.PRICE_LOW_RATIO)
     cr.PRICE_HIGH_RATIO = float(settings.get("price_high_ratio") or cr.PRICE_HIGH_RATIO)
     cr.AT_MARKET_PCT = float(settings.get("at_market_pct") or cr.AT_MARKET_PCT)
@@ -2057,7 +2095,7 @@ def _run_report_job(*, brand: str | None = None, lane: str = "remote") -> None:
 
                     report = run_catalog_on_worker(
                         products=job_catalog,
-                        settings=settings,
+                        settings={**settings, "sku_workers": _parse_sku_workers(settings)},
                         brand=brand,
                         on_progress=progress_remote,
                         on_started=on_started,
@@ -2119,7 +2157,7 @@ def _run_report_job(*, brand: str | None = None, lane: str = "remote") -> None:
         report = run_catalog(
             progress=progress,
             ids=ids,
-            workers=int(settings.get("sku_workers") or 4),
+            workers=_parse_sku_workers(settings),
             report_scope=report_scope,
             output_xlsx=out_xlsx,
             write_excel_file=True,

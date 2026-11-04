@@ -27,7 +27,40 @@
     <div class="parser-schedule-card__brand">{{ rotation.brand_schedule.summary }}</div>
     {% endif %}
     {% endif %}
-    {% if active_jobs %}
+    {% if report_status is defined and report_status.lanes %}
+    <div class="parser-schedule-jobs" id="activeParserJobs">
+        <span class="parser-schedule-card__label">Два парсери</span>
+        {% for lane in report_status.lanes %}
+        <div class="parser-live-job" data-live-brand="{{ (lane.brand or '')|lower }}" data-live-lane="{{ lane.lane or 'remote' }}">
+            <div>
+                <strong>{{ lane.lane_label }}</strong>
+                {% if lane.state == 'running' %}
+                <span>· {{ lane.brand or 'весь каталог' }}</span>
+                <div class="parser-muted js-live-progress">{{ lane.current or 0 }} / {{ lane.total or '—' }}{% if lane.product %} · {{ lane.product }}{% endif %}</div>
+                {% else %}
+                <span class="parser-muted">· вільний, можна запустити інший бренд</span>
+                {% endif %}
+            </div>
+            {% if lane.state == 'running' %}
+            <div class="parser-actions-row">
+                <form method="post" action="/parser/restart" onsubmit="return confirm('Перезапустити цей парсинг? Поточний прогін зупиниться і почнеться знову.');">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <input type="hidden" name="brand" value="{{ lane.brand or '' }}">
+                    <input type="hidden" name="lane" value="{{ lane.lane or '' }}">
+                    <button type="submit" class="btn btn-primary btn-sm">Перезапустити</button>
+                </form>
+                <form method="post" action="/parser/stop" onsubmit="return confirm('Зупинити цей парсинг? Уже зібрані ціни лишаться.');">
+                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+                    <input type="hidden" name="brand" value="{{ lane.brand or '' }}">
+                    <input type="hidden" name="lane" value="{{ lane.lane or '' }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">Зупинити</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% elif active_jobs %}
     <div class="parser-schedule-jobs" id="activeParserJobs">
         <span class="parser-schedule-card__label">Активні парсинги</span>
         {% for job in active_jobs %}
@@ -36,20 +69,6 @@
                 <strong>{{ job.brand or 'Весь каталог' }}</strong>
                 <span class="parser-muted">· {{ job.lane_label or job.lane or 'парсер' }}</span>
                 <div class="parser-muted js-live-progress">{{ job.current or 0 }} / {{ job.total or '—' }}{% if job.product %} · {{ job.product }}{% endif %}</div>
-            </div>
-            <div class="parser-actions-row">
-                <form method="post" action="/parser/restart" onsubmit="return confirm('Перезапустити цей парсинг? Поточний прогін зупиниться і почнеться знову.');">
-                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
-                    <input type="hidden" name="brand" value="{{ job.brand or '' }}">
-                    <input type="hidden" name="lane" value="{{ job.lane or '' }}">
-                    <button type="submit" class="btn btn-primary btn-sm">Перезапустити</button>
-                </form>
-                <form method="post" action="/parser/stop" onsubmit="return confirm('Зупинити цей парсинг? Уже зібрані ціни лишаться.');">
-                    <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
-                    <input type="hidden" name="brand" value="{{ job.brand or '' }}">
-                    <input type="hidden" name="lane" value="{{ job.lane or '' }}">
-                    <button type="submit" class="btn btn-secondary btn-sm">Зупинити</button>
-                </form>
             </div>
         </div>
         {% endfor %}
