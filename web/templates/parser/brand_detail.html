@@ -4,7 +4,7 @@
 {% block mobile_title %}{{ brand }}{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="/static/css/parser.css?v=20261104b">
-<link rel="stylesheet" href="/static/css/parser_matrix.css?v=20261105b">
+<link rel="stylesheet" href="/static/css/parser_matrix.css?v=20261105c">
 {% endblock %}
 {% block content %}
 {% set shop_cols = shop_cols if shop_cols is defined and shop_cols else (report.sites if report and report.sites else sites) %}
@@ -98,7 +98,7 @@
         <div class="pmx-toolbar">
             <div class="pmx-toolbar-title">
                 <h2>Товари бренду · ціни конкурентів</h2>
-                <p>У рядку — лише магазини, де знайдено ціну (клік по чіпу відкриває сторінку конкурента). Клік по рядку — повний інспектор по всіх магазинах.</p>
+                <p>У рядку — лише магазини, де знайдено цей товар (клік по чіпу відкриває сторінку). Клік по рядку — інспектор по всіх сайтах.</p>
             </div>
             <input type="search" id="pmxSearch" class="pmx-search" placeholder="Назва / модель…" autocomplete="off">
             <select id="pmxSort" class="pmx-select" aria-label="Сортування">
@@ -320,17 +320,12 @@
       var info = (r.shops || {})[s];
       if (!info || info.price == null) return;
       var st = effectiveStatus(info, our);
-      if (st === 'no_brand' || st === 'not_found' || DEAD[st]) return;
+      if (st !== 'match') return;
       list.push({ site: s, info: info, st: st, price: Number(info.price) });
     });
-    list.sort(function (a, b) {
-      var rank = { match: 0, low_match: 1, other_volume: 2, out_of_stock: 3, odd_price: 4 };
-      var ra = rank[a.st] != null ? rank[a.st] : 5, rb = rank[b.st] != null ? rank[b.st] : 5;
-      if (ra !== rb) return ra - rb;
-      return a.price - b.price;
-    });
+    list.sort(function (a, b) { return a.price - b.price; });
     if (!list.length) {
-      var hint = an.brandShops ? 'цін не знайдено' : 'немає бренду в магазинах';
+      var hint = r.partial ? 'шукаю…' : (an.brandShops ? 'товар не знайдено' : 'немає бренду в магазинах');
       return '<td class="c-competitors pmx-competitors"><span class="pmx-competitors-empty">' + hint + '</span></td>';
     }
     var chips = list.map(function (x) {
@@ -614,7 +609,7 @@
     head.innerHTML = '<tr><th class="c-idx">#</th><th class="c-name" style="text-align:left">Товар</th><th class="c-our">Наша</th>' +
       '<th class="c-delta">Δ до мін.<span class="th-sub">лише надійні збіги</span></th>' +
       '<th class="c-range">Ринок<span class="th-sub">мін · наша ◆ · макс</span></th>' +
-      '<th class="c-competitors" style="text-align:left">Конкуренти<span class="th-sub">лише де є ціна · клік → сайт</span></th>' +
+      '<th class="c-competitors" style="text-align:left">Конкуренти<span class="th-sub">лише де знайдено товар</span></th>' +
       '<th class="c-pos">Позиція</th></tr>';
     var html = '';
     var shown = 0;
