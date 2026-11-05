@@ -150,6 +150,52 @@ def test_two_lanes_do_not_overwrite(tmp_path, monkeypatch):
     assert ps.store.load_job("local")["brand"] == "Academie"
 
 
+def test_connection_refused_stays_short():
+    import requests
+    from web.parser_worker_client import _short_worker_down
+
+    exc = requests.ConnectionError(
+        "HTTPConnectionPool(host='127.0.0.1', port=8091): Max retries exceeded "
+        "(Caused by NewConnectionError: [Errno 111] Connection refused)"
+    )
+    assert _short_worker_down(exc) == "не запущений"
+
+
+def test_pick_lane_starts_local_parser(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    ps.store.save_job(
+        {
+            "state": "running",
+            "brand": "Bjorn Axen",
+            "lane": "remote",
+            "pid": 7,
+            "updated_epoch": time.time(),
+        },
+        lane="remote",
+    )
+    monkeypatch.setattr(ps, "_parser_process_alive", lambda _pid: True)
+    calls = {"n": 0}
+
+    def _reach(url, timeout=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return False, "не запущений"
+        return True, "ok"
+
+    monkeypatch.setattr("web.parser_worker_client.worker_reachable", _reach)
+    monkeypatch.setattr(
+        "web.parser_worker_client.settle_worker_slot",
+        lambda url, timeout=4, **_kw: ("free", ""),
+    )
+    started = {"ok": False}
+    monkeypatch.setattr(ps, "_ensure_local_parser", lambda: started.__setitem__("ok", True) or True)
+    lane, why = ps._pick_lane()
+    assert started["ok"] is True
+    assert lane == "local"
+    assert why == ""
+    assert "Connection refused" not in why
+
+
 def test_pick_lane_uses_local_when_remote_is_busy(tmp_path, monkeypatch):
     _paths(tmp_path, monkeypatch)
     ps.store.save_job(

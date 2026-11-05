@@ -521,15 +521,14 @@
     <div class="mkt-channel-block__kpis">
       <div><span>{{ ad_inline_label("Витрати") }}</span><strong>{{ gp.spend | fmt_ua }} {{ gp.currency_suffix or '₴' }}</strong>{% if gp.spend_uah and gp.currency_suffix and gp.currency_suffix != '₴' %} <span class="mkt-muted">≈ {{ gp.spend_uah | fmt_ua }} ₴</span>{% endif %}</div>
       <div><span>{{ ad_inline_label("Дохід CRM", "revenue_crm") }}</span><strong>{{ gp.revenue | fmt_ua }} ₴</strong>{% if gp.revenue_share_pct is not none %} <span class="mkt-muted">({{ gp.revenue_share_pct }}%)</span>{% endif %}</div>
+      <div><span>{{ ad_inline_label("ROAS CRM", "roas") }}</span><strong>{{ gp.roas_pct or '—' }}</strong></div>
+      <div><span>{{ ad_inline_label("Дохід Google", "revenue_google") }}</span><strong>{% if gp.revenue_google %}{{ gp.revenue_google | fmt_ua }} {{ gp.currency_suffix or '₴' }}{% else %}—{% endif %}</strong></div>
+      <div><span>{{ ad_inline_label("ROAS Google", "roas_google") }}</span><strong>{{ gp.gads_roas_pct or '—' }}</strong></div>
       <div><span>{{ ad_inline_label("CRM замовлення", "crm_orders") }}</span><strong>{{ gp.orders | fmt_ua }}</strong></div>
       <div><span>{{ ad_inline_label("CPA CRM", "cpa_crm") }}</span><strong>{% if gp.crm_cpa %}{{ gp.crm_cpa | fmt_ua }} ₴{% else %}—{% endif %}</strong></div>
-      <div><span>{{ ad_inline_label("ROAS CRM", "roas") }}</span><strong>{{ gp.roas_pct or '—' }}</strong></div>
       <div><span>{{ ad_inline_label("Коефіцієнт конверсії") }}</span><strong>{{ gp.conversion_rate_pct or '—' }}</strong></div>
     </div>
-    <p class="mkt-table-note">Частка в дужках — % від загального доходу CRM. CPA CRM = витрати (₴) ÷ CRM замовлення. ROAS CRM = дохід CRM ÷ витрати (₴). Дохід збігається з рядком Google Ads у таблиці «Канали» нижче.</p>
-    {% if gp.revenue_google and gp.revenue_google != gp.revenue %}
-    <p class="mkt-table-note">Дохід Google (conv. value by conv. time): {{ gp.revenue_google | fmt_ua }} {{ gp.currency_suffix or '₴' }} — за датою конверсії; від CRM може відрізнятись через вікно атрибуції Google.</p>
-    {% endif %}
+    <p class="mkt-table-note">Дохід CRM / ROAS CRM — замовлення Cosmy за UTM. Дохід Google / ROAS Google — conversions_value з кабінету Ads. Частка в дужках — % від загального доходу CRM.</p>
     {% if gp.campaigns %}
     <div class="mkt-table-wrap">
       <table class="mkt-table mkt-table--compact" data-sortable>
@@ -754,12 +753,13 @@
   ════════════════════════════════════════════════════════════ #}
   {% elif s == 'google_ads' %}
   {% set cur = k.currency_suffix or '₴' %}
-  {% set rev_label = "Дохід Google" if k.revenue_source == 'google' else ("Дохід CRM" if k.revenue_source == 'crm' else "Дохід") %}
 
   <div class="kpi-row kpi-row--overview">
     {{ kpi_card("Витрати", k.spend | fmt_ua_compact ~ " " ~ cur, d.get('spend_pct'), icon_spend, 'blue', false, '', kpi_cmp, (k.spend | fmt_ua ~ " " ~ cur)) }}
-    {{ kpi_card(rev_label, k.revenue | fmt_ua_compact ~ (" ₴" if k.revenue_source == 'crm' else (" " ~ cur)), d.get('revenue_pct'), icon_revenue, 'green', false, '', kpi_cmp, (k.revenue | fmt_ua ~ (" ₴" if k.revenue_source == 'crm' else (" " ~ cur))), help_key=('revenue_google' if k.revenue_source == 'google' else ('revenue_crm' if k.revenue_source == 'crm' else 'revenue'))) }}
-    {{ kpi_card(k.roas_label or "ROAS CRM", k.roas_pct if k.roas_pct else "—", d.get('roas_pct'), icon_roas, 'purple', false, '', kpi_cmp, '', help_key=('roas_google' if k.revenue_source == 'google' else 'roas')) }}
+    {{ kpi_card("Дохід CRM", (k.crm_revenue | fmt_ua_compact ~ " ₴") if k.crm_revenue is not none else "—", d.get('crm_revenue_pct'), icon_revenue, 'green', false, '', kpi_cmp, ((k.crm_revenue | fmt_ua ~ " ₴") if k.crm_revenue is not none else ''), help_key='revenue_crm') }}
+    {{ kpi_card("ROAS CRM", k.crm_roas_pct if k.crm_roas_pct else (k.roas_pct if k.revenue_source == 'crm' else "—"), d.get('roas_pct'), icon_roas, 'purple', false, '', kpi_cmp, '', help_key='roas') }}
+    {{ kpi_card("Дохід Google", (k.gads_revenue | fmt_ua_compact ~ " " ~ cur) if k.gads_revenue else "—", d.get('gads_revenue_pct'), icon_revenue, 'teal', false, '', kpi_cmp, ((k.gads_revenue | fmt_ua ~ " " ~ cur) if k.gads_revenue else ''), help_key='revenue_google') }}
+    {{ kpi_card("ROAS Google", k.gads_roas_pct if k.gads_roas_pct else "—", d.get('gads_roas_pct'), icon_roas, 'indigo', false, '', kpi_cmp, '', help_key='roas_google') }}
     {{ kpi_card("Конверсії Google", (k.gads_conversions | string) if k.gads_conversions is not none else "—", d.get('gads_conversions_pct'), icon_conv, 'teal', false, '', kpi_cmp, '', help_key='conversions') }}
     {{ kpi_card("CPA CRM", (k.crm_cpa | fmt_ua_compact ~ " ₴") if k.crm_cpa else "—", d.get('cpa_pct'), icon_cpa, 'orange', true, '', kpi_cmp if k.crm_cpa else '', help_key='cpa_crm') }}
     {{ kpi_card("Кліки", k.clicks | fmt_ua, d.get('clicks_pct'), icon_clicks, 'indigo', false) }}
@@ -777,11 +777,9 @@
     {{ kpi_card("Коефіцієнт конверсії", k.conversion_rate_pct or "—", d.get('conversion_rate_pct'), icon_conv, 'teal', false, '', kpi_cmp) }}
   </div>
   <p class="mkt-note" style="margin: -4px 0 12px; font-size: 12px; color: #6b7280;">
-    Google Ads: витрати/кліки/покази — за датою кліку; конверсії — by conv. time ({{ k.currency or 'UAH' }}).
-    У KPI — дохід CRM (як на огляді та в таблиці каналів): {{ k.crm_orders | fmt_ua }} замовлень, {{ k.crm_revenue | fmt_ua }} ₴.
-    {% if k.gads_revenue and k.gads_revenue != k.crm_revenue %}
-    Дохід Google (by conv. time): {{ k.gads_revenue | fmt_ua }} {{ k.currency or 'UAH' }}{% if k.gads_roas_pct %} · ROAS Google {{ k.gads_roas_pct }}{% endif %}.
-    {% endif %}
+    Google Ads: витрати/кліки/покази — за датою кліку; конверсії й дохід Google — conversions_value з кабінету ({{ k.currency or 'UAH' }}).
+    Дохід CRM — успішні замовлення Cosmy за UTM Google: {{ k.crm_orders | fmt_ua }} шт., {{ k.crm_revenue | fmt_ua }} ₴.
+    {% if k.gads_roas_pct and k.gads_roas_pct != '—' %}ROAS Google: {{ k.gads_roas_pct }}.{% endif %}
   </p>
 
   <div class="mkt-two-col">

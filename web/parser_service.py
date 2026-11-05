@@ -18,7 +18,7 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlparse
 
 from web import parser_store as store
 
@@ -491,6 +491,8 @@ def _pick_lane(running: list[dict] | None = None) -> tuple[str | None, str]:
         if not url:
             return lane, ""
         ok, reason = worker_reachable(url, timeout=4)
+        if not ok and lane == "local" and reason == "не запущений" and _ensure_local_parser():
+            ok, reason = worker_reachable(url, timeout=4)
         if not ok:
             notes.append(f"{LANE_LABELS.get(lane, lane)}: {reason}")
             continue
@@ -503,9 +505,52 @@ def _pick_lane(running: list[dict] | None = None) -> tuple[str | None, str]:
         f"«{job.get('brand') or 'каталог'}» ({LANE_LABELS.get(job.get('lane') or 'remote', '')})"
         for job in running
     )
-    if busy_txt:
-        return None, f"Зараз іде {busy_txt}. Другий парсер не відповів: " + "; ".join(notes)
+    if busy_txt and notes:
+        return None, f"Зараз іде {busy_txt}. Другий парсер: " + "; ".join(notes) + "."
     return None, "Вільний парсер недоступний. " + "; ".join(notes)
+
+
+def _loopback_url(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return host in {"127.0.0.1", "localhost", "::1"}
+
+
+_LOCAL_PARSER_LOCK = threading.Lock()
+
+
+def _ensure_local_parser() -> bool:
+    """Підняти ParserService на цій машині, якщо другий слот ще не слухає порт."""
+    url = _lane_base_url("local")
+    if not url or not _loopback_url(url):
+        return False
+    script = ROOT / "ParserService" / "start.sh"
+    if not script.is_file():
+        return False
+    with _LOCAL_PARSER_LOCK:
+        from web.parser_worker_client import worker_reachable
+
+        ok, _reason = worker_reachable(url, timeout=2)
+        if ok:
+            return True
+        logger.info("Starting local ParserService via %s", script)
+        try:
+            subprocess.Popen(
+                ["bash", str(script)],
+                cwd=str(script.parent),
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            logger.exception("Failed to start local ParserService")
+            return False
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            ok, _reason = worker_reachable(url, timeout=2)
+            if ok:
+                return True
+            time.sleep(1)
+    return False
 
 
 def _first_reachable_lane() -> str | None:

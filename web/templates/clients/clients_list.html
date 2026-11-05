@@ -2052,6 +2052,8 @@
     <div class="clients-flash clients-flash--ok" role="status">Відповідального менеджера оновлено для <strong>{{ clients_notice_n or '0' }}</strong> клієнтів.</div>
     {% elif clients_notice == 'bulk_err' %}
     <div class="clients-flash clients-flash--warn" role="alert">Не вдалося застосувати зміни: позначте хоча б одного клієнта або оберіть менеджера / «Зняти відповідального» у списку.</div>
+    {% elif clients_notice == 'closure_required' %}
+    <div class="clients-flash clients-flash--warn" role="alert">Щоб закрити лід, обовʼязково оберіть «Результат закриття».</div>
     {% endif %}
 
         <div class="card clients-filter-card clients-filters-compact">
@@ -2595,8 +2597,8 @@
                     </select>
                 </label>
                 <label class="clients-assign-toolbar__lbl" id="clientsBulkClosureLabel" style="display:none;">
-                    <span>Результат закриття</span>
-                    <select name="closure_result" form="clientsProcessingSelectedForm" id="clientsBulkClosureSelect">
+                    <span>Результат закриття *</span>
+                    <select name="closure_result" form="clientsProcessingSelectedForm" id="clientsBulkClosureSelect" aria-required="true">
                         <option value="" selected disabled>— оберіть —</option>
                         {% for key, label in closure_result_options %}
                         <option value="{{ key }}">{{ label }}</option>
@@ -3013,7 +3015,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             if (status === 'closed' && !String(fd.get('closure_result') || '').trim()) {
-                clientsSetAjaxMsg('Для закриття оберіть результат взаємодії.', true);
+                clientsSetAjaxMsg('Щоб закрити лід, обовʼязково оберіть «Результат закриття».', true);
+                if (clientsBulkClosureSelect) clientsBulkClosureSelect.focus();
                 return;
             }
             var checkedRows = document.querySelectorAll('input.clients-row-check:checked');
@@ -3058,7 +3061,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 })
                 .catch(function (err) {
                     var msg = (err && err.message === 'closure_required')
-                        ? 'Для закриття оберіть результат взаємодії.'
+                        ? 'Щоб закрити лід, обовʼязково оберіть «Результат закриття».'
                         : 'Не вдалося застосувати статус.';
                     clientsSetAjaxMsg(msg, true);
                 });
@@ -3169,7 +3172,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 .catch(function (err) {
                     clientsSetAjaxMsg(
                         (err && err.message === 'closure_required')
-                            ? 'Оберіть результат взаємодії.'
+                            ? 'Щоб закрити лід, обовʼязково оберіть «Результат закриття».'
                             : 'Не вдалося закрити лід.',
                         true
                     );

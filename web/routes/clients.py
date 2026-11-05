@@ -943,6 +943,11 @@ async def client_row_processing_status_post(
     def _err(code: str = "bulk_err"):
         if ajax:
             return JSONResponse({"ok": False, "error": code}, status_code=400)
+        if str(return_detail or "").strip() in ("1", "true", "yes"):
+            return RedirectResponse(
+                url=f"/clients/{client_id}?notice={code}",
+                status_code=302,
+            )
         return _redirect_clients_list(str(return_qs) if return_qs else None, f"clients_notice={code}")
 
     if new_status == CRM_STATUS_NEUTRAL:

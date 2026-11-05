@@ -624,6 +624,9 @@ def _build_overview_extra(
             "crm_cpa": g_crm_cpa,
             "gads_cpa": g_gads_cpa,
             "roas_pct": _roas_pct(_safe_roas(g_rev, g_spend_uah)),
+            "gads_roas_pct": meta_roas_display(
+                _safe_roas(gads_value, g_spend_native) if gads_value > 0 else None
+            ),
             "conversion_rate_pct": format_conversion_rate(
                 _safe_conversion_rate(g_ord, int(gads.get("clicks") or 0)),
             ),
@@ -1327,6 +1330,7 @@ async def build_advertising_report(
         kpi["delta"]["cpa_pct"] = _pct_delta(kpi.get("crm_cpa") or 0, prev_crm_cpa or 0)
         kpi["delta"]["gads_cpa_pct"] = _pct_delta(kpi.get("gads_cpa") or 0, prev_gads_cpa or 0)
         kpi["delta"]["gads_conversions_pct"] = _pct_delta(gads_conv, prev_gads_conv)
+        kpi["delta"]["gads_revenue_pct"] = _pct_delta(gads_value, prev_gads_value)
         kpi["delta"]["crm_orders_pct"] = _pct_delta(crm_ord, prev_crm_ord)
         kpi["delta"]["crm_revenue_pct"] = _pct_delta(crm_rev, prev_crm_rev)
         _attach_conversion_rate_kpi(

@@ -370,6 +370,7 @@ LABEL_TO_METRIC_KEY: dict[str, str] = {
     "Дохід Meta": "revenue_meta",
     "ROAS": "roas",
     "ROAS CRM": "roas",
+    "ROAS Google": "roas_google",
     "ROAS Meta": "roas_meta",
     "Конверсії Google": "conversions",
     "Частка в «Інших»": "channel_share",

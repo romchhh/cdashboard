@@ -59,12 +59,14 @@ CRM_CLOSURE_ORDER_PLACED = "order_placed"
 CRM_CLOSURE_DEFERRED = "deferred_demand"
 CRM_CLOSURE_DECLINED = "declined"
 CRM_CLOSURE_NO_RESPONSE = "no_response"
+CRM_CLOSURE_NOT_FOUND = "not_found"
 
 CRM_CLOSURE_RESULT_CHOICES: tuple[tuple[str, str], ...] = (
     (CRM_CLOSURE_ORDER_PLACED, "Замовлення оформлено"),
     (CRM_CLOSURE_DEFERRED, "Відкладений попит"),
     (CRM_CLOSURE_DECLINED, "Відмовився від покупки"),
     (CRM_CLOSURE_NO_RESPONSE, "Не відповів"),
+    (CRM_CLOSURE_NOT_FOUND, "Не знайдено"),
 )
 
 CRM_CLOSURE_RESULTS_ALLOWED = frozenset(k for k, _ in CRM_CLOSURE_RESULT_CHOICES)

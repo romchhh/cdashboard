@@ -765,7 +765,7 @@ table.client-order-table .col-brand {
         <h2 class="card-title">Менеджерські дані</h2>
     </div>
     <div class="card-content">
-        {% if query_notice in ('comment_ok', 'comment_empty', 'crm_ok') %}
+        {% if query_notice in ('comment_ok', 'comment_empty', 'crm_ok', 'closure_required') %}
         <div class="client-crm-alerts">
         {% if query_notice == 'comment_ok' %}
         <div class="client-crm-notice client-crm-notice--ok" role="status">Коментар збережено й з’явиться в журналі нижче.</div>
@@ -773,6 +773,8 @@ table.client-order-table .col-brand {
         <div class="client-crm-notice client-crm-notice--warn" role="alert">Введіть текст коментаря перед відправкою.</div>
         {% elif query_notice == 'crm_ok' %}
         <div class="client-crm-notice client-crm-notice--ok" role="status">CRM-дані збережено. Після закриття ліда робочі поля скинуто — історія залишилась нижче.</div>
+        {% elif query_notice == 'closure_required' %}
+        <div class="client-crm-notice client-crm-notice--warn" role="alert">Щоб закрити лід, обовʼязково оберіть «Результат закриття».</div>
         {% endif %}
         </div>
         {% endif %}
@@ -835,8 +837,8 @@ table.client-order-table .col-brand {
                         </select>
                     </div>
                     <div id="clientDetailClosureWrap" style="display:none;">
-                        <label for="clientDetailClosureResult" class="client-crm-panel-title" style="font-size:0.875rem;display:block;margin-bottom:8px;">Результат взаємодії</label>
-                        <select name="closure_result" id="clientDetailClosureResult" class="client-crm-select" style="width:100%;max-width:320px;">
+                        <label for="clientDetailClosureResult" class="client-crm-panel-title" style="font-size:0.875rem;display:block;margin-bottom:8px;">Результат закриття <span aria-hidden="true">*</span></label>
+                        <select name="closure_result" id="clientDetailClosureResult" class="client-crm-select" style="width:100%;max-width:320px;" aria-required="true">
                             <option value="" selected disabled>— оберіть результат —</option>
                             {% for key, label in closure_result_options %}
                             <option value="{{ key }}">{{ label }}</option>
@@ -845,7 +847,7 @@ table.client-order-table .col-brand {
                     </div>
                 </div>
                 <div class="client-crm-submit-row">
-                    <span class="client-crm-submit-hint">При «Закрито» оберіть результат. Після закриття статус і канали скинуться до нейтрального.</span>
+                    <span class="client-crm-submit-hint">При «Закрито» результат закриття обовʼязковий. Після закриття статус і канали скинуться до нейтрального.</span>
                     <button type="submit" class="btn btn-primary btn-sm">Застосувати статус</button>
                 </div>
             </form>
@@ -1109,13 +1111,30 @@ document.addEventListener('DOMContentLoaded', function () {
     var statusSel = document.getElementById('clientDetailProcessingStatus');
     var closureWrap = document.getElementById('clientDetailClosureWrap');
     var closureSel = document.getElementById('clientDetailClosureResult');
+    var statusForm = document.getElementById('clientDetailStatusForm');
     if (!statusSel || !closureWrap) return;
     function syncClosure() {
         var closed = statusSel.value === 'closed';
         closureWrap.style.display = closed ? '' : 'none';
-        if (closureSel) closureSel.required = closed;
+        if (closureSel) {
+            closureSel.required = closed;
+            closureSel.setAttribute('aria-required', closed ? 'true' : 'false');
+            if (!closed) closureSel.selectedIndex = 0;
+        }
     }
     statusSel.addEventListener('change', syncClosure);
+    if (statusForm) {
+        statusForm.addEventListener('submit', function (ev) {
+            if (statusSel.value !== 'closed') return;
+            if (closureSel && String(closureSel.value || '').trim()) return;
+            ev.preventDefault();
+            if (closureSel) {
+                closureSel.focus();
+                try { closureSel.reportValidity(); } catch (e) {}
+            }
+            alert('Щоб закрити лід, обовʼязково оберіть «Результат закриття».');
+        });
+    }
     syncClosure();
 });
 </script>

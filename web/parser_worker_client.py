@@ -106,6 +106,15 @@ def _is_transient(exc_or_msg: Exception | str) -> bool:
     return any(x in msg for x in ("HTTP 502", "HTTP 503", "HTTP 504", "Bad Gateway", "Connection"))
 
 
+def _short_worker_down(exc: BaseException) -> str:
+    text = str(exc)
+    if "Connection refused" in text or "Errno 111" in text or "NewConnectionError" in text:
+        return "не запущений"
+    if isinstance(exc, requests.Timeout) or "timed out" in text.lower():
+        return "не відповідає"
+    return "недоступний"
+
+
 def worker_reachable(base_url: str | None = None, timeout: float | None = None) -> tuple[bool, str]:
     """Швидка перевірка перед стартом job."""
     base = _base(base_url)
@@ -125,7 +134,7 @@ def worker_reachable(base_url: str | None = None, timeout: float | None = None) 
             return True, "ok"
         return False, _err_detail(resp)
     except requests.RequestException as exc:
-        return False, f"Worker недоступний: {exc}"
+        return False, _short_worker_down(exc)
 
 
 def cancel_catalog_job(job_id: str, base_url: str | None = None) -> bool:

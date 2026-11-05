@@ -4,7 +4,7 @@
 {% block mobile_title %}{{ brand }}{% endblock %}
 {% block head %}
 <link rel="stylesheet" href="/static/css/parser.css?v=20261104b">
-<link rel="stylesheet" href="/static/css/parser_matrix.css?v=20261016c">
+<link rel="stylesheet" href="/static/css/parser_matrix.css?v=20261105b">
 {% endblock %}
 {% block content %}
 {% set shop_cols = shop_cols if shop_cols is defined and shop_cols else (report.sites if report and report.sites else sites) %}
@@ -84,23 +84,21 @@
     <div class="pmx-kpis" id="pmxKpis"></div>
 
     <div class="pmx-legend" aria-label="Легенда кольорів">
-        <span class="leg leg-dearer">конкурент дорожчий за нас</span>
+        <span class="leg leg-dearer">конкурент дорожчий</span>
         <span class="leg leg-same">±3% від нашої</span>
         <span class="leg leg-cheaper">конкурент дешевший</span>
         <span class="leg leg-min">★ мінімум ринку</span>
-        <span class="leg leg-low">≈ слабкий збіг (не в статистиці)</span>
+        <span class="leg leg-low">≈ слабкий збіг</span>
         <span class="leg leg-vol">інший обʼєм</span>
         <span class="leg leg-oos">немає в наявності</span>
-        <span class="leg leg-odd">підозріла ціна (&gt;±85%, не в статистиці)</span>
-        <span class="leg leg-nf">не знайдено / немає бренду</span>
-        <span class="leg leg-unav">сайт не відповів</span>
+        <span class="leg leg-odd">підозріла ціна</span>
     </div>
 
     <div class="parser-panel parser-panel--flush">
         <div class="pmx-toolbar">
             <div class="pmx-toolbar-title">
-                <h2>Товари бренду · порівняння з магазинами</h2>
-                <p>Клікніть по рядку — відкриється інспектор: що саме знайдено в кожному магазині і наскільки це збігається.</p>
+                <h2>Товари бренду · ціни конкурентів</h2>
+                <p>У рядку — лише магазини, де знайдено ціну (клік по чіпу відкриває сторінку конкурента). Клік по рядку — повний інспектор по всіх магазинах.</p>
             </div>
             <input type="search" id="pmxSearch" class="pmx-search" placeholder="Назва / модель…" autocomplete="off">
             <select id="pmxSort" class="pmx-select" aria-label="Сортування">
@@ -140,12 +138,12 @@
   var ROWS = dataEl ? JSON.parse(dataEl.textContent) : [];
   var TOTAL = ROWS.length;
   var LAST_AT = {{ (format_parsed_at(brand_info.last_parsed_at if brand_info else None)) | tojson }};
-  var state = { filter: 'all', q: '', sort: 'default', hideEmpty: true, open: {}, flash: {} };
+  var PMX_COLS = 7;
+  var state = { filter: 'all', q: '', sort: 'default', open: {}, flash: {} };
   var idIndex = {};
   ROWS.forEach(function (r, i) { if (r.id != null) idIndex[String(r.id)] = i; });
   var ORIGINAL = ROWS.map(function (_, i) { return i; });
 
-  var DATA_STATUSES = { match: 1, low_match: 1, other_volume: 1, out_of_stock: 1, odd_price: 1 };
   var DEAD = { unavailable: 1, timeout: 1, error: 1 };
   var STATUS_LABEL = {
     match: 'збіг', low_match: 'слабкий збіг', other_volume: 'інший обʼєм', out_of_stock: 'немає в наявності',
@@ -308,53 +306,57 @@
   }
 
   /* ——— комірки ——— */
-  function shopCell(site, r, an) {
-    if (!parsedRow(r)) return '<td class="pmx-cell k-pending" title="Ще не парсилось">·</td>';
-    var info = (r.shops || {})[site];
-    if (!info) {
-      if (r.partial) return '<td class="pmx-cell k-pending" title="Шукаю в цьому магазині">…</td>';
-      return '<td class="pmx-cell k-empty" title="немає даних">—</td>';
+  function competitorsCell(r, an) {
+    if (!parsedRow(r)) {
+      return '<td class="c-competitors pmx-competitors"><span class="parser-muted">—</span></td>';
     }
     var our = r.our_price != null ? Number(r.our_price) : null;
-    var st = effectiveStatus(info, our);
-    var price = info.price != null ? Number(info.price) : null;
-    var tip = esc((info.title || site) + (info.note ? ' · ' + info.note : '') + (info.match != null ? ' · збіг ' + Math.round(info.match * 100) + '%' : ''));
-    var link = function (txt, cls) {
-      return info.url ? '<a href="' + esc(info.url) + '" target="_blank" rel="noopener" class="' + cls + '">' + txt + '</a>' : '<span class="' + cls + '">' + txt + '</span>';
-    };
-    if (st === 'match' && price != null) {
-      var dp = our ? (price - our) / our * 100 : (info.diff_pct != null ? Number(info.diff_pct) : null);
-      var isMin = an.min != null && price === an.min && an.found > 1;
-      var style = dp != null ? cellStyle(dp) : 'background:#f1f5f9';
-      return '<td class="pmx-cell k-match' + (isMin ? ' is-min' : '') + '" style="' + style + '" title="' + tip + '">' +
-        link(fmtPrice(price), 'px') +
-        (dp != null ? '<span class="pd">' + fmtPct(dp, 0) + '</span>' : '') +
-        (isMin ? '<span class="star">★</span>' : '') +
-        (info.volume ? '<span class="pt">' + esc(info.volume) + '</span>' : '') + '</td>';
+    var anyShop = SITES.some(function (s) { return (r.shops || {})[s]; });
+    if (r.partial && !anyShop) {
+      return '<td class="c-competitors pmx-competitors"><span class="pmx-competitors-empty">шукаю…</span></td>';
     }
-    if (st === 'low_match') {
-      return '<td class="pmx-cell k-low" title="' + tip + '">' + (price != null ? link(fmtPrice(price), 'px') : '') + '<span class="pd">≈ збіг?</span></td>';
+    var list = [];
+    SITES.forEach(function (s) {
+      var info = (r.shops || {})[s];
+      if (!info || info.price == null) return;
+      var st = effectiveStatus(info, our);
+      if (st === 'no_brand' || st === 'not_found' || DEAD[st]) return;
+      list.push({ site: s, info: info, st: st, price: Number(info.price) });
+    });
+    list.sort(function (a, b) {
+      var rank = { match: 0, low_match: 1, other_volume: 2, out_of_stock: 3, odd_price: 4 };
+      var ra = rank[a.st] != null ? rank[a.st] : 5, rb = rank[b.st] != null ? rank[b.st] : 5;
+      if (ra !== rb) return ra - rb;
+      return a.price - b.price;
+    });
+    if (!list.length) {
+      var hint = an.brandShops ? 'цін не знайдено' : 'немає бренду в магазинах';
+      return '<td class="c-competitors pmx-competitors"><span class="pmx-competitors-empty">' + hint + '</span></td>';
     }
-    if (st === 'other_volume') {
-      return '<td class="pmx-cell k-vol" title="' + tip + '">' + (price != null ? link(fmtPrice(price), 'px') : '') + '<span class="pd">' + esc(info.volume || 'інший обʼєм') + '</span></td>';
-    }
-    if (st === 'out_of_stock') {
-      return '<td class="pmx-cell k-oos" title="' + tip + '">' + (price != null ? link(fmtPrice(price), 'px') : '') + '<span class="pd">немає</span></td>';
-    }
-    if (st === 'odd_price') {
-      var oddPct = our && price ? ' · ' + fmtPct((price - our) / our * 100, 0) + ' від нашої' : '';
-      return '<td class="pmx-cell k-odd" title="' + tip + ' · підозріла ціна (ймовірно інша фасовка)' + oddPct + '">' +
-        (price != null ? link(fmtPrice(price), 'px') : '') + '<span class="pd">ціна?</span></td>';
-    }
-    if (st === 'not_found') return '<td class="pmx-cell k-nf" title="' + esc(info.reason || 'не знайдено') + '">не знайдено</td>';
-    if (st === 'no_brand') return '<td class="pmx-cell k-nb" title="бренд не представлений у магазині">·</td>';
-    if (DEAD[st]) return '<td class="pmx-cell k-unav" title="' + esc(info.reason || 'магазин не відповів') + '">н/д</td>';
-    return '<td class="pmx-cell k-empty" title="' + esc(st) + '">—</td>';
+    var chips = list.map(function (x) {
+      var info = x.info, st = x.st, price = x.price;
+      var tip = esc((info.title || x.site) + (info.note ? ' · ' + info.note : '') + (info.match != null ? ' · збіг ' + Math.round(info.match * 100) + '%' : '') + ' · ' + (STATUS_LABEL[st] || st));
+      var cls = 'pmx-cchip pmx-cchip--' + (st === 'match' ? 'match' : (st === 'low_match' ? 'low' : (st === 'other_volume' ? 'vol' : (st === 'out_of_stock' ? 'oos' : 'odd'))));
+      var isMin = st === 'match' && an.min != null && price === an.min && an.found > 1;
+      var dp = our ? (price - our) / our * 100 : (info.diff_pct != null && st === 'match' ? Number(info.diff_pct) : null);
+      var style = st === 'match' && dp != null ? cellStyle(dp) : '';
+      var tag = st === 'low_match' ? '≈?' : (st === 'odd_price' ? '?' : (st === 'out_of_stock' ? 'немає' : (st === 'other_volume' ? (info.volume ? esc(info.volume) : 'обʼєм') : '')));
+      var inner = '<span class="pmx-cchip__site">' + esc(x.site) + '</span>' +
+        '<span class="pmx-cchip__row"><span class="pmx-cchip__price">' + fmtPrice(price) + ' ₴</span>' +
+        (dp != null && st === 'match' ? '<span class="pmx-cchip__dp">' + fmtPct(dp, 0) + '</span>' : '') +
+        (isMin ? '<span class="pmx-cchip__star">★</span>' : '') + '</span>' +
+        (tag ? '<span class="pmx-cchip__tag">' + tag + '</span>' : '');
+      if (info.url) {
+        return '<a class="' + cls + (isMin ? ' is-min' : '') + '" style="' + style + '" href="' + esc(info.url) + '" target="_blank" rel="noopener" title="' + tip + '">' + inner + '</a>';
+      }
+      return '<span class="' + cls + '" style="' + style + '" title="' + tip + '">' + inner + '</span>';
+    }).join('');
+    return '<td class="c-competitors pmx-competitors"><div class="pmx-competitors-chips">' + chips + '</div></td>';
   }
 
   function rangeCell(r, an) {
-    if (!parsedRow(r)) return '<td class="pmx-range"><span class="parser-muted">—</span></td>';
-    if (!an.found) return '<td class="pmx-range"><span class="parser-muted">немає порівняння</span></td>';
+    if (!parsedRow(r)) return '<td class="c-range pmx-range"><span class="parser-muted">—</span></td>';
+    if (!an.found) return '<td class="c-range pmx-range"><span class="parser-muted">немає порівняння</span></td>';
     var our = r.our_price != null ? Number(r.our_price) : null;
     var lo = an.min, hi = an.max;
     if (our != null) { lo = Math.min(lo, our); hi = Math.max(hi, our); }
@@ -364,28 +366,12 @@
     var cls = '';
     if (our != null && an.min != null) cls = our <= an.min * 1.0 ? 'is-good' : (our <= an.min * 1.03 ? 'is-ok' : 'is-bad');
     var ourMark = our != null ? '<i class="rb-our ' + cls + '" style="left:' + pos(our).toFixed(1) + '%" title="наша: ' + fmtPrice(our) + '"></i>' : '';
-    return '<td class="pmx-range"><div class="pmx-range-nums"><b>' + fmtPrice(an.min) + '</b><b>' + fmtPrice(an.max) + '</b></div>' +
+    return '<td class="c-range pmx-range"><div class="pmx-range-nums"><b>' + fmtPrice(an.min) + '</b><b>' + fmtPrice(an.max) + '</b></div>' +
       '<div class="pmx-range-bar">' + dots + ourMark + '</div>' +
       '<div class="pmx-range-med">медіана ' + fmtPrice(an.med) + '</div></td>';
   }
 
-  function foundCell(r, an) {
-    if (!parsedRow(r)) return '<td><span class="pmx-found-badge f-none">—</span></td>';
-    var anyShop = SITES.some(function (s) { return (r.shops || {})[s]; });
-    if (r.partial && !anyShop) return '<td><span class="pmx-found-badge f-none">шукаю</span></td>';
-    var our = r.our_price != null ? Number(r.our_price) : null;
-    var cls = an.found >= 3 ? 'f-good' : (an.found >= 1 ? 'f-mid' : (an.brandShops > 0 ? 'f-zero' : 'f-none'));
-    var dots = SITES.map(function (s) {
-      var i = (r.shops || {})[s];
-      var st = i ? effectiveStatus(i, our) : '';
-      var c = st === 'match' ? 'd-match' : (st === 'low_match' || st === 'odd_price' ? 'd-weak' : (st === 'other_volume' ? 'd-vol' : (st === 'not_found' ? 'd-miss' : 'd-none')));
-      return '<i class="' + c + '" title="' + esc(s + ' — ' + (STATUS_LABEL[st] || '—')) + '"></i>';
-    }).join('');
-    var tip = 'надійних збігів: ' + an.found + ' · слабких: ' + an.weak + ' · підозріла ціна: ' + an.odd + ' · магазинів з брендом: ' + an.brandShops;
-    return '<td><div class="pmx-found"><span class="pmx-found-badge ' + cls + '" title="' + esc(tip) + '">' + an.found + ' / ' + an.brandShops + '</span><div class="pmx-dots">' + dots + '</div></div></td>';
-  }
-
-  function rowHtml(r, idx, visible) {
+  function rowHtml(r, idx) {
     var an = analyze(r);
     var pending = !parsedRow(r);
     var our = r.our_price != null ? Number(r.our_price) : null;
@@ -405,8 +391,6 @@
     var pos = an.position || r.position || '';
     var posHtml = pending ? '<span class="pmx-pos pmx-pos--none">не парсився</span>'
       : '<span class="pmx-pos ' + posClass(pos) + '" title="' + esc(an.advice || r.advice || '') + '">' + esc(pos || '—') + '</span>';
-    var cells = '';
-    visible.forEach(function (s) { cells += shopCell(s, r, an); });
     var flash = state.flash[r.id] ? ' is-live-flash' : '';
     var html = '<tr class="pmx-row' + (pending ? ' is-pending' : '') + (open ? ' is-open' : '') + flash + '" data-i="' + idx + '" data-id="' + esc(r.id) + '">' +
       '<td class="c-idx">' + (idx + 1) + '</td>' +
@@ -418,8 +402,9 @@
       '<td class="c-our pmx-our">' + (our ? fmtPrice(our) : '—') + '</td>' +
       '<td class="c-delta">' + delta + '</td>' +
       rangeCell(r, an) +
-      foundCell(r, an) + '<td>' + posHtml + '</td>' + cells + '</tr>';
-    if (open) html += detailHtml(r, an, visible.length + 7);
+      competitorsCell(r, an) +
+      '<td class="c-pos">' + posHtml + '</td></tr>';
+    if (open) html += detailHtml(r, an, PMX_COLS);
     return html;
   }
 
@@ -592,7 +577,7 @@
     ['all', 'Усі'], ['strong', 'Надійні (≥2)'], ['found', 'Є збіги'], ['weak', 'Слабкі дані'],
     ['none', 'Без збігів'], ['dearer', 'Ми дорожчі'], ['cheaper', 'Ми дешевші'], ['pending', 'Не парсились']
   ];
-  function renderChips(emptyHidden) {
+  function renderChips() {
     var el = document.getElementById('pmxChips');
     if (!el) return;
     var counts = {};
@@ -603,12 +588,9 @@
       ROWS.forEach(function (r) { if (passes(r)) counts[f[0]]++; });
     });
     state.filter = saved; state.q = savedQ;
-    var html = FILTERS.map(function (f) {
+    el.innerHTML = FILTERS.map(function (f) {
       return '<button type="button" class="pmx-chip' + (state.filter === f[0] ? ' is-active' : '') + '" data-f="' + f[0] + '">' + f[1] + ' <em>' + counts[f[0]] + '</em></button>';
     }).join('');
-    html += '<button type="button" class="pmx-chip pmx-chip--toggle' + (state.hideEmpty ? ' is-active' : '') + '" data-toggle="empty" title="Сховати магазини, де жодного разу нічого не знайдено">' +
-      (state.hideEmpty ? 'Порожні магазини сховано' + (emptyHidden ? ' (' + emptyHidden + ')' : '') : 'Показати всі магазини') + '</button>';
-    el.innerHTML = html;
   }
   function sortedIndexes() {
     var idx = ORIGINAL.slice();
@@ -625,76 +607,27 @@
     if (by[state.sort]) idx.sort(by[state.sort]);
     return idx;
   }
-  function visibleSites() {
-    var parsedN = ROWS.filter(parsedRow).length;
-    var stats = {};
-    SITES.forEach(function (s) { stats[s] = { data: 0, found: 0, odd: 0, weak: 0, noBrand: 0, miss: 0, dead: 0 }; });
-    ROWS.forEach(function (r) {
-      if (!parsedRow(r)) return;
-      var our = r.our_price != null ? Number(r.our_price) : null;
-      SITES.forEach(function (s) {
-        var i = (r.shops || {})[s];
-        if (!i) return;
-        var st = effectiveStatus(i, our);
-        if (DATA_STATUSES[st] || DATA_STATUSES[i.status]) stats[s].data++;
-        if (st === 'match') stats[s].found++;
-        else if (st === 'odd_price') stats[s].odd++;
-        else if (st === 'low_match') stats[s].weak++;
-        else if (st === 'no_brand') stats[s].noBrand++;
-        else if (st === 'not_found') stats[s].miss++;
-        else if (DEAD[st]) stats[s].dead++;
-      });
-    });
-    var hidden = 0;
-    var vis = SITES.filter(function (s) {
-      if (!state.hideEmpty || !parsedN) return true;
-      // no_brand на всіх рядках — магазин без бренду, ховаємо разом із порожніми
-      var keep = stats[s].data > 0 || stats[s].found > 0;
-      if (!keep) hidden++;
-      return keep;
-    });
-    return { vis: vis, stats: stats, hidden: hidden, parsedN: parsedN };
-  }
   function renderTable() {
     var head = document.getElementById('pmxHead');
     var body = document.getElementById('pmxBody');
     if (!head || !body) return;
-    var vs = visibleSites();
-    var h = '<tr><th class="c-idx">#</th><th class="c-name" style="text-align:left">Товар</th><th class="c-our">Наша</th>' +
+    head.innerHTML = '<tr><th class="c-idx">#</th><th class="c-name" style="text-align:left">Товар</th><th class="c-our">Наша</th>' +
       '<th class="c-delta">Δ до мін.<span class="th-sub">лише надійні збіги</span></th>' +
-      '<th>Ринок<span class="th-sub">мін · наша ◆ · макс</span></th><th>Конкуренти<span class="th-sub">надійні / з брендом</span></th><th>Позиція</th>';
-    vs.vis.forEach(function (s) {
-      var st = vs.stats[s];
-      var pct = vs.parsedN ? Math.round(st.found / vs.parsedN * 100) : 0;
-      var sub, tip;
-      if (!vs.parsedN) { sub = '—'; tip = esc(s); }
-      else if (st.noBrand >= vs.parsedN * 0.9 && !st.found) {
-        sub = 'немає бренду';
-        tip = esc(s) + ': бренд відсутній в асортименті';
-      } else if (st.dead >= vs.parsedN * 0.5 && !st.found) {
-        sub = 'не відповів';
-        tip = esc(s) + ': сайт не відповів / Cloudflare / таймаут';
-      } else {
-        sub = st.found + ' ✓' + (st.odd || st.weak ? ' · ' + ((st.odd || 0) + (st.weak || 0)) + '?' : '') + ' / ' + vs.parsedN;
-        tip = esc(s) + ': надійних ' + st.found + ', підозріла ціна ' + st.odd + ', слабкий ' + st.weak +
-          ', не знайдено ' + st.miss + ', н/д ' + st.dead;
-      }
-      h += '<th class="th-shop' + (vs.parsedN && !st.found ? ' is-weak' : '') + '" title="' + tip + '">' + esc(s) +
-        '<span class="th-sub">' + sub + '</span><span class="th-bar"><i style="width:' + pct + '%"></i></span></th>';
-    });
-    head.innerHTML = h + '</tr>';
+      '<th class="c-range">Ринок<span class="th-sub">мін · наша ◆ · макс</span></th>' +
+      '<th class="c-competitors" style="text-align:left">Конкуренти<span class="th-sub">лише де є ціна · клік → сайт</span></th>' +
+      '<th class="c-pos">Позиція</th></tr>';
     var html = '';
     var shown = 0;
     sortedIndexes().forEach(function (i) {
       var r = ROWS[i];
       if (!passes(r)) return;
-      html += rowHtml(r, i, vs.vis);
+      html += rowHtml(r, i);
       shown++;
     });
-    if (!shown) html = '<tr><td colspan="' + (vs.vis.length + 7) + '" style="padding:2rem;color:#94a3b8">Нічого не знайдено за цими фільтрами.</td></tr>';
+    if (!shown) html = '<tr><td colspan="' + PMX_COLS + '" style="padding:2rem;color:#94a3b8">Нічого не знайдено за цими фільтрами.</td></tr>';
     body.innerHTML = html;
     state.flash = {};
-    renderChips(vs.hidden);
+    renderChips();
   }
   function renderAll() { renderKpis(); renderTable(); }
 
@@ -707,7 +640,6 @@
   if (chips) chips.addEventListener('click', function (e) {
     var b = e.target.closest('button');
     if (!b) return;
-    if (b.getAttribute('data-toggle') === 'empty') { state.hideEmpty = !state.hideEmpty; renderTable(); return; }
     var f = b.getAttribute('data-f');
     if (f) { state.filter = f; renderTable(); }
   });
