@@ -22,8 +22,11 @@ PROJECT_ROOT = next(
     _SERVICE_ROOT.parent,
 )
 
+# Спочатку корінь монорепо (той самий PARSER_API_KEY, що у веб), потім локальний
+# ParserService/.env лише для ключів, яких ще немає (порт тощо).
+# override=True на service ламав локальний слот: веб і worker мали різні ключі.
 load_dotenv(PROJECT_ROOT / ".env", override=False)
-load_dotenv(_SERVICE_ROOT / ".env", override=True)
+load_dotenv(_SERVICE_ROOT / ".env", override=False)
 
 HOST = os.getenv("PARSER_HOST", "0.0.0.0")
 PORT = int(os.getenv("PARSER_PORT", "8091"))

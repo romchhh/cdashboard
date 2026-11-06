@@ -702,7 +702,7 @@
       title.textContent = phase === 'brand_check' ? 'Перевіряю магазини…'
         : (phase === 'starting' ? 'Запуск у фоні…'
         : (phase === 'done' ? 'Готово'
-        : (phase === 'retry' ? 'Товари зібрані · повторюю магазини, що не відповіли'
+        : (phase === 'retry' ? 'Застарілий повтор магазинів (має зникнути після оновлення worker)'
         : 'Збираю ціни…')));
     }
     var counts = document.getElementById('liveCounts');

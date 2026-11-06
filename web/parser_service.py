@@ -491,10 +491,18 @@ def _pick_lane(running: list[dict] | None = None) -> tuple[str | None, str]:
         if not url:
             return lane, ""
         ok, reason = worker_reachable(url, timeout=4)
-        if not ok and lane == "local" and reason == "не запущений" and _ensure_local_parser():
+        if (
+            not ok
+            and lane == "local"
+            and reason in {"не запущений", "не відповідає", "недоступний"}
+            and _ensure_local_parser()
+        ):
             ok, reason = worker_reachable(url, timeout=4)
         if not ok:
-            notes.append(f"{LANE_LABELS.get(lane, lane)}: {reason}")
+            note = f"{LANE_LABELS.get(lane, lane)}: {reason}"
+            if lane == "local" and reason in {"не запущений", "не відповідає", "недоступний"}:
+                note += f" ({_local_parser_start_hint()})"
+            notes.append(note)
             continue
         slot, detail = settle_worker_slot(url, timeout=4)
         if slot == "busy":
@@ -506,7 +514,7 @@ def _pick_lane(running: list[dict] | None = None) -> tuple[str | None, str]:
         for job in running
     )
     if busy_txt and notes:
-        return None, f"Зараз іде {busy_txt}. Другий парсер: " + "; ".join(notes) + "."
+        return None, f"Зараз іде {busy_txt}. Другий парсер не відповів: " + "; ".join(notes) + "."
     return None, "Вільний парсер недоступний. " + "; ".join(notes)
 
 
@@ -516,6 +524,18 @@ def _loopback_url(url: str) -> bool:
 
 
 _LOCAL_PARSER_LOCK = threading.Lock()
+
+
+def _local_parser_start_hint() -> str:
+    log = ROOT / "ParserService" / "logs" / "parser.log"
+    if log.is_file():
+        try:
+            lines = [ln.strip() for ln in log.read_text(encoding="utf-8", errors="replace").splitlines() if ln.strip()]
+            if lines:
+                return "Останній рядок логу: " + lines[-1][:180]
+        except OSError:
+            pass
+    return "Запустіть вручну: cd ParserService && ./start.sh"
 
 
 def _ensure_local_parser() -> bool:
@@ -534,22 +554,41 @@ def _ensure_local_parser() -> bool:
             return True
         logger.info("Starting local ParserService via %s", script)
         try:
-            subprocess.Popen(
-                ["bash", str(script)],
+            from config import PARSER_API_KEY
+
+            env = os.environ.copy()
+            if PARSER_API_KEY:
+                env["PARSER_API_KEY"] = PARSER_API_KEY
+            proc = subprocess.Popen(
+                ["bash", str(script), "start"],
                 cwd=str(script.parent),
                 start_new_session=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=env,
             )
         except OSError:
             logger.exception("Failed to start local ParserService")
             return False
-        deadline = time.time() + 20
+        try:
+            out, _ = proc.communicate(timeout=25)
+        except subprocess.TimeoutExpired:
+            # watchdog лишається в фоні — далі чекаємо /health
+            out = ""
+        if out:
+            logger.info("local ParserService start: %s", out.strip()[:500])
+        deadline = time.time() + 25
         while time.time() < deadline:
-            ok, _reason = worker_reachable(url, timeout=2)
+            ok, reason = worker_reachable(url, timeout=2)
             if ok:
                 return True
+            # Процес уже слухає порт, але ключ не збігається — рестарт не допоможе в циклі.
+            if "PARSER_API_KEY" in reason:
+                logger.warning("local ParserService up but key mismatch: %s", reason)
+                break
             time.sleep(1)
+        logger.warning("local ParserService did not become healthy: %s", _local_parser_start_hint())
     return False
 
 

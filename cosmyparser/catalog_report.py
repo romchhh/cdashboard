@@ -96,8 +96,9 @@ SUSPICIOUS_GAP_PCT = 30.0
 # Менше стількох надійних магазинів — позиція «умовна», не «дешевше за всіх».
 MIN_SHOPS_FOR_STRONG_POS = 2
 RETRY_SHOP_STATUSES = frozenset({"unavailable", "error"})
+# Жорстко вимкнено: друге коло по «н/д» магазинах роздувало прогін на тисячі позицій.
+ENABLE_SHOP_RETRY = False
 # Магазин, який мовчить на більшій частині бренду, не перепитуємо по кожному товару.
-# Інакше 92 SKU перетворюються на ~1600 послідовних повторів і виглядають як новий прогін.
 _WIDESPREAD_FAIL_RATIO = 0.45
 _WIDESPREAD_PROBE_LIMIT = 2
 
@@ -495,8 +496,7 @@ def run_catalog(
                     "row": row,
                 })
 
-    # Другого кола немає: магазин, який не відповів, лишається «н/д».
-    # Повтор по кожному товару виглядав як новий прогін на тисячі позицій.
+    # ENABLE_SHOP_RETRY=False: магазин «н/д» лишається як є, без другого кола.
     report = _write_partial(final=True)
     report["total"] = total
     report["partial"] = False

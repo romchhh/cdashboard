@@ -132,6 +132,8 @@ def worker_reachable(base_url: str | None = None, timeout: float | None = None) 
             if isinstance(eng, dict) and eng.get("ready") is False:
                 return False, f"Worker engine не готовий: {eng.get('error') or 'cosmy_parse missing'}"
             return True, "ok"
+        if resp.status_code == 401:
+            return False, "різні PARSER_API_KEY у веб і ParserService/.env"
         return False, _err_detail(resp)
     except requests.RequestException as exc:
         return False, _short_worker_down(exc)

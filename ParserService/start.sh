@@ -13,10 +13,16 @@ RESPAWN_DELAY="${PARSER_RESPAWN_DELAY:-3}"
 LOG_MAX_BYTES="${PARSER_LOG_MAX_BYTES:-5242880}" # 5 MiB
 
 pick_python() {
+  # У монорепо CosmyFinancesBot venv часто в корені, не в ParserService/.
+  local parent="$(cd "$ROOT/.." && pwd)"
   local candidates=(
     "$ROOT/.venv/bin/python"
     "$ROOT/venv/bin/python"
+    "$ROOT/myenv/bin/python"
     "$ROOT/runtime/.venv/bin/python"
+    "$parent/.venv/bin/python"
+    "$parent/venv/bin/python"
+    "$parent/myenv/bin/python"
     "$(command -v python3 2>/dev/null || true)"
     "$(command -v python 2>/dev/null || true)"
   )
