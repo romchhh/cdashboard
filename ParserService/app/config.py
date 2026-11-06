@@ -22,11 +22,13 @@ PROJECT_ROOT = next(
     _SERVICE_ROOT.parent,
 )
 
-# Спочатку корінь монорепо (той самий PARSER_API_KEY, що у веб), потім локальний
-# ParserService/.env лише для ключів, яких ще немає (порт тощо).
-# override=True на service ламав локальний слот: веб і worker мали різні ключі.
-load_dotenv(PROJECT_ROOT / ".env", override=False)
+# Секрети: завжди з кореня монорепо (той самий PARSER_API_KEY, що у веб) і ParserService/.env.
+# Не брати .env з runtime/ — після pack.sh PROJECT_ROOT = runtime, там ключа немає.
+_MONOREPO_ROOT = _SERVICE_ROOT.parent
+load_dotenv(_MONOREPO_ROOT / ".env", override=False)
 load_dotenv(_SERVICE_ROOT / ".env", override=False)
+if PROJECT_ROOT not in (_MONOREPO_ROOT, _SERVICE_ROOT):
+    load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 HOST = os.getenv("PARSER_HOST", "0.0.0.0")
 PORT = int(os.getenv("PARSER_PORT", "8091"))

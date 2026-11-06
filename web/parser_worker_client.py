@@ -85,9 +85,18 @@ def _err_detail(resp: requests.Response) -> str:
         except Exception:
             return "Worker перезапустився під час job (OOM/restart)"
     if code in (502, 503, 504):
+        try:
+            data = resp.json() if resp.content else {}
+        except Exception:
+            data = {}
+        if isinstance(data, dict):
+            eng = data.get("engine") if isinstance(data.get("engine"), dict) else {}
+            eng_err = (eng or {}).get("error") or data.get("error") or data.get("detail")
+            if eng_err:
+                return f"Worker engine не готовий (HTTP {code}): {eng_err}"[:400]
+        host = (resp.url or "").split("/")[2] if resp.url else "worker"
         return (
-            f"Worker HTTP {code} (Bad Gateway) — сервіс cosmyparser.telebots.site "
-            "не відповідає. Перезапустіть ParserService: ./start.sh restart"
+            f"Worker HTTP {code} на {host}. Перезапустіть: cd ParserService && ./start.sh restart"
         )
     try:
         data = resp.json()

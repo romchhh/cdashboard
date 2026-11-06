@@ -217,6 +217,29 @@ supervise_loop() {
   done
 }
 
+load_parser_key_into_env() {
+  # Не source .env цілком — там масиви на кшталт ADMINISTRATORS=[…] ламають bash.
+  local parent_env="$ROOT/../.env"
+  local local_env="$ROOT/.env"
+  local line key=""
+  for f in "$parent_env" "$local_env"; do
+    [[ -f "$f" ]] || continue
+    line="$(grep -E '^PARSER_API_KEY=' "$f" | tail -1 || true)"
+    [[ -n "$line" ]] || continue
+    key="${line#PARSER_API_KEY=}"
+    key="${key%\"}"
+    key="${key#\"}"
+    key="${key%\'}"
+    key="${key#\'}"
+    key="$(printf '%s' "$key" | tr -d '[:space:]')"
+    if [[ -n "$key" ]]; then
+      export PARSER_API_KEY="$key"
+      return 0
+    fi
+  done
+  return 1
+}
+
 start_all() {
   local py existing
   ensure_runtime || exit 1
@@ -225,6 +248,13 @@ start_all() {
     echo "У ParserService: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt" >&2
     exit 127
   }
+
+  if [[ -z "${PARSER_API_KEY:-}" ]]; then
+    load_parser_key_into_env || true
+  fi
+  if [[ -z "${PARSER_API_KEY:-}" ]]; then
+    echo "Увага: PARSER_API_KEY порожній. Додай його в ~/CosmyFinancesBot/.env (той самий, що у веб)." >&2
+  fi
 
   existing="$(running_pids "$SCRIPT" "$PIDFILE" | tr '\n' ' ')" || true
   if [[ -n "${existing// /}" ]]; then
