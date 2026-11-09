@@ -484,6 +484,34 @@ table.client-order-table .col-brand {
     color: #1e293b;
     line-height: 1.5;
 }
+.client-crm-closure-tone {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-weight: 650;
+    font-size: 0.85em;
+    border: 1px solid transparent;
+}
+.client-crm-closure-tone--success {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+.client-crm-closure-tone--warn {
+    background: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+}
+.client-crm-closure-tone--danger {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+.client-crm-closure-tone--muted {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: #475569;
+}
 .client-notes-empty {
     margin: 0 0 16px;
     padding: 20px 16px;
@@ -869,7 +897,7 @@ table.client-order-table .col-brand {
                     </div>
                     <div class="client-notes-log-body">
                         {% if h.processing_status %}Статус: {{ h.processing_status|processing_status_label }}{% endif %}
-                        {% if h.closure_result %} · Результат: {{ h.closure_result|closure_result_label }}{% endif %}
+                        {% if h.closure_result %} · Результат: <span class="client-crm-closure-tone client-crm-closure-tone--{{ h.closure_result|closure_result_tone }}">{{ h.closure_result|closure_result_label }}</span>{% endif %}
                         {% if h.assigned_username %} · Менеджер: {{ h.assigned_username }}{% endif %}
                         {% if h.interaction_keys %} · Канали: {{ h.interaction_keys|crm_interaction_labels_json }}{% endif %}
                     </div>

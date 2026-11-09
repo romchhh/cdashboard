@@ -90,6 +90,7 @@ from web.client_crm import (
     apply_client_last_touch,
     apply_processing_status_change,
     closure_result_label,
+    closure_result_tone,
     format_crm_history_items,
     deserialize_interaction_keys,
     interaction_keys_from_raw_list,
@@ -214,6 +215,7 @@ templates.env.filters["html_unescape"] = lambda s: html.unescape(s) if isinstanc
 templates.env.filters["normalize_product_text"] = normalize_product_text
 templates.env.filters["processing_status_label"] = processing_status_label
 templates.env.filters["closure_result_label"] = closure_result_label
+templates.env.filters["closure_result_tone"] = closure_result_tone
 templates.env.filters["crm_event_type_label"] = crm_event_type_label
 templates.env.globals["clients_filter_has"] = clients_filter_has
 templates.env.globals["clients_filter_list"] = clients_filter_list

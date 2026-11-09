@@ -38,17 +38,35 @@
   gap: 0.05rem;
   padding: 0.2rem 0.4rem;
   border-radius: 7px;
-  background: #f8fafc;
-  border: 1px solid #e8edf3;
+  border: 1px solid transparent;
 }
 .clients-page .clients-crm-history-item__label {
   font-weight: 650;
-  color: #0f172a;
 }
 .clients-page .clients-crm-history-item__date {
-  color: #64748b;
   font-variant-numeric: tabular-nums;
   font-size: 0.7rem;
+  opacity: 0.88;
+}
+.clients-page .clients-crm-history-item--success {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+.clients-page .clients-crm-history-item--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+.clients-page .clients-crm-history-item--danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+.clients-page .clients-crm-history-item--muted {
+  background: #f8fafc;
+  border-color: #e8edf3;
+  color: #475569;
 }
 .clients-page .clients-crm-history-empty {
   color: #94a3b8;
@@ -106,20 +124,65 @@
   cursor: pointer;
   user-select: none;
 }
-.clients-page .cff-history-chip:has(input:checked) {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  color: #1e3a8a;
+.clients-page .cff-history-chip--success {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
 }
+.clients-page .cff-history-chip--success:has(input:checked) {
+  border-color: #22c55e;
+  background: #dcfce7;
+  color: #14532d;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.25);
+}
+.clients-page .cff-history-chip--warn {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: #a16207;
+}
+.clients-page .cff-history-chip--warn:has(input:checked) {
+  border-color: #eab308;
+  background: #fef08a;
+  color: #713f12;
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.28);
+}
+.clients-page .cff-history-chip--danger {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.clients-page .cff-history-chip--danger:has(input:checked) {
+  border-color: #ef4444;
+  background: #fee2e2;
+  color: #7f1d1d;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25);
+}
+.clients-page .cff-history-chip--success input { accent-color: #16a34a; }
+.clients-page .cff-history-chip--warn input { accent-color: #ca8a04; }
+.clients-page .cff-history-chip--danger input { accent-color: #dc2626; }
 .clients-page .cff-history-chip input {
   margin: 0;
-  accent-color: #2563eb;
 }
 .clients-page .cff-history-dates {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: flex-end;
+}
+.clients-page .cff-history-selected .cff-selected-chip--success {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #166534;
+}
+.clients-page .cff-history-selected .cff-selected-chip--warn {
+  border-color: #fcd34d;
+  background: #fef9c3;
+  color: #a16207;
+}
+.clients-page .cff-history-selected .cff-selected-chip--danger {
+  border-color: #fca5a5;
+  background: #fee2e2;
+  color: #b91c1c;
 }
 .clients-page .data-table.clients-table-fixed col.col-w-phone { width: 124px; }
 .clients-page .data-table.clients-table-fixed col.col-w-city { width: 120px; }
@@ -2581,7 +2644,7 @@
                         <div class="cff-history-filter__row">
                             <div class="cff-history-results" role="group" aria-label="Результати закриття">
                                 {% for key, label in closure_result_options %}
-                                <label class="cff-history-chip">
+                                <label class="cff-history-chip cff-history-chip--{{ key|closure_result_tone }}">
                                     <input type="checkbox" name="history_result" value="{{ key }}" {% if key in selected_closure %}checked{% endif %}>
                                     <span>{{ label }}</span>
                                 </label>
@@ -2611,7 +2674,7 @@
                         {% if selected_closure or filter_form.get('history_from') or filter_form.get('history_to') %}
                         <div class="cff-selected-inline cff-history-selected" id="clientsHistorySelected" style="margin-top:0.55rem;">
                             {% for key, label in closure_result_options if key in selected_closure %}
-                            <span class="cff-selected-chip">
+                            <span class="cff-selected-chip cff-selected-chip--{{ key|closure_result_tone }}">
                                 <span>{{ label }}</span>
                             </span>
                             {% endfor %}
@@ -2889,7 +2952,7 @@
                             {% if row.crm_history_items %}
                             <ul class="clients-crm-history-list">
                                 {% for h in row.crm_history_items %}
-                                <li class="clients-crm-history-item" title="{{ h.title|e }}">
+                                <li class="clients-crm-history-item clients-crm-history-item--{{ h.tone|default('muted') }}" title="{{ h.title|e }}">
                                     <span class="clients-crm-history-item__label">{{ h.label }}</span>
                                     <span class="clients-crm-history-item__date">{{ h.date }}</span>
                                 </li>

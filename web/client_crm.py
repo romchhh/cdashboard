@@ -140,6 +140,18 @@ def closure_result_label(result: str | None) -> str:
     return dict(CRM_CLOSURE_RESULT_CHOICES).get(result, result)
 
 
+def closure_result_tone(result: str | None) -> str:
+    """Колірний тон для UI: success / warn / danger / muted."""
+    key = (result or "").strip().lower()
+    if key == CRM_CLOSURE_ORDER_PLACED:
+        return "success"
+    if key == CRM_CLOSURE_DEFERRED:
+        return "warn"
+    if key in (CRM_CLOSURE_DECLINED, CRM_CLOSURE_NO_RESPONSE, CRM_CLOSURE_NOT_FOUND):
+        return "danger"
+    return "muted"
+
+
 def crm_history_event_label(entry: Any) -> str:
     """Короткий підпис для рядка історії в таблиці клієнтів."""
     et = (getattr(entry, "event_type", None) or "").strip()
@@ -156,7 +168,7 @@ def crm_history_event_label(entry: Any) -> str:
 
 
 def format_crm_history_items(entries: list[Any], *, limit: int = 4) -> list[dict[str, str]]:
-    """Список {label, date, title} для UI; новіші першими."""
+    """Список {label, date, title, tone} для UI; новіші першими."""
     out: list[dict[str, str]] = []
     for entry in entries[:limit]:
         created = getattr(entry, "created_at", None)
@@ -166,7 +178,20 @@ def format_crm_history_items(entries: list[Any], *, limit: int = 4) -> list[dict
         tip_parts = [label, date_s]
         if author:
             tip_parts.append(author)
-        out.append({"label": label, "date": date_s, "title": " · ".join(tip_parts)})
+        et = (getattr(entry, "event_type", None) or "").strip()
+        tone = (
+            closure_result_tone(getattr(entry, "closure_result", None))
+            if et == CRM_HISTORY_CLOSED
+            else "muted"
+        )
+        out.append(
+            {
+                "label": label,
+                "date": date_s,
+                "title": " · ".join(tip_parts),
+                "tone": tone,
+            }
+        )
     return out
 
 
