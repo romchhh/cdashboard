@@ -41,6 +41,8 @@ HEADERS = {
 
 TIMEOUT = 10
 MAX_CANDIDATES = 10
+# Скільки карток з лістингу оцінюємо матчингом (решту відсікаємо префетч-скором).
+LISTING_MATCH_POOL = 40
 MIN_PRICE = 10
 
 VOLUME_RE = re.compile(
@@ -215,6 +217,18 @@ CYRILLIC_HINTS = {
     "умыван": "cleanser", "денн": "day", "дневн": "day", "нічн": "night", "ночн": "night",
     "набір": "set", "набор": "set", "миттєв": "flash", "мгновен": "flash",
     "контур": "contour", "захис": "protective",
+}
+# Слова лінійки в одному бренді: якщо є в запиті, інша в назві — інший SKU (не штраф за «зайві» SPF/опис).
+LINE_DISCRIMINATORS: dict[str, tuple[str, ...]] = {
+    "essential": ("nutritive", "healing", "intoning", "restoring", "toner"),
+    "nutritive": ("essential", "healing", "intoning"),
+    "healing": ("essential", "nutritive", "hydration"),
+    "hydration": ("nutritive", "healing", "intoning"),
+    "charging": ("regenetic", "regenerating", "deto2x", "detox", "deto"),
+    "regenetic": ("charging", "deto2x", "detox"),
+    "deto2x": ("charging", "regenetic", "hydra3"),
+    "c-tetra": ("total", "moisture", "advanced"),
+    "radiance": ("moisturizing", "total", "eye"),
 }
 # Групи, відсутність яких у картці означає інший товар (запит «Eye», а в картці — ні).
 REQUIRED_MODIFIER_GROUPS = {
@@ -598,6 +612,505 @@ SITES = [
         kind="jsonld",
         search_url_patterns=["https://www.notino.ua/search.asp?exps={q}"],
         min_similarity=0.6,
+    ),
+    # --- нові конкуренти (2026-11) ---
+    SiteConfig(
+        name="Femi",
+        base_url="https://femi.in.ua",
+        kind="live_search",
+        api_url="https://femi.in.ua/index.php?route=extension/module/live_search&filter_name={q}",
+        search_url_patterns=["https://femi.in.ua/search/?search={q}"],
+        result_link_selector=".product-thumb .caption a, .product-layout .caption a, .name a",
+    ),
+    SiteConfig(
+        name="Top Beauty Shop",
+        base_url="https://top-beauty-shop.com.ua",
+        kind="cards",
+        listing_only=True,
+        # MODX mSearch2: параметр query на /poshuk-na-sajti/ (не OC ?search=).
+        search_url_patterns=[
+            "https://top-beauty-shop.com.ua/poshuk-na-sajti/?query={q}",
+        ],
+        card_selector="div.product-item",
+        card_title=".product-item__title, .product-item__name a",
+        # select_one бере перший матч у DOM: не ставити батьківський .product-item__price
+        # (там ще «0 ₴» з modification-old-price).
+        card_price=".product-item__price-item.modification-price, .product-item__price > .modification-price",
+        card_link=".product-item__title a, a.product-item__title, a[href*='/produkti/']",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="The Beauty Room",
+        base_url="https://thebeautyroom.store",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://thebeautyroom.store/ua/index.php?route=product/search&search={q}",
+            "https://thebeautyroom.store/ua/?s={q}&post_type=product",
+        ],
+        card_selector="div.product-layout, div.product-thumb",
+        card_title=".caption a, h4 a",
+        card_price=".price",
+        card_link=".caption a, h4 a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Beauty Systema",
+        base_url="https://www.beauty-systema.com",
+        kind="woocommerce",
+        api_url="https://www.beauty-systema.com/wp-json/wc/store/v1/products?search={q}&per_page=10",
+        search_url_patterns=["https://www.beauty-systema.com/?s={q}&post_type=product"],
+        result_link_selector="li.product a.woocommerce-LoopProduct-link, a.woocommerce-LoopProduct-link",
+        result_href_contains="/product/",
+    ),
+    SiteConfig(
+        name="Cosmodrugs",
+        base_url="https://cosmodrugs.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://cosmodrugs.com.ua/?s={q}&post_type=product"],
+        card_selector="div.product_preview.fn_product, div.fn_product",
+        card_title=".product_preview__name a, .product_preview__name",
+        card_price=".fn_price, .price",
+        card_link="a[href*='/products/']",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Cosmari",
+        base_url="https://cosmari.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://cosmari.com.ua/index.php?route=product/search&search={q}",
+            "https://cosmari.com.ua/ua/index.php?route=product/search&search={q}",
+        ],
+        card_selector="div.catalogue__products-list-item, li.catalogue__products-list-item",
+        card_title=".products-list__name, .catalogue__product-name, .products-list__caption a",
+        card_price=".catalogue__price, .products-list__price",
+        card_link="a.products-list__link, .products-list__name a, a[href]",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="EOS",
+        base_url="https://eos.kiev.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://eos.kiev.ua/ua/search/?query={q}",
+            "https://eos.kiev.ua/ua/search/?search={q}",
+        ],
+        card_selector="div.products__item",
+        card_title=".products__item-name a, .products__item-info a",
+        card_price=".products__item-price, .price",
+        card_link=".products__item-name a, a.products__sgallery-link",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Clarity UA",
+        base_url="https://clarity-ua.com",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://clarity-ua.com/index.php?route=product/search&search={q}",
+            "https://clarity-ua.com/ua/index.php?route=product/search&search={q}",
+        ],
+        card_selector="div.product-layout",
+        card_title=".ds-module-title, a[title]",
+        card_title_attr="title",
+        card_price=".ds-module-price, .price",
+        card_link="a[href*='cosmetics'], a[href]:not([href*='javascript'])",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Zvizda",
+        base_url="https://zvizda.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://zvizda.com.ua/?s={q}&post_type=product"],
+        card_selector="div.product_item",
+        card_title=".product_item-title, .us-module-title a",
+        card_price=".us-module-price, .price",
+        card_link="a[href*='/product/']",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Dazzle",
+        base_url="https://dazzle.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://dazzle.com.ua/catalogsearch/result/?q={q}",
+            "https://dazzle.com.ua/index.php?route=product/search&search={q}",
+        ],
+        card_selector="li.product-item, div.product-item",
+        card_title=".product-item-link, .product-item-name a, .name a",
+        card_price=".price, .price-wrapper",
+        card_link="a.product-item-link, a.product-item-photo, .name a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Moonali",
+        base_url="https://moonali.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://moonali.com.ua/index.php?route=product/search&search={q}",
+            "https://moonali.com.ua/search/?search={q}",
+        ],
+        card_selector="article.item-v1",
+        card_title=".item-brand, .item-name, .item-name-orig",
+        card_price="p.item-price, .item-price",
+        card_link="a.item-v1-link",
+        card_image="img.item-photo-img, img",
+    ),
+    SiteConfig(
+        name="Bonvivant",
+        base_url="https://bonvivant.ua",
+        kind="live_search",
+        api_url="https://search.edgelab.com.ua/v1/bonvivant/search?q={q}",
+        search_url_patterns=["https://bonvivant.ua/products/search?search={q}"],
+        result_link_selector="a[href*='/ua-']",
+    ),
+    SiteConfig(
+        name="IsNuYou",
+        base_url="https://isnuyou.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://isnuyou.com.ua/shop/?search={q}",
+        ],
+        card_selector="div.product-block",
+        card_title=".product-name",
+        card_price=".product-price-regular, .product-prices",
+        card_link="a[href*='/shop/']",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Paradiz",
+        base_url="https://paradiz.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://paradiz.com.ua/ua/search/?search={q}",
+            "https://paradiz.com.ua/ua/index.php?route=product/search&search={q}",
+        ],
+        card_selector="div.product-layout, div.product-thumb",
+        card_title=".caption a, h4 a",
+        card_price=".price",
+        card_link=".caption a, h4 a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="FLTR",
+        base_url="https://fltr.shop",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://fltr.shop/index.php?route=product/search&search={q}",
+            "https://fltr.shop/?s={q}&post_type=product",
+        ],
+        card_selector="div.product-layout, .ds-module-item",
+        card_title=".ds-module-title, a[title]",
+        card_title_attr="title",
+        card_price=".ds-module-price, .price",
+        card_link="a[href]:not([href*='javascript'])",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Angel Beauty",
+        base_url="https://angel-beauty.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://angel-beauty.com.ua/ua/catalogsearch/result/?q={q}",
+            "https://angel-beauty.com.ua/catalogsearch/result/?q={q}",
+        ],
+        card_selector="li.product-item",
+        card_title=".product-item-link, .product-item-name a, .name a",
+        card_price=".price, .price-wrapper",
+        card_link="a.product-item-link, a.product-item-photo",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Skini",
+        base_url="https://skini.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://skini.com.ua/ru/search/?search={q}",
+            "https://skini.com.ua/ua/search/?search={q}",
+            "https://skini.com.ua/ru/index.php?route=product/search&search={q}",
+        ],
+        card_selector="div.product-thumb, div.product-layout",
+        card_title=".caption a, h4 a",
+        card_price=".price",
+        card_link=".caption a, h4 a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="MiSo Shop",
+        base_url="https://misoshop.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://misoshop.com.ua/?q={q}"],
+        card_selector="div.product-item-component",
+        card_title="a.name, .name",
+        card_price=".price, .price-wraper .price",
+        card_link="a.name, a.img",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Japan Shampoo",
+        base_url="https://japan-shampoo.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://japan-shampoo.com.ua/products/search?search={q}"],
+        card_selector="div.product-item",
+        card_title=".title a, .title",
+        card_price=".price, .product-price",
+        card_link=".title a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Krem UA",
+        base_url="https://krem-ua.com",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://krem-ua.com/?route=product/search&search={q}",
+            "https://krem-ua.com/index.php?route=product/search&search={q}",
+        ],
+        card_selector="div.product",
+        card_title="img[alt], a[title], a",
+        card_price=".price, .p_price",
+        card_link="a.p_img_href, a[href*='/p-']",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Paradise Fruit",
+        base_url="https://paradisefruit.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://paradisefruit.com.ua/uk/search?text={q}",
+            "https://paradisefruit.com.ua/uk/search?keys={q}",
+        ],
+        card_selector="div.product",
+        card_title="a.product-link-wrapper, a[href*='/product/']",
+        card_price=".price, .product-price, .field--price",
+        card_link="a[href*='/product/']",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Profcare",
+        base_url="https://profcare.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://profcare.com.ua/index.php?route=product/search&search={q}",
+            "https://profcare.com.ua/search/?search={q}",
+        ],
+        card_selector="div.product-layout, div.product-thumb",
+        card_title=".caption h4 a, h4 a",
+        card_price=".price",
+        card_link=".caption h4 a, h4 a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Daviani",
+        base_url="https://daviani.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://daviani.com.ua/index.php?route=product/search&search={q}",
+            "https://daviani.com.ua/?s={q}&post_type=product",
+        ],
+        card_selector="div.product-item",
+        card_title=".product-item__brand, .product-item__brand_name, img[alt]",
+        card_price=".product-item__price, .price",
+        card_link="a[href]",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Jouvence",
+        base_url="https://jouvence.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://jouvence.com.ua/shop/search/?query={q}",
+            "https://jouvence.com.ua/shop/search/?search={q}",
+        ],
+        card_selector="li.product-card-li",
+        card_title=".product-title a, .product-card-title a, [itemprop='name']",
+        card_price=".price, [itemprop='price']",
+        card_link=".product-title a, a[href*='/shop/product/']",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Kapitanova",
+        base_url="https://kapitanova.com.ua",
+        kind="live_search",
+        api_url="https://kapitanova.com.ua/api/search?q={q}",
+        search_url_patterns=["https://kapitanova.com.ua/search?q={q}"],
+        result_link_selector="a[href]",
+    ),
+    SiteConfig(
+        name="Cosmohit",
+        base_url="https://cosmohit.ua",
+        search_url_patterns=["https://cosmohit.ua/?q={q}"],
+        result_link_selector='a[href*="/catalogue/product/"]',
+        result_href_contains="/catalogue/product/",
+    ),
+    SiteConfig(
+        name="Amoris",
+        base_url="https://amoris.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://amoris.com.ua/index.php?route=product/search&search={q}",
+            "https://amoris.com.ua/search/?search={q}",
+        ],
+        card_selector="div.product-thumb.product-wrapper, div.product-wrapper",
+        card_title=".name a, .caption h4 a, h4 a",
+        card_price=".price",
+        card_link=".name a, .caption h4 a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Luxmarafet",
+        base_url="https://luxmarafet.com",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://luxmarafet.com/ua/searchml/?query={q}",
+            "https://luxmarafet.com/ua/search/?search={q}",
+        ],
+        card_selector="li.lux-list-prod, .lux-list-prod",
+        card_title="a[title], .lux-podzagolovok a, a",
+        card_title_attr="title",
+        card_price=".lux-div-price, .price, span.price",
+        card_link="a[href*='/ua/']",
+        card_image="img",
+    ),
+    # SPA / захист: додаємо з типовими URL — увімкнути після перевірки на VPS
+    SiteConfig(
+        name="Korea Beauty Store",
+        base_url="https://koreabeautystore.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://koreabeautystore.com.ua/katalog/search/?q={q}"],
+        card_selector="div.catalogCard",
+        card_title=".catalogCard-title",
+        card_price=".catalogCard-price",
+        card_link=".catalogCard-title a",
+        card_image="img.catalogCard-img, img",
+    ),
+    SiteConfig(
+        name="R1 Beauty",
+        base_url="https://r1beauty.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://r1beauty.com.ua/katalog/search/?q={q}"],
+        card_selector="div.catalogCard",
+        card_title=".catalogCard-title",
+        card_price=".catalogCard-price",
+        card_link=".catalogCard-title a",
+        card_image="img.catalogCard-img, img",
+    ),
+    SiteConfig(
+        name="Hitomi",
+        base_url="https://hitomi.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://hitomi.com.ua/search/?search={q}",
+            "https://hitomi.com.ua/search?q={q}",
+            "https://hitomi.com.ua/?s={q}&post_type=product",
+        ],
+        card_selector="div.product-item, div.product-card, .product-thumb, li.product",
+        card_title=".name a, .title a, h3 a, a",
+        card_price=".price",
+        card_link="a[href]",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Profline",
+        base_url="https://profline.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://profline.com.ua/katalog/search/?q={q}"],
+        card_selector="div.catalogCard",
+        card_title=".catalogCard-title",
+        card_price=".catalogCard-price",
+        card_link=".catalogCard-title a",
+        card_image="img.catalogCard-img, img",
+    ),
+    SiteConfig(
+        name="Oh My Beauty",
+        base_url="https://ohmybeauty.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://ohmybeauty.com.ua/kataloh/search/?q={q}"],
+        card_selector="div.catalogCard",
+        card_title=".catalogCard-title",
+        card_price=".catalogCard-price",
+        card_link=".catalogCard-title a",
+        card_image="img.catalogCard-img, img",
+    ),
+    SiteConfig(
+        name="VBeauty",
+        base_url="https://vbeauty.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://vbeauty.com.ua/katalog/search/?q={q}"],
+        card_selector="div.catalogCard",
+        card_title=".catalogCard-title",
+        card_price=".catalogCard-price",
+        card_link=".catalogCard-title a",
+        card_image="img.catalogCard-img, img",
+    ),
+    SiteConfig(
+        name="Bye Shop",
+        base_url="https://bye-shop.com",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://bye-shop.com/katalog/search/?q={q}"],
+        card_selector="div.catalogCard",
+        card_title=".catalogCard-title",
+        card_price=".catalogCard-price",
+        card_link=".catalogCard-title a",
+        card_image="img.catalogCard-img, img",
+    ),
+    SiteConfig(
+        name="Okrylena",
+        base_url="https://okrylena.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://okrylena.ua/search?q={q}",
+            "https://okrylena.ua/ua/search/?search={q}",
+            "https://okrylena.ua/?s={q}&post_type=product",
+        ],
+        card_selector="div.product-item, div.product-card, .product-thumb, li.product",
+        card_title=".name a, .title a, h3 a, a",
+        card_price=".price",
+        card_link="a[href]",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Makoko",
+        base_url="https://makoko.shop",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://makoko.shop/search?type=product&q={q}",
+            "https://makoko.shop/search?q={q}",
+        ],
+        card_selector="div.product-card, li.grid__item, div.product-item",
+        card_title="a.product-card__title, h3 a, .name a, a",
+        card_price=".price, .price-item",
+        card_link="a[href*='/products/'], a[href]",
+        card_image="img",
     ),
 ]
 
@@ -1046,6 +1559,21 @@ def _group_hits(blob: str, tokens: set) -> set:
     return hits
 
 
+def _line_token_conflict(query: str, title: str, url: str = "") -> bool:
+    """Чи назва конкурента належить іншій лінійці того ж бренду (Essential vs Nutritive)."""
+    drop = _brand_tokens(query)
+    q_tokens = set(_latin_tokens(identity_query(query) or query, drop))
+    t_text = f"{title} {slug_text(url)}" if url and not re.search(r"[A-Za-z]{4,}", title or "") else title
+    t_tokens = set(_latin_tokens(t_text, drop))
+    for tok in q_tokens:
+        if tok not in LINE_DISCRIMINATORS:
+            continue
+        for other in LINE_DISCRIMINATORS[tok]:
+            if other in t_tokens:
+                return True
+    return False
+
+
 def extra_modifiers(query: str, *texts: str) -> set:
     """Групи ознак, які є в назві конкурента, але відсутні в запиті."""
     q_blob = f" {normalize_text(query)} "
@@ -1056,6 +1584,11 @@ def extra_modifiers(query: str, *texts: str) -> set:
     # «для обличчя і тіла» — універсальний засіб, а не окремий товар для тіла.
     if "body" in extras and re.search(r"\b(face|facial)\b| облич| лиц", t_blob):
         extras.discard("body")
+    # «Solar Dew» у запиті — лінійка SPF; укр. «сонцезахисн» у картці не інший SKU.
+    if "sun" in extras:
+        q_blob = normalize_text(query)
+        if "spf" in q_blob or "сонц" in q_blob or re.search(r"\b(sun|solar|repaskin)\b", q_blob):
+            extras.discard("sun")
     return extras
 
 
@@ -1202,16 +1735,17 @@ def query_variants(query: str) -> list:
         if alias:
             article_vars.append(f"{alias} {code}")
         article_vars.append(code)
+    # Спочатку точніші запити — менше зайвих HTTP-раундів.
     seeds = (
+        query,
         latin,
         stripped,
         stripped_no_vol,
-        query,
         VOLUME_RE.sub("", query),
         brand_line_query(query),
+        *article_vars,
         cyr_brand,
         cyr,
-        *article_vars,
         brand_only,
     )
     for raw in seeds:
@@ -1251,7 +1785,8 @@ def query_variants(query: str) -> list:
         if item not in ordered:
             ordered.append(item)
     # Занадто довгий список гальмує прогін — залишаємо найкорисніші.
-    return ordered[:18]
+    cap = 12 if article_vars else 16
+    return ordered[:cap]
 
 
 def brand_line_query(query: str) -> str:
@@ -1269,12 +1804,24 @@ def brand_line_query(query: str) -> str:
     return f"{alias} {words[0]}"
 
 
+def _strong_listing_hit(query: str, item: dict, site: SiteConfig) -> bool:
+    if not isinstance(item, dict):
+        return False
+    title, url = item.get("title") or "", item.get("url") or ""
+    score = candidate_prefetch_score(query, item)
+    hay = f"{title} {url}".lower()
+    if any(code.lower() in hay for code in all_article_codes(query)) and score >= 0.72:
+        return True
+    if score >= 0.78 and brand_matches(query, title, url):
+        return True
+    if score >= 0.86 and brand_matches(query, title, url):
+        return True
+    return score >= site.min_similarity and brand_matches(query, title, url)
+
+
 def results_good_enough(site: SiteConfig, query: str, items: list) -> bool:
     for item in items:
-        if not isinstance(item, dict):
-            continue
-        title, url = item.get("title") or "", item.get("url") or ""
-        if brand_matches(query, title, url) and candidate_prefetch_score(query, item) >= site.min_similarity:
+        if _strong_listing_hit(query, item, site):
             return True
     return False
 
@@ -1471,16 +2018,17 @@ def find_live_search_results(site: SiteConfig, query: str, debug: bool = False) 
         for item in items:
             if not isinstance(item, dict):
                 continue
-            name = BeautifulSoup(item.get("name") or "", "lxml").get_text(" ", strip=True)
-            href = item.get("url") or item.get("href") or ""
+            raw_name = item.get("name") or item.get("title") or item.get("product_name") or ""
+            name = BeautifulSoup(str(raw_name), "lxml").get_text(" ", strip=True)
+            href = item.get("url") or item.get("href") or item.get("link") or item.get("permalink") or ""
             if not href:
                 continue
             products.append(
                 {
                     "title": clean_title(name),
-                    "price": parse_price(item.get("special") or item.get("price")),
+                    "price": parse_price(item.get("special") or item.get("price") or item.get("sale_price")),
                     "url": normalize_product_url(urljoin(site.base_url, href)),
-                    "image": item.get("image"),
+                    "image": item.get("image") or item.get("img") or item.get("thumbnail"),
                     "preloaded": True,
                 }
             )
@@ -1493,6 +2041,12 @@ def _card_text(card, selectors: str) -> str:
     parts = []
     for el in card.select(selectors) if selectors else []:
         text = el.get_text(" ", strip=True)
+        if not text:
+            text = (
+                (el.get("alt") or "").strip()
+                or (el.get("title") or "").strip()
+                or (el.get("aria-label") or "").strip()
+            )
         if text and text not in parts:
             parts.append(text)
     return " ".join(parts)
@@ -1538,6 +2092,13 @@ def parse_cards(site: SiteConfig, soup) -> list:
     for card in soup.select(site.card_selector):
         link = card.select_one(site.card_link) if site.card_link else None
         href = (link.get("href") if link else "") or ""
+        if not href or href.startswith(("javascript:", "#")):
+            # IsNuYou тощо: URL товару лише в data-product-url, а <a href="#">.
+            href = (
+                (card.get("data-product-url") or "")
+                or (card.get("data-url") or "")
+                or (card.get("data-href") or "")
+            ).strip()
         if not href or href.startswith(("javascript:", "#")):
             continue
         # кошик / wishlist — не сторінка товару
@@ -1594,13 +2155,16 @@ def _is_search_or_listing_url(url: str) -> bool:
     low = (url or "").lower()
     if not low:
         return True
+    path = low.split("?", 1)[0]
+    # Top Beauty (MODX): /poshuk-na-sajti/; інші UA/DE-шляхи пошуку.
+    if re.search(r"/(poshuk|poisk|suche)(?:[-_/]|$)", path):
+        return True
     if any(x in low for x in (
         "/search", "/search?", "search.asp", "route=product/search",
         "?search=", "&search=", "?s=", "&s=", "?q=", "&q=",
         "filter_name=", "post_type=product&s=",
     )):
         # PDP інколи містить ?search= у query — рідко; типовий шлях товару інший.
-        path = low.split("?", 1)[0]
         if path.rstrip("/").endswith("/search") or "/search/" in path or path.endswith("search.asp"):
             return True
         if "route=product/search" in low or "/search?" in low:
@@ -2186,11 +2750,17 @@ def raw_search(site: SiteConfig, query: str, debug: bool = False, exhaustive: bo
         }, as_json=True)
         if isinstance(data, (dict, list)):
             rows = (data.get("products") or data.get("items") or []) if isinstance(data, dict) else data
-            return [
-                {"title": BeautifulSoup(it.get("name") or "", "lxml").get_text(" ", strip=True),
-                 "url": it.get("url") or it.get("href") or ""}
-                for it in rows if isinstance(it, dict)
-            ]
+            out = []
+            for it in rows:
+                if not isinstance(it, dict):
+                    continue
+                raw_name = it.get("name") or it.get("title") or it.get("product_name") or ""
+                title = BeautifulSoup(str(raw_name), "lxml").get_text(" ", strip=True)
+                href = it.get("url") or it.get("href") or it.get("link") or it.get("permalink") or ""
+                if not href:
+                    continue
+                out.append({"title": title, "url": href})
+            return out
     responded = False
     for pattern in site.search_url_patterns:
         soup = fetch(pattern.format(q=quote(query)), debug=debug)
@@ -2224,9 +2794,33 @@ def find_search_results(site: SiteConfig, query: str, debug: bool = False):
     return find_html_search_results(site, query, debug=debug)
 
 
+def dedupe_title_repetition(title: str) -> str:
+    """Прибирає дубль фрази, коли назву зібрано з кількох селекторів."""
+    text = re.sub(r"\s+", " ", (title or "").strip())
+    if not text:
+        return text
+    words = text.split()
+    n = len(words)
+    for span in range(n // 2, 2, -1):
+        if words[:span] == words[span : 2 * span]:
+            return " ".join(words[:span])
+    for span in range(min(14, n // 2), 3, -1):
+        chunk = " ".join(words[:span])
+        if len(chunk) < 12:
+            continue
+        first = text.find(chunk)
+        second = text.find(chunk, first + len(chunk))
+        if second > 0:
+            merged = (text[:second] + text[second + len(chunk) :]).strip()
+            merged = re.sub(r"\s+", " ", merged)
+            if merged != text:
+                return merged
+    return text
+
+
 def clean_title(title: str) -> str:
     """Прибирає типове маркетингове сміття з заголовків сторінок товару."""
-    title = (title or "").replace("ᐉ", "").strip()
+    title = dedupe_title_repetition((title or "").replace("ᐉ", "").strip())
     title = re.sub(r"\s*\(\d{6,}\)\s*$", "", title)
     cut_markers = [
         " - купити", " – купити", " - Купити", " – Купити",
@@ -2263,13 +2857,19 @@ def parse_price(value) -> Optional[float]:
             return float(thousands.group(1).replace(",", ""))
         except ValueError:
             return None
-    match = re.search(r"(\d[\d\s]{0,8}(?:[.,]\d{1,2})?)", text)
-    if not match:
-        return None
-    try:
-        return float(match.group(1).replace(" ", "").replace(",", "."))
-    except ValueError:
-        return None
+    # Кілька чисел («0 ₴ 2 022 ₴» або «1450 грн 1700 грн») — перше валідне > 0
+    # (акційна / поточна зазвичай йде першою; 0 з old-price пропускаємо).
+    matches = re.findall(r"(\d[\d\s]{0,8}(?:[.,]\d{1,2})?)", text)
+    parsed: list[float] = []
+    for raw in matches:
+        try:
+            parsed.append(float(raw.replace(" ", "").replace(",", ".")))
+        except ValueError:
+            continue
+    for price in parsed:
+        if price > 0:
+            return price
+    return parsed[-1] if parsed else None
 
 
 def extract_volumes(text: str) -> list:
@@ -3067,14 +3667,18 @@ def _fuzzy_twin(token: str, candidates: set) -> Optional[str]:
     for cand in candidates:
         if len(cand) < 4 or cand.isdigit() or abs(len(cand) - len(token)) > 3:
             continue
-        if token[:4] != cand[:4]:
-            continue
         short, long_ = sorted((token, cand), key=len)
-        if long_.startswith(short) and len(long_) - len(short) <= 1:
+        if token[:4] == cand[:4]:
+            if long_.startswith(short) and len(long_) - len(short) <= 1:
+                return cand
+            if _stem(token) == _stem(cand) and len(_stem(token)) >= 4:
+                return cand
+        ratio = difflib.SequenceMatcher(None, token, cand).ratio()
+        if min(len(token), len(cand)) >= 5 and abs(len(token) - len(cand)) <= 3 and ratio >= 0.74:
             return cand
-        if _stem(token) == _stem(cand) and len(_stem(token)) >= 4:
+        if len(token) >= 6 and len(cand) >= 6 and ratio >= 0.78:
             return cand
-        if difflib.SequenceMatcher(None, token, cand).ratio() >= 0.8:
+        if ratio >= 0.84:
             return cand
     return None
 
@@ -3249,6 +3853,14 @@ def product_match_score(query: str, title: str, url: str = "") -> float:
     if q_codes and any(code in hay for code in q_codes):
         score = max(score, 0.88)
 
+    id_core = normalize_text(_scrub_match_text(latin_product_name(identity) or identity))
+    id_tokens = [t for t in id_core.split() if t not in drop and len(t) >= 3]
+    if len(id_tokens) >= 2:
+        phrase = " ".join(id_tokens)
+        title_core = normalize_text(_scrub_match_text(title))
+        if len(phrase) >= 8 and phrase in title_core:
+            score = max(score, min(0.93, score + 0.14))
+
     return max(0.0, min(1.0, score))
 
 
@@ -3343,6 +3955,8 @@ def candidate_score(query: str, product: dict, *, trust_brand_context: bool = Fa
         return 0.0
     if not kinds_compatible(identity_query(query) + " " + query, title):
         return 0.0
+    if _line_token_conflict(query, title, url):
+        return 0.0
     score = product_match_score(query, title, url)
     missing_groups = missing_modifiers(query, title, slug_text(url))
     if missing_groups:
@@ -3355,13 +3969,21 @@ def candidate_score(query: str, product: dict, *, trust_brand_context: bool = Fa
     elif volume_match == "mismatch":
         score = max(0.0, score - 0.38)
     query_specs = extract_specs(query)
-    if query_specs["spf"] is not None:
-        if product.get("spf") == query_specs["spf"]:
+    q_spf, p_spf = query_specs["spf"], product.get("spf")
+    if q_spf is not None:
+        if p_spf == q_spf:
             score = min(1.0, score + 0.05)
-        elif product.get("spf"):
+        elif p_spf:
             score = max(0.0, score - 0.12)
-    elif product.get("spf"):
-        score = max(0.0, score - 0.28)
+    elif p_spf is not None:
+        # У фіді SPF немає, а магазин дописав «SPF 30» — не відкидаємо правильну лінійку.
+        base = product_match_score(query, title, url)
+        if _identity_covered(query, title, url) or base >= 0.72:
+            pass
+        elif base >= 0.55:
+            score = max(0.0, score - 0.05)
+        else:
+            score = max(0.0, score - 0.14)
     extras = extra_modifiers(query, title, slug_text(url))
     covered = _identity_covered(query, title, url)
     if extras:
@@ -3453,6 +4075,11 @@ def _match_threshold(site: SiteConfig, query: str, product: dict) -> float:
     url = product.get("url") or ""
     if _strict_name_covered(query, title, url):
         threshold = max(0.48, threshold - 0.06)
+    match = float(product.get("match") or 0)
+    if match >= 0.82:
+        threshold = max(0.50, threshold - 0.04)
+    elif match >= 0.74:
+        threshold = max(0.52, threshold - 0.02)
     return threshold
 
 
@@ -3558,6 +4185,8 @@ def search_one_site(
         pool = unique
         if site.kind == "brand_catalog" and len(pool) > 30:
             pool = sorted(pool, key=lambda it: -candidate_prefetch_score(query, it))[:140]
+        elif len(pool) > LISTING_MATCH_POOL:
+            pool = sorted(pool, key=lambda it: -candidate_prefetch_score(query, it))[:LISTING_MATCH_POOL]
         for item in pool:
             has_price = valid_price(item.get("price")) is not None
             out_of_stock = item.get("in_stock") is False
@@ -3769,6 +4398,7 @@ def search_all(
     max_workers: Optional[int] = None,
     site_names: Optional[tuple] = None,
 ) -> dict:
+    reset_site_strikes()
     hits = []
     misses = []
     limit = SEARCH_DEADLINE if deadline is None else deadline
@@ -3807,6 +4437,11 @@ def search_all(
             pool_size = max(1, min(pool_size, int(cap)))
         except (TypeError, ValueError):
             pool_size = max(1, len(active))
+    # 63 магазини × низький pool — інакше дедлайн зрізає хвіст як «unavailable».
+    waves = (len(active) + pool_size - 1) // pool_size if active else 1
+    min_limit = waves * 14.0 + 20.0
+    if limit <= 0 or limit < min_limit:
+        limit = max(SEARCH_DEADLINE, min_limit)
     pool = ThreadPoolExecutor(max_workers=pool_size)
     futs = {
         pool.submit(search_one_site, site, query, debug, our_price, samples): site

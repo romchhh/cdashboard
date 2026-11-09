@@ -134,6 +134,17 @@ CASES = [
         "Academie Mattifying Hydrating Balm",
         True,
     ),
+  # Лінійки й опечатки в картках нових магазинів.
+    ("Medik8 Total Moisture", "Щоденний зволожуючий крем Medik8 Total Moitur", True),
+    ("Rejuran Essential Hydration Cream 50 ml", "Живильний крем Rejuran Nutritive Cream 50 мл", False),
+    ("Rejuran Essential Hydration Cream 50 ml", "Rejuran Essential Hydration Cream 50 ml", True),
+    ("Valmont Hydra3 Charging Cream", "Valmont Hydra3 Regenetic Cream 50ml", False),
+    ("Valmont Hydra3 Charging Cream", "Енергетичний зволожуючий крем Valmont Hydra3 Charging Cream", True),
+    (
+        "HydroPeptide Solar Dew",
+        "HydroPeptide Solar Dew SPF 30 Сонцезахисна сироватка",
+        True,
+    ),
 ]
 
 
