@@ -168,6 +168,9 @@ _CLIENTS_FILTER_KEYS = (
     "geo_city",
     "geo_oblast",
     "gender",
+    "closure_result",
+    "closure_from",
+    "closure_to",
 )
 
 
@@ -282,6 +285,16 @@ def _clients_filter_clauses_from_multidict(qp, now: datetime) -> tuple[list, dic
         qp.get("last_from"),
         qp.get("last_to"),
     )
+    from web.client_marketing import _parse_date_param
+    from web.client_crm import CRM_CLOSURE_RESULTS_ALLOWED
+
+    closure_from = _parse_date_param(qp.get("closure_from"))
+    closure_to = _parse_date_param(qp.get("closure_to"))
+    closure_results = [
+        str(x).strip().lower()
+        for x in qp.getlist("closure_result")
+        if str(x).strip().lower() in CRM_CLOSURE_RESULTS_ALLOWED
+    ]
     segment = _clients_parse_segment_list(qp) or None
     activity = _clients_parse_activity_list(qp) or None
     feed_tag = _clients_parse_feed_tag_list(qp) or None
@@ -326,6 +339,9 @@ def _clients_filter_clauses_from_multidict(qp, now: datetime) -> tuple[list, dic
         geo_cities=geo_cities or None,
         geo_oblasts=geo_oblasts or None,
         gender=_clients_parse_gender_filter(qp.get("gender")),
+        closure_results=closure_results or None,
+        closure_from=closure_from,
+        closure_to=closure_to,
     )
     filter_form: dict = {}
     for key in _CLIENTS_FILTER_KEYS:
@@ -338,6 +354,7 @@ def _clients_filter_clauses_from_multidict(qp, now: datetime) -> tuple[list, dic
             "segment",
             "activity",
             "feed_tag",
+            "closure_result",
         ):
             if key == "segment":
                 vals = _clients_parse_segment_list(qp)

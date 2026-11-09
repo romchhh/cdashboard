@@ -284,6 +284,7 @@ async def clients_list_page(
         clients = list(res.scalars().all())
         customer_ids = [c.customer_id for c in clients if c.customer_id]
         latest_status_by_customer: dict[str, dict] = {}
+        history_by_customer: dict[str, list] = {}
         if customer_ids:
             latest_dt_sq = (
                 select(
@@ -315,12 +316,28 @@ async def clients_list_page(
                     "name": label,
                     "tone": order_status_tone(label, sid),
                 }
+            hist_q = await session.execute(
+                select(ClientCrmHistory)
+                .where(
+                    ClientCrmHistory.client_customer_id.in_(customer_ids),
+                    ClientCrmHistory.event_type == CRM_HISTORY_CLOSED,
+                )
+                .order_by(desc(ClientCrmHistory.created_at))
+            )
+            for entry in hist_q.scalars().all():
+                cid = str(entry.client_customer_id or "")
+                if not cid:
+                    continue
+                bucket = history_by_customer.setdefault(cid, [])
+                if len(bucket) < 5:
+                    bucket.append(entry)
 
     now = reference_now()
     clients_with_meta = []
     for c in clients:
         keys = deserialize_interaction_keys(getattr(c, "crm_interaction_keys", None))
         proc_st = normalize_processing_status(getattr(c, "crm_processing_status", None))
+        hist_entries = history_by_customer.get(str(c.customer_id or ""), [])
         clients_with_meta.append(
             {
                 "client": c,
@@ -332,6 +349,7 @@ async def clients_list_page(
                 "interaction_keys": keys,
                 "processing_status": proc_st,
                 "processing_status_label": processing_status_label(proc_st),
+                "crm_history_items": format_crm_history_items(hist_entries, limit=4),
             }
         )
     export_qs = _clients_urlencode_params(filter_form, sort_by, sort_dir)

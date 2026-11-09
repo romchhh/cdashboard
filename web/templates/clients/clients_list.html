@@ -16,7 +16,111 @@
 .clients-page .data-table.clients-table-fixed col.col-w-client { width: 228px; }
 .clients-page .data-table.clients-table-fixed col.col-w-mgr { width: 128px; }
 .clients-page .data-table.clients-table-fixed col.col-w-crm-status { width: 104px; }
-.clients-page .data-table.clients-table-fixed col.col-w-crm-ch { width: 84px; }
+.clients-page .data-table.clients-table-fixed col.col-w-crm-hist { width: 168px; }
+.clients-page .clients-crm-history-cell {
+  vertical-align: top;
+  white-space: normal;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: #475569;
+}
+.clients-page .clients-crm-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.clients-page .clients-crm-history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 7px;
+  background: #f8fafc;
+  border: 1px solid #e8edf3;
+}
+.clients-page .clients-crm-history-item__label {
+  font-weight: 650;
+  color: #0f172a;
+}
+.clients-page .clients-crm-history-item__date {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.7rem;
+}
+.clients-page .clients-crm-history-empty {
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+.clients-page .cff-history-filter {
+  margin-top: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fbfcfe 0%, #f4f7fb 100%);
+}
+.clients-page .cff-history-filter__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  margin-bottom: 0.55rem;
+}
+.clients-page .cff-history-filter__title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.clients-page .cff-history-filter__hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+.clients-page .cff-history-filter__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-end;
+}
+.clients-page .cff-history-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  flex: 1 1 280px;
+}
+.clients-page .cff-history-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid #dbe3ec;
+  background: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  user-select: none;
+}
+.clients-page .cff-history-chip:has(input:checked) {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+.clients-page .cff-history-chip input {
+  margin: 0;
+  accent-color: #2563eb;
+}
+.clients-page .cff-history-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
 .clients-page .data-table.clients-table-fixed col.col-w-phone { width: 124px; }
 .clients-page .data-table.clients-table-fixed col.col-w-city { width: 120px; }
 .clients-page .data-table.clients-table-fixed col.col-w-activity { width: 104px; }
@@ -2467,6 +2571,44 @@
                             {% endfor %}
                         </div>
                     </div>
+
+                    {% set selected_closure = filter_form.get('closure_result', []) %}
+                    <div class="cff-history-filter" aria-label="Фільтр історії закриття">
+                        <div class="cff-history-filter__head">
+                            <p class="cff-history-filter__title">Історія закриття ліда</p>
+                            <p class="cff-history-filter__hint">Результат + період дати закриття. Після закриття лід знову «нейтральний», історія лишається тут.</p>
+                        </div>
+                        <div class="cff-history-filter__row">
+                            <div class="cff-history-results" role="group" aria-label="Результати закриття">
+                                {% for key, label in closure_result_options %}
+                                <label class="cff-history-chip">
+                                    <input type="checkbox" name="closure_result" value="{{ key }}" {% if key in selected_closure %}checked{% endif %}>
+                                    <span>{{ label }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div class="cff-history-dates">
+                                <div class="cff-field">
+                                    <label class="cff-label-text" for="clientsClosureFrom">Закрито з</label>
+                                    <div class="cff-date-combo">
+                                        <input id="clientsClosureFrom" class="cff-date-text" type="text" name="closure_from" value="{{ filter_form.get('closure_from', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" placeholder="дд.мм.рррр" title="Приклад: 01.11.2026">
+                                        <div class="cff-date-cal-wrap" title="Відкрити календар">
+                                            <input type="date" class="cff-date-cal-native" aria-label="Календар: закрито з" tabindex="-1">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="cff-field">
+                                    <label class="cff-label-text" for="clientsClosureTo">Закрито до</label>
+                                    <div class="cff-date-combo">
+                                        <input id="clientsClosureTo" class="cff-date-text" type="text" name="closure_to" value="{{ filter_form.get('closure_to', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" placeholder="дд.мм.рррр" title="Приклад: 09.11.2026">
+                                        <div class="cff-date-cal-wrap" title="Відкрити календар">
+                                            <input type="date" class="cff-date-cal-native" aria-label="Календар: закрито до" tabindex="-1">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="cff-actions">
@@ -2616,7 +2758,7 @@
                     <col class="col-w-client" />
                     <col class="col-w-mgr" />
                     <col class="col-w-crm-status" />
-                    <col class="col-w-crm-ch" />
+                    <col class="col-w-crm-hist" />
                     <col class="col-w-phone" />
                     <col class="col-w-city" />
                     <col class="col-w-activity" />
@@ -2641,7 +2783,7 @@
                             <a href="{{ sort_urls.assigned }}" class="clients-th-sort {% if sort_by == 'assigned' %}is-active{% endif %}">Відп.{% if sort_by == 'assigned' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
                         </th>
                         <th title="Статус ручного опрацювання ліда" class="clients-th-crm-status">Статус</th>
-                        <th title="Канали CRM (авто + ручні)" class="clients-th-crm-ch">CRM</th>
+                        <th title="Історія закриттів ліда (результат · дата)" class="clients-th-crm-hist">Історія</th>
                         <th class="clients-th-sort-wrap" title="Телефон з фіду; сортування по полю telephone">
                             <a href="{{ sort_urls.phone }}" class="clients-th-sort {% if sort_by == 'phone' %}is-active{% endif %}">Телефон{% if sort_by == 'phone' %}<span class="clients-sort-ind">{% if sort_dir == 'asc' %}↑{% else %}↓{% endif %}</span>{% endif %}</a>
                         </th>
@@ -2729,43 +2871,19 @@
                             <span class="clients-crm-tag clients-crm-tag--{{ row.processing_status }} clients-crm-status-badge">{{ row.processing_status_label }}</span>
                             {% endif %}
                         </td>
-                        <td class="clients-crm-channels-cell">
-                            <details class="clients-crm-channels-details">
-                                <summary title="{% if row.interaction_labels|length %}{{ row.interaction_labels|join(', ') }}{% else %}Обрати канали CRM{% endif %}">{% if row.interaction_labels|length %}{{ row.interaction_labels|length }} кан{% else %}CRM{% endif %}</summary>
-                                <div class="clients-crm-channels-pop">
-                                    <form method="post" action="/clients/{{ c.id }}/interactions" class="clients-inline-channels-form">
-                                        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
-                                        <input type="hidden" name="return_qs" value="{{ export_qs|e }}">
-                                        <div class="clients-crm-channels-pop__body">
-                                            <div class="clients-interaction-group">
-                                                <p class="clients-interaction-group__title">Прямий контакт</p>
-                                                <div class="clients-interaction-options">
-                                                    {% for key, ilabel in interaction_options_direct %}
-                                                    <label class="clients-interaction-option">
-                                                        <input type="checkbox" name="interaction" value="{{ key }}" {% if key in row.interaction_keys %}checked{% endif %}>
-                                                        <span title="{{ ilabel }}">{{ interaction_short_label(key, ilabel) }}</span>
-                                                    </label>
-                                                    {% endfor %}
-                                                </div>
-                                            </div>
-                                            <div class="clients-interaction-group">
-                                                <p class="clients-interaction-group__title">Масові</p>
-                                                <div class="clients-interaction-options">
-                                                    {% for key, ilabel in interaction_options_mass %}
-                                                    <label class="clients-interaction-option">
-                                                        <input type="checkbox" name="interaction" value="{{ key }}" {% if key in row.interaction_keys %}checked{% endif %}>
-                                                        <span title="{{ ilabel }}">{{ interaction_short_label(key, ilabel) }}</span>
-                                                    </label>
-                                                    {% endfor %}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="clients-crm-channels-pop__foot">
-                                            <button type="submit" class="btn btn-primary btn-sm">Зберегти</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </details>
+                        <td class="clients-crm-history-cell">
+                            {% if row.crm_history_items %}
+                            <ul class="clients-crm-history-list">
+                                {% for h in row.crm_history_items %}
+                                <li class="clients-crm-history-item" title="{{ h.title|e }}">
+                                    <span class="clients-crm-history-item__label">{{ h.label }}</span>
+                                    <span class="clients-crm-history-item__date">{{ h.date }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <span class="clients-crm-history-empty">немає закриттів</span>
+                            {% endif %}
                         </td>
                         <td class="col-narrow clients-phone-cell" title="{{ c.telephone or '' }}">{{ c.telephone or '—' }}</td>
                         <td>{{ c.geo_city or '—' }}</td>

@@ -90,6 +90,7 @@ from web.client_crm import (
     apply_client_last_touch,
     apply_processing_status_change,
     closure_result_label,
+    format_crm_history_items,
     deserialize_interaction_keys,
     interaction_keys_from_raw_list,
     interaction_labels_for_keys,

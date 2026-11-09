@@ -140,6 +140,36 @@ def closure_result_label(result: str | None) -> str:
     return dict(CRM_CLOSURE_RESULT_CHOICES).get(result, result)
 
 
+def crm_history_event_label(entry: Any) -> str:
+    """Короткий підпис для рядка історії в таблиці клієнтів."""
+    et = (getattr(entry, "event_type", None) or "").strip()
+    if et == CRM_HISTORY_CLOSED:
+        return closure_result_label(getattr(entry, "closure_result", None))
+    if et == CRM_HISTORY_STATUS:
+        return processing_status_label(getattr(entry, "processing_status", None))
+    if et == CRM_HISTORY_CHANNELS:
+        return "Канали оновлено"
+    if et == CRM_HISTORY_ASSIGNMENT:
+        who = (getattr(entry, "assigned_username", None) or "").strip()
+        return f"Відп.: {who}" if who else "Знято відповідального"
+    return et or "подія"
+
+
+def format_crm_history_items(entries: list[Any], *, limit: int = 4) -> list[dict[str, str]]:
+    """Список {label, date, title} для UI; новіші першими."""
+    out: list[dict[str, str]] = []
+    for entry in entries[:limit]:
+        created = getattr(entry, "created_at", None)
+        date_s = created.strftime("%d.%m.%Y") if created else "—"
+        label = crm_history_event_label(entry)
+        author = (getattr(entry, "author_display", None) or "").strip()
+        tip_parts = [label, date_s]
+        if author:
+            tip_parts.append(author)
+        out.append({"label": label, "date": date_s, "title": " · ".join(tip_parts)})
+    return out
+
+
 def interaction_keys_from_raw_list(raw: list[Any]) -> list[str]:
     out: list[str] = []
     for x in raw or []:

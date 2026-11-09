@@ -730,6 +730,9 @@ def build_client_where_clauses(
     geo_cities: list[str] | None = None,
     geo_oblasts: list[str] | None = None,
     gender: str | None = None,
+    closure_results: list[str] | None = None,
+    closure_from: datetime | None = None,
+    closure_to: datetime | None = None,
 ) -> list[Any]:
     clauses: list[Any] = []
     if registered is True:
@@ -941,6 +944,27 @@ def build_client_where_clauses(
                 func.lower(func.coalesce(Client.crm_interaction_keys, "")).not_like(f'%"{iks.lower()}"%'),
             )
         )
+
+    closure_keys = [
+        str(x).strip().lower()
+        for x in (closure_results or [])
+        if str(x).strip()
+    ]
+    if closure_keys or closure_from is not None or closure_to is not None:
+        from bot.database.clients_models import ClientCrmHistory
+        from web.client_crm import CRM_HISTORY_CLOSED
+
+        hist_conds = [
+            ClientCrmHistory.client_customer_id == Client.customer_id,
+            ClientCrmHistory.event_type == CRM_HISTORY_CLOSED,
+        ]
+        if closure_keys:
+            hist_conds.append(ClientCrmHistory.closure_result.in_(closure_keys))
+        if closure_from is not None:
+            hist_conds.append(ClientCrmHistory.created_at >= closure_from)
+        if closure_to is not None:
+            hist_conds.append(ClientCrmHistory.created_at < (closure_to + timedelta(days=1)))
+        clauses.append(exists(select(1).select_from(ClientCrmHistory).where(*hist_conds)))
 
     af = (assigned_username_filter or "").strip()
     if af == "__none__":
