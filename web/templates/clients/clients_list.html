@@ -2572,35 +2572,35 @@
                         </div>
                     </div>
 
-                    {% set selected_closure = filter_form.get('closure_result', []) %}
-                    <div class="cff-history-filter" aria-label="Фільтр історії закриття">
+                    {% set selected_closure = clients_filter_list(filter_form, 'history_result') %}
+                    <div class="cff-history-filter" id="clientsHistoryFilter" aria-label="Фільтр історії закриття">
                         <div class="cff-history-filter__head">
                             <p class="cff-history-filter__title">Історія закриття ліда</p>
-                            <p class="cff-history-filter__hint">Результат + період дати закриття. Після закриття лід знову «нейтральний», історія лишається тут.</p>
+                            <p class="cff-history-filter__hint">Оберіть результат і/або період — фільтр застосується одразу. Після закриття лід знову «нейтральний», історія лишається тут.</p>
                         </div>
                         <div class="cff-history-filter__row">
                             <div class="cff-history-results" role="group" aria-label="Результати закриття">
                                 {% for key, label in closure_result_options %}
                                 <label class="cff-history-chip">
-                                    <input type="checkbox" name="closure_result" value="{{ key }}" {% if key in selected_closure %}checked{% endif %}>
+                                    <input type="checkbox" name="history_result" value="{{ key }}" {% if key in selected_closure %}checked{% endif %}>
                                     <span>{{ label }}</span>
                                 </label>
                                 {% endfor %}
                             </div>
                             <div class="cff-history-dates">
                                 <div class="cff-field">
-                                    <label class="cff-label-text" for="clientsClosureFrom">Закрито з</label>
+                                    <label class="cff-label-text" for="clientsHistoryFrom">Закрито з</label>
                                     <div class="cff-date-combo">
-                                        <input id="clientsClosureFrom" class="cff-date-text" type="text" name="closure_from" value="{{ filter_form.get('closure_from', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" placeholder="дд.мм.рррр" title="Приклад: 01.11.2026">
+                                        <input id="clientsHistoryFrom" class="cff-date-text" type="text" name="history_from" value="{{ filter_form.get('history_from', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" placeholder="дд.мм.рррр" title="Приклад: 01.11.2026">
                                         <div class="cff-date-cal-wrap" title="Відкрити календар">
                                             <input type="date" class="cff-date-cal-native" aria-label="Календар: закрито з" tabindex="-1">
                                         </div>
                                     </div>
                                 </div>
                                 <div class="cff-field">
-                                    <label class="cff-label-text" for="clientsClosureTo">Закрито до</label>
+                                    <label class="cff-label-text" for="clientsHistoryTo">Закрито до</label>
                                     <div class="cff-date-combo">
-                                        <input id="clientsClosureTo" class="cff-date-text" type="text" name="closure_to" value="{{ filter_form.get('closure_to', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" placeholder="дд.мм.рррр" title="Приклад: 09.11.2026">
+                                        <input id="clientsHistoryTo" class="cff-date-text" type="text" name="history_to" value="{{ filter_form.get('history_to', '') }}" inputmode="numeric" autocomplete="off" maxlength="10" spellcheck="false" placeholder="дд.мм.рррр" title="Приклад: 09.11.2026">
                                         <div class="cff-date-cal-wrap" title="Відкрити календар">
                                             <input type="date" class="cff-date-cal-native" aria-label="Календар: закрито до" tabindex="-1">
                                         </div>
@@ -2608,6 +2608,20 @@
                                 </div>
                             </div>
                         </div>
+                        {% if selected_closure or filter_form.get('history_from') or filter_form.get('history_to') %}
+                        <div class="cff-selected-inline cff-history-selected" id="clientsHistorySelected" style="margin-top:0.55rem;">
+                            {% for key, label in closure_result_options if key in selected_closure %}
+                            <span class="cff-selected-chip">
+                                <span>{{ label }}</span>
+                            </span>
+                            {% endfor %}
+                            {% if filter_form.get('history_from') or filter_form.get('history_to') %}
+                            <span class="cff-selected-chip">
+                                <span>{{ filter_form.get('history_from', '…') }} — {{ filter_form.get('history_to', '…') }}</span>
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -3366,14 +3380,48 @@ document.addEventListener('DOMContentLoaded', function () {
     var form = document.getElementById('clientsFilterForm');
     var searchInput = document.getElementById('clientsSearchInput');
     var pageInput = document.getElementById('clientsPageInput');
+
+    /* Збираємо GET-параметри лише з полів форми фільтрів (без порожніх radio/select). */
+    function clientsFilterSearchParams() {
+        var sp = new URLSearchParams();
+        if (!form) return sp;
+        try {
+            new FormData(form).forEach(function (val, key) {
+                if (val === null || val === undefined) return;
+                var s = String(val).trim();
+                if (!s) return;
+                /* CRM-селект «Результат закриття» не має потрапляти у фільтр списку */
+                if (key === 'closure_result' || key === 'closure_from' || key === 'closure_to') return;
+                sp.append(key, s);
+            });
+        } catch (e) {}
+        return sp;
+    }
+
+    function navigateClientsFilter(extraMutate) {
+        if (!form) return;
+        if (pageInput) pageInput.value = '1';
+        var sp = clientsFilterSearchParams();
+        sp.set('page', '1');
+        if (typeof extraMutate === 'function') extraMutate(sp);
+        var qs = sp.toString();
+        window.location.href = '/clients' + (qs ? '?' + qs : '');
+    }
+
+    if (form) {
+        form.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            navigateClientsFilter();
+        });
+    }
+
     if (form && searchInput && pageInput) {
         var t = null;
         var DEBOUNCE_MS = 500;
         searchInput.addEventListener('input', function () {
             if (t) clearTimeout(t);
             t = setTimeout(function () {
-                pageInput.value = 1;
-                form.submit();
+                navigateClientsFilter();
             }, DEBOUNCE_MS);
         });
     }
@@ -3388,57 +3436,57 @@ document.addEventListener('DOMContentLoaded', function () {
             var chipAction = a.getAttribute('data-chip-action');
             if (!chipType || !chipAction) return;
             ev.preventDefault();
-            var sp = new URLSearchParams();
-            try {
-                new FormData(form).forEach(function (val, key) {
-                    sp.append(key, val);
-                });
-            } catch (e) {
-                window.location.href = a.getAttribute('href') || '/clients';
-                return;
-            }
-            if (chipType === 'segment' || chipType === 'activity' || chipType === 'feed_tag') {
-                if (chipAction === 'clear') {
-                    sp.delete(chipType);
-                } else if (chipAction === 'toggle' || chipAction === 'set') {
-                    var chipVal = a.getAttribute('data-chip-value');
-                    var current = sp.getAll(chipType);
-                    sp.delete(chipType);
-                    if (chipVal) {
-                        var idx = current.indexOf(chipVal);
-                        if (idx >= 0) {
-                            current.forEach(function (v) {
-                                if (v !== chipVal) sp.append(chipType, v);
-                            });
-                        } else {
-                            current.forEach(function (v) { sp.append(chipType, v); });
-                            sp.append(chipType, chipVal);
+            navigateClientsFilter(function (sp) {
+                if (chipType === 'segment' || chipType === 'activity' || chipType === 'feed_tag') {
+                    if (chipAction === 'clear') {
+                        sp.delete(chipType);
+                    } else if (chipAction === 'toggle' || chipAction === 'set') {
+                        var chipVal = a.getAttribute('data-chip-value');
+                        var current = sp.getAll(chipType);
+                        sp.delete(chipType);
+                        if (chipVal) {
+                            var idx = current.indexOf(chipVal);
+                            if (idx >= 0) {
+                                current.forEach(function (v) {
+                                    if (v !== chipVal) sp.append(chipType, v);
+                                });
+                            } else {
+                                current.forEach(function (v) { sp.append(chipType, v); });
+                                sp.append(chipType, chipVal);
+                            }
                         }
                     }
                 }
-            }
-            sp.set('page', '1');
-            var qs = sp.toString();
-            window.location.href = '/clients' + (qs ? '?' + qs : '');
+            });
         });
     }
 
-    /* Реєстрація / Пошта: динамічні перемикачі з миттєвим застосуванням */
+    /* Реєстрація / Пошта / історія закриття: миттєве застосування */
     if (form && pageInput) {
         ['registered', 'email_mode', 'gender'].forEach(function (groupName) {
             form.querySelectorAll('input[type="radio"][name="' + groupName + '"]').forEach(function (input) {
                 input.addEventListener('change', function () {
                     if (!input.checked) return;
-                    pageInput.value = 1;
-                    form.submit();
+                    navigateClientsFilter();
                 });
             });
         });
         form.querySelectorAll('input[type="radio"][name="bad_clients"]').forEach(function (input) {
             input.addEventListener('change', function () {
                 if (!input.checked) return;
-                pageInput.value = 1;
-                form.submit();
+                navigateClientsFilter();
+            });
+        });
+        form.querySelectorAll('input[type="checkbox"][name="history_result"]').forEach(function (input) {
+            input.addEventListener('change', function () {
+                navigateClientsFilter();
+            });
+        });
+        ['clientsHistoryFrom', 'clientsHistoryTo'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('change', function () {
+                navigateClientsFilter();
             });
         });
     }
@@ -3691,13 +3739,14 @@ document.addEventListener('DOMContentLoaded', function () {
     renderSelectedChips('clientsCitySet', 'clientsCitySelected', 'geo_city');
     renderSelectedChips('clientsOblastSet', 'clientsOblastSelected', 'geo_oblast');
 
-    function wireClientFilterDateCombo(textId) {
+    function wireClientFilterDateCombo(textId, opts) {
         var text = document.getElementById(textId);
         if (!text) return;
         var wrap = text.closest('.cff-date-combo');
         if (!wrap) return;
         var picker = wrap.querySelector('input[type="date"].cff-date-cal-native');
         if (!picker) return;
+        var autoApply = !!(opts && opts.autoApply);
         function syncPickerFromText() {
             var v = String(text.value || '').trim();
             if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
@@ -3719,9 +3768,18 @@ document.addEventListener('DOMContentLoaded', function () {
         text.addEventListener('blur', syncPickerFromText);
         picker.addEventListener('change', function () {
             if (picker.value) text.value = picker.value;
+            else text.value = '';
+            if (autoApply && typeof navigateClientsFilter === 'function') {
+                navigateClientsFilter();
+            }
         });
     }
-    ['clientsFirstFrom', 'clientsFirstTo', 'clientsLastFrom', 'clientsLastTo'].forEach(wireClientFilterDateCombo);
+    ['clientsFirstFrom', 'clientsFirstTo', 'clientsLastFrom', 'clientsLastTo'].forEach(function (id) {
+        wireClientFilterDateCombo(id, { autoApply: false });
+    });
+    ['clientsHistoryFrom', 'clientsHistoryTo'].forEach(function (id) {
+        wireClientFilterDateCombo(id, { autoApply: true });
+    });
 });
 </script>
 {% endblock %}

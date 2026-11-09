@@ -168,9 +168,10 @@ _CLIENTS_FILTER_KEYS = (
     "geo_city",
     "geo_oblast",
     "gender",
-    "closure_result",
-    "closure_from",
-    "closure_to",
+    # Історія закриття ліда (окремі ключі, щоб не колізити з CRM name=closure_result)
+    "history_result",
+    "history_from",
+    "history_to",
 )
 
 
@@ -288,13 +289,20 @@ def _clients_filter_clauses_from_multidict(qp, now: datetime) -> tuple[list, dic
     from web.client_marketing import _parse_date_param
     from web.client_crm import CRM_CLOSURE_RESULTS_ALLOWED
 
-    closure_from = _parse_date_param(qp.get("closure_from"))
-    closure_to = _parse_date_param(qp.get("closure_to"))
-    closure_results = [
-        str(x).strip().lower()
-        for x in qp.getlist("closure_result")
-        if str(x).strip().lower() in CRM_CLOSURE_RESULTS_ALLOWED
-    ]
+    def _history_result_values() -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        # Нові ключі + старі closure_* (зворотна сумісність зі старими посиланнями)
+        for raw in list(qp.getlist("history_result")) + list(qp.getlist("closure_result")):
+            val = str(raw or "").strip().lower()
+            if val in CRM_CLOSURE_RESULTS_ALLOWED and val not in seen:
+                seen.add(val)
+                out.append(val)
+        return out
+
+    closure_results = _history_result_values()
+    closure_from = _parse_date_param(qp.get("history_from") or qp.get("closure_from"))
+    closure_to = _parse_date_param(qp.get("history_to") or qp.get("closure_to"))
     segment = _clients_parse_segment_list(qp) or None
     activity = _clients_parse_activity_list(qp) or None
     feed_tag = _clients_parse_feed_tag_list(qp) or None
@@ -354,7 +362,7 @@ def _clients_filter_clauses_from_multidict(qp, now: datetime) -> tuple[list, dic
             "segment",
             "activity",
             "feed_tag",
-            "closure_result",
+            "history_result",
         ):
             if key == "segment":
                 vals = _clients_parse_segment_list(qp)
@@ -362,10 +370,22 @@ def _clients_filter_clauses_from_multidict(qp, now: datetime) -> tuple[list, dic
                 vals = _clients_parse_activity_list(qp)
             elif key == "feed_tag":
                 vals = _clients_parse_feed_tag_list(qp)
+            elif key == "history_result":
+                vals = closure_results
             else:
                 vals = [str(x).strip() for x in qp.getlist(key) if str(x).strip()]
             if vals:
                 filter_form[key] = vals
+            continue
+        if key == "history_from":
+            raw = (qp.get("history_from") or qp.get("closure_from") or "").strip()
+            if raw:
+                filter_form[key] = raw
+            continue
+        if key == "history_to":
+            raw = (qp.get("history_to") or qp.get("closure_to") or "").strip()
+            if raw:
+                filter_form[key] = raw
             continue
         val = qp.get(key)
         if val is not None and str(val).strip() != "":
