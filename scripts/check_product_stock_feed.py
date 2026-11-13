@@ -2,9 +2,16 @@
 """
 Порівняння залишку товару: XML-фід Cosmy vs products.db.
 
-На сервері (з кореня репозиторію, з активним venv):
+На сервері (корінь репо; venv зазвичай myenv, не .venv):
+
+  source myenv/bin/activate
+  pip install -r requirements.txt   # якщо немає sqlalchemy
 
   python scripts/check_product_stock_feed.py --query "Needly A to Cream"
+
+Без venv — тільки фід:
+
+  python3 scripts/check_product_stock_feed_lite.py -q "Needly A to Cream"
   python scripts/check_product_stock_feed.py --product-id 12345
   python scripts/check_product_stock_feed.py --query "Needly" --feed /tmp/feed.xml
 
