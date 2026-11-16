@@ -5,7 +5,7 @@ from __future__ import annotations
 import calendar
 from datetime import datetime, timedelta
 
-from mono.api import now_kyiv
+from mono.api import KYIV_TZ, now_kyiv
 
 
 def day_start(dt: datetime) -> datetime:
@@ -131,3 +131,20 @@ def days_since_year_start() -> int:
     """Скільки днів від 1 січня до сьогодні включно (для YTD-синку)."""
     start, end = calendar_year_to_date()
     return max(1, (end.date() - start.date()).days + 1)
+
+
+def mono_epoch_range(*, days: int | None = None, ytd: bool = False) -> tuple[int, int]:
+    """
+    Unix-діапазон для виписки Monobank.
+    YTD = 1 січня 00:00 Київ — кінець сьогодні (як у ліміті ФОП), не «N×86400» від зараз.
+    """
+    import time
+
+    if ytd or (days is not None and days >= days_since_year_start()):
+        date_from, date_to = calendar_year_to_date()
+        from_dt = day_start(date_from).replace(tzinfo=KYIV_TZ)
+        to_dt = date_to.replace(tzinfo=KYIV_TZ)
+        return int(from_dt.timestamp()), int(to_dt.timestamp())
+    span = max(1, int(days or 31))
+    to_time = int(time.time())
+    return to_time - span * 86400, to_time

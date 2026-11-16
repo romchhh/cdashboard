@@ -70,6 +70,20 @@ def test_days_since_year_start():
         assert days_since_year_start() == 31
 
 
+def test_mono_epoch_range_ytd_starts_jan1():
+    from zoneinfo import ZoneInfo
+
+    from bot.services.period_range import mono_epoch_range
+
+    kyiv = ZoneInfo("Europe/Kyiv")
+    with patch("bot.services.period_range.now_kyiv", return_value=datetime(2026, 9, 15, 12, 0, 0)):
+        from_ts, to_ts = mono_epoch_range(ytd=True)
+    start = datetime.fromtimestamp(from_ts, tz=kyiv)
+    end = datetime.fromtimestamp(to_ts, tz=kyiv)
+    assert start.year == 2026 and start.month == 1 and start.day == 1
+    assert end.year == 2026 and end.month == 9 and end.day == 15
+
+
 def test_mono_statement_windows_chunk_31_days():
     start = 1_700_000_000
     end = start + 90 * 24 * 60 * 60

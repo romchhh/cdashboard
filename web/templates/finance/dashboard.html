@@ -229,10 +229,12 @@
                                     {{ row.mono_live|fmt_ua }} ₴
                                     {% if row.sync_gap %}
                                     <div class="fop-limit-gap">
-                                        {% if row.mono_gap > 0 %}
-                                        Виписка на {{ row.mono_gap|fmt_ua }} ₴ більша за «Моно (БД)» — є незавантажені або відфільтровані операції
-                                        {% else %}
-                                        У БД на {{ (row.mono_gap * -1)|fmt_ua }} ₴ більше, ніж у виписці — перевірте дублікати/категорії
+                                        {% if row.mono_db_orphan and row.mono_db_orphan >= 5 %}
+                                        У «Моно (БД)» {{ row.mono_db_orphan|fmt_ua }} ₴ немає в поточній виписці рахунку (інший IBAN, дата або дубль)
+                                        {% elif row.mono_gap > 0.01 %}
+                                        Виписка на {{ row.mono_gap|fmt_ua }} ₴ більша за збіги в БД — зробіть синх <strong>за рік</strong>
+                                        {% elif row.mono_gap < -0.01 %}
+                                        Збіги в БД на {{ (row.mono_gap * -1)|fmt_ua }} ₴ більші за виписку — перевірте дублікати
                                         {% endif %}
                                     </div>
                                     {% endif %}

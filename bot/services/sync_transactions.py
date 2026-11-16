@@ -214,8 +214,9 @@ class TransactionSyncService:
             )
             return
 
-        to_time = int(time.time())
-        from_time = to_time - (days * 24 * 60 * 60)
+        from bot.services.period_range import mono_epoch_range
+
+        from_time, to_time = mono_epoch_range(days=days)
 
         client_info, error_reason, http_status = await asyncio.to_thread(
             get_client_info_retried, token

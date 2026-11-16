@@ -21,10 +21,10 @@ from bot.database.models import (
     TransactionType,
 )
 from bot.services.fop_filter import fop_surname
-from bot.services.period_range import calendar_year_to_date, day_start
+from bot.services.period_range import calendar_year_to_date, mono_epoch_range
 from bot.services.reports import CASH_MOVEMENT_CATEGORY_NAMES
 from config import FOP_ANNUAL_INCOME_LIMIT_UAH, INACTIVE_FOP_NAMES, ROOT_DIR
-from mono.api import KYIV_TZ, format_amount, now_kyiv
+from mono.api import format_amount, now_kyiv
 
 logger = logging.getLogger(__name__)
 
@@ -120,12 +120,23 @@ async def load_ytd_income_by_fop(session: AsyncSession) -> list[dict[str, Any]]:
         item["mono_db"] = recon.get("mono_db")
         item["reconcile_at"] = recon.get("checked_at")
         item["reconcile_error"] = recon.get("error")
-        # Розрив лише vs те, що на дашборді в «Моно (БД)» — item["monobank"].
-        if item["mono_live"] is not None:
+        item["mono_db_matched"] = recon.get("mono_db_matched")
+        item["mono_db_orphan"] = recon.get("mono_db_orphan")
+        # Розрив: виписка vs сума БД лише по id з цієї виписки (не весь стовпець «Моно»).
+        if item["mono_live"] is not None and recon.get("mono_db_matched") is not None:
+            item["mono_gap"] = round(
+                float(item["mono_live"]) - float(recon["mono_db_matched"]),
+                2,
+            )
+        elif item["mono_live"] is not None:
             item["mono_gap"] = round(float(item["mono_live"]) - float(item["monobank"]), 2)
         else:
             item["mono_gap"] = recon.get("mono_gap")
-        item["sync_gap"] = abs(float(item["mono_gap"] or 0)) >= WARN_DELTA_UAH
+        orphan = float(item.get("mono_db_orphan") or 0)
+        item["sync_gap"] = (
+            abs(float(item["mono_gap"] or 0)) >= WARN_DELTA_UAH
+            or orphan >= WARN_DELTA_UAH
+        )
         out.append(item)
     out.sort(key=lambda x: (-x["over_limit"], -x["used_pct"], x["name"]))
     return out
@@ -221,6 +232,7 @@ async def _db_mono_income(
     date_to: datetime,
     *,
     skip_ids: set[int] | None = None,
+    external_ids: set[str] | None = None,
 ) -> float:
     if skip_ids is None:
         skip_ids = await _excluded_category_ids(session)
@@ -232,6 +244,10 @@ async def _db_mono_income(
         Transaction.date >= date_from,
         Transaction.date <= date_to,
     ]
+    if external_ids is not None:
+        if not external_ids:
+            return 0.0
+        conditions.append(Transaction.external_id.in_(external_ids))
     if skip_ids:
         conditions.append(
             (Transaction.category_id.is_(None)) | (Transaction.category_id.notin_(skip_ids))
@@ -251,10 +267,7 @@ async def reconcile_mono_ytd(session: AsyncSession) -> dict[str, Any]:
     from mono.api import MonoStatementError, get_all_statements, get_client_info_retried
 
     date_from, date_to = calendar_year_to_date()
-    from_dt = day_start(date_from).replace(tzinfo=KYIV_TZ)
-    to_dt = date_to.replace(tzinfo=KYIV_TZ)
-    from_time = int(from_dt.timestamp())
-    to_time = int(to_dt.timestamp())
+    from_time, to_time = mono_epoch_range(ytd=True)
     skip_ids = await _excluded_category_ids(session)
 
     fops_out: dict[str, Any] = {}
@@ -293,19 +306,33 @@ async def reconcile_mono_ytd(session: AsyncSession) -> dict[str, Any]:
             live_txs = await asyncio.to_thread(
                 get_all_statements, token, account["id"], from_time, to_time
             )
+            statement_ext_ids = {
+                f"mono_{tx.get('id')}"
+                for tx in live_txs
+                if _mono_credit_amount(tx) is not None and tx.get("id") is not None
+            }
+            db_matched = await _db_mono_income(
+                session,
+                row.id,
+                date_from,
+                date_to,
+                skip_ids=skip_ids,
+                external_ids=statement_ext_ids,
+            )
             live_sum = sum_mono_credits_aligned(live_txs, mono_map, skip_ids)
             entry["mono_live"] = live_sum
-            entry["mono_live_raw"] = round(
-                sum(_mono_credit_amount(tx) or 0 for tx in live_txs),
-                2,
-            )
-            entry["mono_gap"] = round(live_sum - db_sum, 2)
+            entry["mono_db_matched"] = db_matched
+            entry["mono_db_orphan"] = round(max(0.0, db_sum - db_matched), 2)
+            entry["statement_ops"] = len(statement_ext_ids)
+            entry["mono_gap"] = round(live_sum - db_matched, 2)
         except Exception as exc:
             logger.warning("Mono YTD reconcile %s: %s", fop_name, exc)
             entry["error"] = str(exc)
 
         prev = fops_out.get(surname) or {
             "mono_db": 0.0,
+            "mono_db_matched": 0.0,
+            "mono_db_orphan": 0.0,
             "mono_live": 0.0,
             "mono_gap": 0.0,
             "checked_at": entry["checked_at"],
@@ -313,9 +340,17 @@ async def reconcile_mono_ytd(session: AsyncSession) -> dict[str, Any]:
             "accounts": [],
         }
         prev["mono_db"] = round(float(prev["mono_db"] or 0) + db_sum, 2)
+        prev["mono_db_matched"] = round(
+            float(prev.get("mono_db_matched") or 0) + float(entry.get("mono_db_matched") or 0),
+            2,
+        )
+        prev["mono_db_orphan"] = round(
+            float(prev.get("mono_db_orphan") or 0) + float(entry.get("mono_db_orphan") or 0),
+            2,
+        )
         if entry["mono_live"] is not None:
             prev["mono_live"] = round(float(prev.get("mono_live") or 0) + float(entry["mono_live"]), 2)
-            prev["mono_gap"] = round(float(prev["mono_live"]) - float(prev["mono_db"]), 2)
+            prev["mono_gap"] = round(float(prev["mono_live"]) - float(prev["mono_db_matched"]), 2)
         if entry["error"]:
             prev["error"] = entry["error"]
         prev["checked_at"] = entry["checked_at"]
