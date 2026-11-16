@@ -98,12 +98,216 @@
   margin-bottom: 1rem;
 }
 
-.parser-brands-filters {
+/* ——— список брендів: фільтри ——— */
+.parser-brands-head {
+  padding: 1rem 1.1rem 0.85rem;
+  border-bottom: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+  border-radius: 14px 14px 0 0;
+}
+
+.parser-brands-head__title h2 {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.parser-brands-head__lead {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-soft, #3f3f46);
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.35rem;
+  line-height: 1.45;
+}
+
+.parser-brands-kpi strong {
+  color: var(--text, #18181b);
+  font-weight: 650;
+}
+
+.parser-brands-kpi-sep {
+  color: #cbd5e1;
+  user-select: none;
+}
+
+.parser-brands-hint {
+  font-size: 0.78rem;
+}
+
+.parser-brands-bar {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1.35fr) minmax(16rem, 2fr);
   gap: 0.65rem 1rem;
-  align-items: flex-end;
-  justify-content: flex-end;
+  margin-top: 0.95rem;
+  padding: 0.75rem 0.85rem;
+  background: #fff;
+  border: 1px solid #e8edf2;
+  border-radius: 12px;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.parser-brands-bar__filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.parser-brands-ctl {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.parser-brands-ctl__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.parser-brands-ctl__field {
+  display: block;
+}
+
+.parser-brands-ctl__field--search {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.65rem 0 0.55rem;
+  min-height: 2.35rem;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  background: #f8fafc;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.parser-brands-ctl__field--search:focus-within {
+  background: #fff;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.parser-brands-ctl__icon {
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.parser-brands-input,
+.parser-brands-select {
+  width: 100%;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.84rem;
+  color: #0f172a;
+  background: #f8fafc;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.parser-brands-ctl__field--search .parser-brands-input {
+  border: none;
+  background: transparent;
+  padding: 0.45rem 0.25rem 0.45rem 0;
+  min-height: 0;
+  box-shadow: none;
+}
+
+.parser-brands-ctl__field--search .parser-brands-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.parser-brands-select:hover {
+  border-color: #cbd5e1;
+  background: #fff;
+}
+
+.parser-brands-select:focus {
+  outline: none;
+  border-color: #93c5fd;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.parser-brands-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.parser-brands-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  line-height: 1.3;
+}
+
+.parser-brands-stat strong {
+  color: #0f172a;
+  font-weight: 650;
+}
+
+.parser-brands-stat-muted {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.parser-brands-stat--view {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.parser-brands-stat--recent {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+  color: #166534;
+}
+
+.parser-brands-stat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+}
+
+.parser-panel.parser-panel--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.parser-panel--flush .table-wrapper {
+  border-radius: 0 0 14px 14px;
+  border-top: none;
+}
+
+.parser-panel--flush .parser-brands-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 900px) {
+  .parser-brands-bar {
+    grid-template-columns: 1fr;
+  }
+  .parser-brands-bar__filters {
+    grid-template-columns: 1fr;
+  }
 }
 
 .parser-brands-table tr.is-recent-parse td {

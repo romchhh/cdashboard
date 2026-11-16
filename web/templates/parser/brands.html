@@ -3,7 +3,7 @@
 {% block title %}Парсер — бренди — Cosmy Agent{% endblock %}
 {% block mobile_title %}Парсер{% endblock %}
 {% block head %}
-<link rel="stylesheet" href="/static/css/parser.css?v=20261116a">
+<link rel="stylesheet" href="/static/css/parser.css?v=20261116b">
 {% endblock %}
 {% block content %}
 {% set brand_sort = brand_sort|default('name') %}
@@ -42,48 +42,68 @@
     <div class="parser-alert parser-alert--err">{{ ui_icon('warning') }} {{ error }}</div>
     {% endif %}
 
-    <div class="parser-panel">
-        <div class="parser-toolbar" style="justify-content:space-between;align-items:flex-end">
-            <div>
-                <h2 style="margin:0">Бренди для моніторингу</h2>
-                <p class="panel-lead" style="margin:0.25rem 0 0">
-                    <strong id="enabledBrandsCount">{{ enabled_n }}</strong> увімкнено з <strong>{{ brands|length }}</strong> ·
-                    пропаршено <strong>{{ parsed_sum }}</strong> з <strong>{{ catalog_count }}</strong> товарів.
-                    <span class="parser-muted" id="parserReportHint">
-                        {% if report_status.generated_at %}· Останній повний звіт: {{ format_parsed_at(report_status.generated_at) }}{% endif %}
+    <div class="parser-panel parser-panel--flush">
+        <div class="parser-brands-head">
+            <div class="parser-brands-head__title">
+                <h2>Бренди для моніторингу</h2>
+                <p class="parser-brands-head__lead">
+                    <span class="parser-brands-kpi"><strong id="enabledBrandsCount">{{ enabled_n }}</strong> увімкнено</span>
+                    <span class="parser-brands-kpi-sep">·</span>
+                    <span class="parser-brands-kpi"><strong>{{ brands|length }}</strong> брендів</span>
+                    <span class="parser-brands-kpi-sep">·</span>
+                    <span class="parser-brands-kpi"><strong>{{ parsed_sum }}</strong> / {{ catalog_count }} SKU</span>
+                    <span class="parser-muted parser-brands-hint" id="parserReportHint">
+                        {% if report_status.generated_at %}· {{ format_parsed_at(report_status.generated_at) }}{% endif %}
                     </span>
                 </p>
             </div>
-            <div class="parser-brands-filters">
-                <label class="parser-field" style="min-width:200px;margin:0">
-                    <span class="label">Пошук бренду</span>
-                    <input type="search" id="brandFilter" placeholder="Назва бренду…" autocomplete="off">
-                </label>
-                <label class="parser-field" style="min-width:200px;margin:0">
-                    <span class="label">Коли парсили</span>
-                    <select id="brandParsedFilter" aria-label="Фільтр за датою парсингу">
-                        <option value="all" {% if brand_parsed_filter == 'all' %}selected{% endif %}>Усі</option>
-                        <option value="today" {% if brand_parsed_filter == 'today' %}selected{% endif %}>Сьогодні</option>
-                        <option value="7d" {% if brand_parsed_filter == '7d' %}selected{% endif %}>Останні 7 днів</option>
-                        <option value="30d" {% if brand_parsed_filter == '30d' %}selected{% endif %}>Останні 30 днів</option>
-                        <option value="stale" {% if brand_parsed_filter == 'stale' %}selected{% endif %}>Давно / не оновлювали</option>
-                        <option value="never" {% if brand_parsed_filter == 'never' %}selected{% endif %}>Ще не парсились</option>
-                    </select>
-                </label>
-                <label class="parser-field" style="min-width:200px;margin:0">
-                    <span class="label">Сортування</span>
-                    <select id="brandSort" aria-label="Сортування брендів">
-                        <option value="name" {% if brand_sort == 'name' %}selected{% endif %}>За назвою</option>
-                        <option value="recent" {% if brand_sort == 'recent' %}selected{% endif %}>Нещодавно парсені зверху</option>
-                        <option value="stale" {% if brand_sort == 'stale' %}selected{% endif %}>Найдавніші зверху</option>
-                    </select>
-                </label>
+            <form class="parser-brands-bar" id="brandFiltersForm" onsubmit="return false" aria-label="Фільтри списку брендів">
+                <div class="parser-brands-bar__search">
+                    <label class="parser-brands-ctl" for="brandFilter">
+                        <span class="parser-brands-ctl__label">Пошук</span>
+                        <span class="parser-brands-ctl__field parser-brands-ctl__field--search">
+                            <svg class="parser-brands-ctl__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></svg>
+                            <input type="search" id="brandFilter" class="parser-brands-input" placeholder="Назва бренду…" autocomplete="off">
+                        </span>
+                    </label>
+                </div>
+                <div class="parser-brands-bar__filters">
+                    <label class="parser-brands-ctl" for="brandParsedFilter">
+                        <span class="parser-brands-ctl__label">Коли парсили</span>
+                        <span class="parser-brands-ctl__field">
+                            <select id="brandParsedFilter" class="parser-brands-select" aria-label="Фільтр за датою парсингу">
+                                <option value="all" {% if brand_parsed_filter == 'all' %}selected{% endif %}>Усі</option>
+                                <option value="today" {% if brand_parsed_filter == 'today' %}selected{% endif %}>Сьогодні</option>
+                                <option value="7d" {% if brand_parsed_filter == '7d' %}selected{% endif %}>Останні 7 днів</option>
+                                <option value="30d" {% if brand_parsed_filter == '30d' %}selected{% endif %}>Останні 30 днів</option>
+                                <option value="stale" {% if brand_parsed_filter == 'stale' %}selected{% endif %}>Давно / не оновлювали</option>
+                                <option value="never" {% if brand_parsed_filter == 'never' %}selected{% endif %}>Ще не парсились</option>
+                            </select>
+                        </span>
+                    </label>
+                    <label class="parser-brands-ctl" for="brandSort">
+                        <span class="parser-brands-ctl__label">Сортування</span>
+                        <span class="parser-brands-ctl__field">
+                            <select id="brandSort" class="parser-brands-select" aria-label="Сортування брендів">
+                                <option value="name" {% if brand_sort == 'name' %}selected{% endif %}>За назвою</option>
+                                <option value="recent" {% if brand_sort == 'recent' %}selected{% endif %}>Нещодавні зверху</option>
+                                <option value="stale" {% if brand_sort == 'stale' %}selected{% endif %}>Найдавніші зверху</option>
+                            </select>
+                        </span>
+                    </label>
+                </div>
+            </form>
+            <div class="parser-brands-stats" id="brandListMeta">
+                <span class="parser-brands-stat parser-brands-stat--view">
+                    Показано <strong id="brandVisibleCount">{{ brands|length }}</strong>
+                    <span class="parser-brands-stat-muted">з {{ brands|length }}</span>
+                </span>
+                <span class="parser-brands-stat parser-brands-stat--recent">
+                    <span class="parser-brands-stat-dot" aria-hidden="true"></span>
+                    7 днів: <strong id="brandRecent7Count">—</strong>
+                </span>
             </div>
         </div>
-        <p class="parser-muted parser-brands-meta" id="brandListMeta" style="margin:0.35rem 0 0.75rem">
-            Показано <strong id="brandVisibleCount">{{ brands|length }}</strong> з {{ brands|length }} ·
-            нещодавно (7 днів): <strong id="brandRecent7Count">—</strong>
-        </p>
 
         <div class="table-wrapper">
             <table class="data-table parser-brands-table" id="brandsTable">
