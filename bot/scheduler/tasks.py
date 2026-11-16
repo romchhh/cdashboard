@@ -379,9 +379,11 @@ async def sync_fop_ytd_and_reconcile():
         async with AsyncSessionLocal() as session:
             payload = await reconcile_mono_ytd(session)
         gaps = [
-            f"{name}: виписка−БД={row.get('mono_gap')}"
+            f"{name}: не в БД={row.get('mono_gap')} ₴, сироти={row.get('mono_db_orphan')} ₴"
             for name, row in (payload.get("fops") or {}).items()
-            if abs(float(row.get("mono_gap") or 0)) >= 5
+            if float(row.get("mono_gap") or 0) >= 5
+            or float(row.get("mono_db_orphan") or 0) >= 5
+            or abs(float(row.get("mono_amount_drift") or 0)) >= 5
         ]
         if gaps:
             logger.warning("⚠️ Розрив Моно YTD: %s", "; ".join(gaps))

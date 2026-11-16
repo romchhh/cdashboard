@@ -10,7 +10,7 @@
             <h1 class="dashboard-title">Financial Dashboard</h1>
             <p class="dashboard-subtitle">Реальний час · Оновлено {{ latest.strftime("%d.%m.%Y %H:%M") if latest else "—" }}</p>
             {% if request.query_params.get('synced') == '1' %}
-            <p class="fop-limit-note" style="margin-top: 0.5rem;">Синхронізація запущена у фоні. Сайт можна користувати як завжди — Моно підтягне виписку протягом кількох хвилин (ліміт API 1 запит / 60 сек).</p>
+            <p class="fop-limit-note" style="margin-top: 0.5rem;">Синхронізація і <strong>звірка ФОП</strong> йдуть у фоні (Monobank ~1 хв на ФОП). Оновіть сторінку через 5–10 хв — інакше ліміт покаже старий кеш звірки.</p>
             {% endif %}
         </div>
         <div class="dashboard-actions">
@@ -230,11 +230,11 @@
                                     {% if row.sync_gap %}
                                     <div class="fop-limit-gap">
                                         {% if row.mono_db_orphan and row.mono_db_orphan >= 5 %}
-                                        У «Моно (БД)» {{ row.mono_db_orphan|fmt_ua }} ₴ немає в поточній виписці рахунку (інший IBAN, дата або дубль)
-                                        {% elif row.mono_gap > 0.01 %}
-                                        Виписка на {{ row.mono_gap|fmt_ua }} ₴ більша за збіги в БД — зробіть синх <strong>за рік</strong>
-                                        {% elif row.mono_gap < -0.01 %}
-                                        Збіги в БД на {{ (row.mono_gap * -1)|fmt_ua }} ₴ більші за виписку — перевірте дублікати
+                                        У «Моно (БД)» {{ row.mono_db_orphan|fmt_ua }} ₴ немає в поточній виписці (інший рахунок, рік або зайві записи)
+                                        {% elif row.mono_gap and row.mono_gap >= 5 %}
+                                        У виписці ще {{ row.mono_gap|fmt_ua }} ₴ без рядка в БД — дочекайтесь фонового синку або повторіть «З початку року»
+                                        {% elif row.mono_amount_drift and (row.mono_amount_drift >= 5 or row.mono_amount_drift <= -5) %}
+                                        Сума в БД ≠ виписці на {{ row.mono_amount_drift|fmt_ua }} ₴ — повторний синх підтягне суми
                                         {% endif %}
                                     </div>
                                     {% endif %}

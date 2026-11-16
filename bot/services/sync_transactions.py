@@ -287,6 +287,7 @@ class TransactionSyncService:
 
         # Зберегти транзакції в БД
         new_count = 0
+        updated_count = 0
         for tx in transactions:
             external_id = f"mono_{tx['id']}"
 
@@ -294,7 +295,19 @@ class TransactionSyncService:
             existing = await self.session.execute(
                 select(Transaction).where(Transaction.external_id == external_id)
             )
-            if existing.scalar_one_or_none():
+            ex = existing.scalar_one_or_none()
+            if ex:
+                new_amount = abs(format_amount(tx["amount"]))
+                kyiv_dt = utc_timestamp_to_kyiv(tx["time"])
+                patched = False
+                if abs(float(ex.amount or 0) - new_amount) > 0.009:
+                    ex.amount = new_amount
+                    patched = True
+                if ex.date != kyiv_dt:
+                    ex.date = kyiv_dt
+                    patched = True
+                if patched:
+                    updated_count += 1
                 continue
 
             new_count += 1
@@ -330,7 +343,13 @@ class TransactionSyncService:
             self.session.add(new_tx)
 
         await self.session.commit()
-        logger.info("Monobank %s: додано нових транзакцій %s (всього отримано %s)", fop_name, new_count, len(transactions))
+        logger.info(
+            "Monobank %s: додано %s, оновлено сум/дат %s (отримано %s)",
+            fop_name,
+            new_count,
+            updated_count,
+            len(transactions),
+        )
 
     async def sync_novapay(self, user_key: str, days: int = 30):
         """Синхронізація транзакцій з NovaPay"""

@@ -104,10 +104,17 @@ def test_overlimit_math():
 
 def test_sum_mono_credits_aligned_skips_cash_in_db():
     from bot.database.models import Transaction, TransactionStatus, TransactionType
-    from bot.services.fop_income_limit import sum_mono_credits_aligned
+    from bot.services.fop_income_limit import mono_sync_missing_and_drift, sum_mono_credits_aligned
 
     skip = {99}
     tx_live = [{"id": "a", "amount": 20040}, {"id": "b", "amount": 10000}]
+    income = Transaction(
+        external_id="mono_a",
+        amount=200.40,
+        transaction_type=TransactionType.INCOME,
+        status=TransactionStatus.CONFIRMED,
+        category_id=1,
+    )
     cash = Transaction(
         external_id="mono_b",
         amount=100.0,
@@ -115,8 +122,34 @@ def test_sum_mono_credits_aligned_skips_cash_in_db():
         status=TransactionStatus.CONFIRMED,
         category_id=99,
     )
-    aligned = sum_mono_credits_aligned(tx_live, {"mono_b": cash}, skip)
+    by_ext = {"mono_a": income, "mono_b": cash}
+    aligned = sum_mono_credits_aligned(tx_live, by_ext, skip)
     assert aligned == 200.40
+    missing, drift = mono_sync_missing_and_drift(tx_live, by_ext, skip)
+    assert missing == 0.0
+    assert drift == 0.0
+
+
+def test_mono_sync_missing_counts_only_absent_rows():
+    from bot.database.models import Transaction, TransactionStatus, TransactionType
+    from bot.services.fop_income_limit import mono_sync_missing_and_drift
+
+    skip: set[int] = set()
+    tx_live = [{"id": "x", "amount": 50000}]
+    missing, drift = mono_sync_missing_and_drift(tx_live, {}, skip)
+    assert missing == 500.0
+    assert drift == 0.0
+
+    ok = Transaction(
+        external_id="mono_x",
+        amount=500.0,
+        transaction_type=TransactionType.INCOME,
+        status=TransactionStatus.CONFIRMED,
+        category_id=None,
+    )
+    missing2, drift2 = mono_sync_missing_and_drift(tx_live, {"mono_x": ok}, skip)
+    assert missing2 == 0.0
+    assert drift2 == 0.0
 
 
 def test_summarize_fop_limits_total_remaining():
