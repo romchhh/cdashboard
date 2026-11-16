@@ -381,7 +381,7 @@ async def sync_fop_ytd_and_reconcile():
         gaps = [
             f"{name}: виписка−БД={row.get('mono_gap')}"
             for name, row in (payload.get("fops") or {}).items()
-            if abs(float(row.get("mono_gap") or 0)) >= 1
+            if abs(float(row.get("mono_gap") or 0)) >= 5
         ]
         if gaps:
             logger.warning("⚠️ Розрив Моно YTD: %s", "; ".join(gaps))

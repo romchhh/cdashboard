@@ -228,7 +228,13 @@
                                 {% elif row.mono_live is not none %}
                                     {{ row.mono_live|fmt_ua }} ₴
                                     {% if row.sync_gap %}
-                                    <div class="fop-limit-gap">БД відстає на {{ row.mono_gap|fmt_ua }} ₴ — не орієнтуйтесь на Фінадмін</div>
+                                    <div class="fop-limit-gap">
+                                        {% if row.mono_gap > 0 %}
+                                        Виписка на {{ row.mono_gap|fmt_ua }} ₴ більша за «Моно (БД)» — є незавантажені або відфільтровані операції
+                                        {% else %}
+                                        У БД на {{ (row.mono_gap * -1)|fmt_ua }} ₴ більше, ніж у виписці — перевірте дублікати/категорії
+                                        {% endif %}
+                                    </div>
                                     {% endif %}
                                     {% if row.reconcile_at %}
                                     <div class="fop-limit-sub">звірка {{ row.reconcile_at }}</div>

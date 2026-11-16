@@ -88,6 +88,23 @@ def test_overlimit_math():
     assert np_sum + mono_stmt - limit == 26_824
 
 
+def test_sum_mono_credits_aligned_skips_cash_in_db():
+    from bot.database.models import Transaction, TransactionStatus, TransactionType
+    from bot.services.fop_income_limit import sum_mono_credits_aligned
+
+    skip = {99}
+    tx_live = [{"id": "a", "amount": 20040}, {"id": "b", "amount": 10000}]
+    cash = Transaction(
+        external_id="mono_b",
+        amount=100.0,
+        transaction_type=TransactionType.INCOME,
+        status=TransactionStatus.CONFIRMED,
+        category_id=99,
+    )
+    aligned = sum_mono_credits_aligned(tx_live, {"mono_b": cash}, skip)
+    assert aligned == 200.40
+
+
 def test_summarize_fop_limits_total_remaining():
     from bot.services.fop_income_limit import summarize_fop_limits
 

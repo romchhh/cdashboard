@@ -9,8 +9,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import asyncio
-
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,7 +29,7 @@ from mono.api import KYIV_TZ, format_amount, now_kyiv
 logger = logging.getLogger(__name__)
 
 RECONCILE_PATH = Path(ROOT_DIR) / "databases" / "fop_income_reconcile.json"
-WARN_DELTA_UAH = 1.0
+WARN_DELTA_UAH = 5.0
 
 
 def load_reconcile_cache() -> dict[str, Any]:
@@ -120,9 +118,13 @@ async def load_ytd_income_by_fop(session: AsyncSession) -> list[dict[str, Any]]:
         recon = (load_reconcile_cache().get("fops") or {}).get(item["name"]) or {}
         item["mono_live"] = recon.get("mono_live")
         item["mono_db"] = recon.get("mono_db")
-        item["mono_gap"] = recon.get("mono_gap")
         item["reconcile_at"] = recon.get("checked_at")
         item["reconcile_error"] = recon.get("error")
+        # Розрив лише vs те, що на дашборді в «Моно (БД)» — item["monobank"].
+        if item["mono_live"] is not None:
+            item["mono_gap"] = round(float(item["mono_live"]) - float(item["monobank"]), 2)
+        else:
+            item["mono_gap"] = recon.get("mono_gap")
         item["sync_gap"] = abs(float(item["mono_gap"] or 0)) >= WARN_DELTA_UAH
         out.append(item)
     out.sort(key=lambda x: (-x["over_limit"], -x["used_pct"], x["name"]))
@@ -138,13 +140,78 @@ def summarize_fop_limits(rows: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
-def _sum_mono_credits(transactions: list[dict]) -> float:
+def _mono_credit_amount(tx: dict) -> float | None:
+    raw = float(tx.get("amount") or 0)
+    if raw <= 0:
+        return None
+    return round(abs(format_amount(raw)), 2)
+
+
+def _tx_counts_mono_ytd(tx: Transaction | None, skip_ids: set[int]) -> bool:
+    """Чи зараховуємо кредит у YTD надходжень ФОП (ті самі правила, що й у БД)."""
+    if tx is None:
+        # Ще немає в БД — реальний розрив синку.
+        return True
+    if tx.status != TransactionStatus.CONFIRMED:
+        return False
+    if tx.category_id is not None and tx.category_id in skip_ids:
+        return False
+    if tx.transaction_type != TransactionType.INCOME:
+        return False
+    return True
+
+
+def sum_mono_credits_aligned(
+    transactions: list[dict],
+    mono_by_ext: dict[str, Transaction],
+    skip_ids: set[int],
+) -> float:
+    """
+    Сума кредитів виписки з тими ж правилами, що й _db_mono_income.
+    Готівкові перекази в виписці є, у БД для ліміту їх немає — раніше давало хибний gap.
+    """
     total = 0.0
     for tx in transactions:
-        raw = float(tx.get("amount") or 0)
-        if raw > 0:
-            total += abs(format_amount(raw))
+        amt = _mono_credit_amount(tx)
+        if amt is None:
+            continue
+        ext = f"mono_{tx.get('id')}"
+        db_tx = mono_by_ext.get(ext)
+        if not _tx_counts_mono_ytd(db_tx, skip_ids):
+            continue
+        total += amt
     return round(total, 2)
+
+
+async def _excluded_category_ids(session: AsyncSession) -> set[int]:
+    rows = await session.execute(
+        select(Category.id).where(Category.name.in_([*CASH_MOVEMENT_CATEGORY_NAMES, "Богдан"]))
+    )
+    return {int(row[0]) for row in rows.all() if row[0] is not None}
+
+
+async def _mono_transactions_map(
+    session: AsyncSession,
+    fop_id: int,
+    date_from: datetime,
+    date_to: datetime,
+) -> dict[str, Transaction]:
+    rows = await session.execute(
+        select(Transaction).where(
+            and_(
+                Transaction.fop_id == fop_id,
+                Transaction.source == TransactionSource.MONOBANK,
+                Transaction.date >= date_from,
+                Transaction.date <= date_to,
+                Transaction.external_id.isnot(None),
+            )
+        )
+    )
+    out: dict[str, Transaction] = {}
+    for tx in rows.scalars().all():
+        if tx.external_id:
+            out[str(tx.external_id)] = tx
+    return out
 
 
 async def _db_mono_income(
@@ -152,16 +219,11 @@ async def _db_mono_income(
     fop_id: int,
     date_from: datetime,
     date_to: datetime,
+    *,
+    skip_ids: set[int] | None = None,
 ) -> float:
-    skip_ids = [
-        row[0]
-        for row in (
-            await session.execute(
-                select(Category.id).where(Category.name.in_([*CASH_MOVEMENT_CATEGORY_NAMES, "Богдан"]))
-            )
-        ).all()
-        if row[0] is not None
-    ]
+    if skip_ids is None:
+        skip_ids = await _excluded_category_ids(session)
     conditions = [
         Transaction.fop_id == fop_id,
         Transaction.source == TransactionSource.MONOBANK,
@@ -193,6 +255,7 @@ async def reconcile_mono_ytd(session: AsyncSession) -> dict[str, Any]:
     to_dt = date_to.replace(tzinfo=KYIV_TZ)
     from_time = int(from_dt.timestamp())
     to_time = int(to_dt.timestamp())
+    skip_ids = await _excluded_category_ids(session)
 
     fops_out: dict[str, Any] = {}
     for fop_name, token in MONO_TOKENS.items():
@@ -200,7 +263,10 @@ async def reconcile_mono_ytd(session: AsyncSession) -> dict[str, Any]:
             continue
         surname = fop_surname(fop_name)
         row = (await session.execute(select(FOP).where(FOP.name == fop_name))).scalar_one_or_none()
-        db_sum = await _db_mono_income(session, row.id, date_from, date_to) if row else 0.0
+        mono_map = (
+            await _mono_transactions_map(session, row.id, date_from, date_to) if row else {}
+        )
+        db_sum = await _db_mono_income(session, row.id, date_from, date_to, skip_ids=skip_ids) if row else 0.0
         entry: dict[str, Any] = {
             "fop_name": fop_name,
             "checked_at": now_kyiv().isoformat(timespec="minutes"),
@@ -227,8 +293,12 @@ async def reconcile_mono_ytd(session: AsyncSession) -> dict[str, Any]:
             live_txs = await asyncio.to_thread(
                 get_all_statements, token, account["id"], from_time, to_time
             )
-            live_sum = _sum_mono_credits(live_txs)
+            live_sum = sum_mono_credits_aligned(live_txs, mono_map, skip_ids)
             entry["mono_live"] = live_sum
+            entry["mono_live_raw"] = round(
+                sum(_mono_credit_amount(tx) or 0 for tx in live_txs),
+                2,
+            )
             entry["mono_gap"] = round(live_sum - db_sum, 2)
         except Exception as exc:
             logger.warning("Mono YTD reconcile %s: %s", fop_name, exc)
