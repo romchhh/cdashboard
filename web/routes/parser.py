@@ -50,6 +50,7 @@ def _ctx(request: Request, **extra):
         "report_status": report_status,
         "brands": brands,
         "format_parsed_at": ps.format_parsed_at,
+        "parsed_at_timestamp": ps.parsed_at_timestamp,
         "catalog_count": catalog_count,
         "parsed_sum": parsed_sum,
         "log_error_count": log_error_count,
@@ -70,11 +71,32 @@ async def parser_home(request: Request):
 
 @router.get("/brands", response_class=HTMLResponse)
 async def parser_brands(request: Request):
+    sort = (request.query_params.get("sort") or "name").strip()
+    if sort not in ("name", "recent", "stale"):
+        sort = "name"
+    brands = list(ps.list_brands())
+    if sort == "recent":
+        brands = sorted(
+            brands,
+            key=lambda b: ps.parsed_at_timestamp(b.get("last_parsed_at")) or 0,
+            reverse=True,
+        )
+    elif sort == "stale":
+        brands = sorted(
+            brands,
+            key=lambda b: ps.parsed_at_timestamp(b.get("last_parsed_at")) or 0,
+        )
+    parsed_since = (request.query_params.get("parsed") or "all").strip()
+    if parsed_since not in ("all", "today", "7d", "30d", "stale", "never"):
+        parsed_since = "all"
     return templates.TemplateResponse(
         "parser/brands.html",
         _ctx(
             request,
             page="brands",
+            brands=brands,
+            brand_sort=sort,
+            brand_parsed_filter=parsed_since,
             notice=request.query_params.get("notice"),
             error=request.query_params.get("error"),
         ),

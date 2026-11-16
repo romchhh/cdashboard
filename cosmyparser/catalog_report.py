@@ -83,6 +83,57 @@ def _save_report(scope: str, report: dict) -> None:
 def _load_saved_report(scope: str) -> dict | None:
     return _parser_store().load_report(scope)
 
+
+class CatalogRunCancelled(Exception):
+    """Зупинка прогону (кнопка «Зупинити» / ParserJobCancelled у progress)."""
+
+
+def _emit_progress(progress: Optional[Callable[[dict], None]], payload: dict) -> None:
+    if not progress:
+        return
+    try:
+        progress(payload)
+    except Exception as exc:
+        if type(exc).__name__ == "ParserJobCancelled":
+            raise CatalogRunCancelled() from exc
+        raise
+
+
+def _merge_partial_stored(
+    catalog: list,
+    ready_by_id: dict,
+    prev_rows: list[dict] | None,
+    *,
+    final: bool,
+) -> list[dict]:
+    """Не затирати вже збережені SKU: новий прогін + попередній звіт + черга каталогу."""
+    prev_by_id: dict = {}
+    for r in prev_rows or []:
+        if isinstance(r, dict) and r.get("id") is not None:
+            prev_by_id[r["id"]] = r
+    merged: list[dict] = []
+    seen: set = set()
+    for product in catalog:
+        pid = product.get("id")
+        if pid is None:
+            continue
+        if pid in ready_by_id:
+            row = dict(ready_by_id[pid])
+            if not final:
+                row["partial"] = False
+            merged.append(row)
+            seen.add(pid)
+        elif pid in prev_by_id:
+            old = dict(prev_by_id[pid])
+            if not final:
+                old["partial"] = True
+            merged.append(old)
+            seen.add(pid)
+    for pid, row in ready_by_id.items():
+        if pid not in seen:
+            merged.append(dict(row))
+    return merged
+
 SKU_WORKERS = 8
 # Ціна конкурента поза цим діапазоном відносно нашої — майже завжди інший товар/фасовка.
 # 2× (типовий промах Krasota/набори) має бути odd_price, не «збіг».
@@ -398,11 +449,18 @@ def run_catalog(
 
     def _write_partial(*, final: bool = False) -> dict:
         ready = [r for r in rows if r]
-        stored = ready if final else [{k: v for k, v in r.items() if k != "raw"} for r in ready]
+        slim_ready = [{k: v for k, v in r.items() if k != "raw"} for r in ready]
+        ready_by_id = {r.get("id"): r for r in slim_ready if r.get("id") is not None}
+        prev = _load_saved_report(scope) if not final else None
+        prev_rows = list((prev or {}).get("rows") or [])
+        if not final and ready_by_id and prev_rows:
+            stored = _merge_partial_stored(catalog, ready_by_id, prev_rows, final=final)
+        else:
+            stored = slim_ready
         report = {
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "started_at": started,
-            "total": total if final else len(ready),
+            "total": total,
             "catalog_total": total,
             "sites": SITE_NAMES,
             "rows": stored,
@@ -472,29 +530,61 @@ def run_catalog(
         finally:
             set_search_feed_model(None)
 
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futs = [pool.submit(work, idx, product) for idx, product in enumerate(catalog)]
-        for fut in as_completed(futs):
-            try:
-                idx, row = fut.result()
-            except Exception:
-                continue
-            rows[idx] = row
-            done += 1
-            # частковий JSON рідше і без сирих карток — жива таблиця йде через live.json
-            if done == 1 or done % 10 == 0 or done == total:
-                _write_partial(final=False)
-            if progress:
-                progress({
-                    "state": "running",
-                    "phase": "products",
+    run_cancelled = False
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = [pool.submit(work, idx, product) for idx, product in enumerate(catalog)]
+            for fut in as_completed(futs):
+                try:
+                    idx, row = fut.result()
+                except Exception:
+                    continue
+                rows[idx] = row
+                done += 1
+                if done == 1 or done % 5 == 0 or done == total:
+                    _write_partial(final=False)
+                try:
+                    _emit_progress(
+                        progress,
+                        {
+                            "state": "running",
+                            "phase": "products",
+                            "current": done,
+                            "total": total,
+                            "product": row.get("name"),
+                            "started_at": started,
+                            "started_epoch": started_epoch,
+                            "row": row,
+                        },
+                    )
+                except CatalogRunCancelled:
+                    run_cancelled = True
+                    for pending in futs:
+                        pending.cancel()
+                    _write_partial(final=False)
+                    break
+    except CatalogRunCancelled:
+        run_cancelled = True
+
+    if run_cancelled:
+        report = _write_partial(final=False)
+        report["total"] = total
+        report["catalog_total"] = total
+        report["partial"] = True
+        if progress:
+            _emit_progress(
+                progress,
+                {
+                    "state": "error",
+                    "phase": "cancelled",
                     "current": done,
                     "total": total,
-                    "product": row.get("name"),
-                    "started_at": started,
+                    "product": "зупинено",
+                    "generated_at": report.get("generated_at"),
                     "started_epoch": started_epoch,
-                    "row": row,
-                })
+                },
+            )
+        return report
 
     # ENABLE_SHOP_RETRY=False: магазин «н/д» лишається як є, без другого кола.
     report = _write_partial(final=True)

@@ -485,6 +485,13 @@ def poll_catalog_job(
                 raise RuntimeError("Worker завершився без report")
             return report
         if state == "error":
+            report = data.get("report")
+            phase = (data.get("phase") or "").lower()
+            err = str(data.get("error") or "")
+            if isinstance(report, dict) and report.get("rows") and (
+                phase == "cancelled" or "зупин" in err.lower()
+            ):
+                return report
             raise RuntimeError(data.get("error") or "Помилка worker-а")
 
         sleep_for = poll_interval if idle_polls < 3 else min(3.0, poll_interval * 2)

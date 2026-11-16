@@ -1992,10 +1992,91 @@ def start_search(query: str, our_price: Any = None) -> tuple[dict, int]:
         return dict(status), 200
 
 
+_CHECKPOINT_LAST: dict[str, float] = {}
+
+
+def build_merged_brand_report(
+    scope: str,
+    catalog: list[dict],
+    fresh_by_id: dict[Any, dict],
+    *,
+    partial: bool = True,
+    started_at: str | None = None,
+) -> dict:
+    """Злитий звіт бренду: нові рядки + попередній збережений (не губити при обриві)."""
+    prev = store.load_report(scope) or {}
+    prev_by_id: dict[Any, dict] = {}
+    for r in (prev.get("rows") or []):
+        if isinstance(r, dict) and r.get("id") is not None:
+            prev_by_id[r["id"]] = r
+    merged: list[dict] = []
+    seen: set[Any] = set()
+    for item in catalog:
+        pid = item.get("id")
+        if pid is None:
+            continue
+        if pid in fresh_by_id:
+            row = {k: v for k, v in fresh_by_id[pid].items() if k != "raw"}
+            merged.append(row)
+            seen.add(pid)
+        elif pid in prev_by_id:
+            old = dict(prev_by_id[pid])
+            if partial:
+                old["partial"] = True
+            merged.append(old)
+            seen.add(pid)
+    for pid, row in fresh_by_id.items():
+        if pid not in seen:
+            merged.append({k: v for k, v in row.items() if k != "raw"})
+    generated = datetime.now(KYIV_TZ).isoformat(timespec="seconds")
+    return {
+        "generated_at": generated,
+        "started_at": started_at or prev.get("started_at") or generated,
+        "total": len(catalog),
+        "catalog_total": len(catalog),
+        "sites": site_names(),
+        "rows": merged,
+        "partial": partial,
+    }
+
+
+def _flush_brand_checkpoint(
+    brand: str,
+    scope: str,
+    catalog: list[dict],
+    fresh_by_id: dict[Any, dict],
+    *,
+    started_at: str | None = None,
+    force: bool = False,
+) -> None:
+    if not brand or not fresh_by_id:
+        return
+    now = time.time()
+    key = scope
+    n = len(fresh_by_id)
+    if not force and n != 1 and n % 5 != 0 and (now - _CHECKPOINT_LAST.get(key, 0)) < 25:
+        return
+    _CHECKPOINT_LAST[key] = now
+    try:
+        report = build_merged_brand_report(
+            scope, catalog, fresh_by_id, partial=True, started_at=started_at
+        )
+        store.save_report(scope, report)
+        logger.info(
+            "Brand checkpoint %s: %d fresh, %d rows saved",
+            brand,
+            n,
+            len(report.get("rows") or []),
+        )
+    except Exception:
+        logger.exception("Brand checkpoint save failed for %s", brand)
+
+
 def _run_report_job(*, brand: str | None = None, lane: str = "remote") -> None:
     global _REPORT_STATUS, _LIVE_ROWS, _LIVE_BRAND, _ACTIVE_LANE
     _ACTIVE_LANE = lane if lane in ("remote", "local") else "remote"
     _LIVE_ROWS.clear()
+    _CHECKPOINT_LAST.clear()
     settings = load_settings()
     try:
         _apply_runtime_settings(settings)
@@ -2034,11 +2115,33 @@ def _run_report_job(*, brand: str | None = None, lane: str = "remote") -> None:
         )
         _LIVE_BRAND = None
 
+    checkpoint_rows: dict[Any, dict] = {}
+    parse_started_at: str | None = None
+
     def progress(status: dict) -> None:
+        nonlocal parse_started_at
         status = dict(status)
         row = status.pop("row", None)
         if brand:
             status["brand"] = brand
+        if status.get("started_at") and not parse_started_at:
+            parse_started_at = str(status["started_at"])
+        if (
+            brand
+            and isinstance(row, dict)
+            and row.get("id") is not None
+            and not row.get("partial")
+        ):
+            checkpoint_rows[row["id"]] = row
+            cur = int(status.get("current") or len(checkpoint_rows))
+            _flush_brand_checkpoint(
+                brand,
+                report_scope,
+                job_catalog,
+                checkpoint_rows,
+                started_at=parse_started_at,
+                force=cur == 1 or cur % 5 == 0,
+            )
         _publish_status(status, row=row if isinstance(row, dict) else None)
 
     def _persist_report(report: dict) -> None:
@@ -2091,8 +2194,77 @@ def _run_report_job(*, brand: str | None = None, lane: str = "remote") -> None:
             _rotation_mark_finished(brand, ok=True)
         _schedule_night_chain()
 
+    def _finalize_partial_saved(report: dict, *, cancelled: bool = False) -> None:
+        try:
+            _persist_report(report)
+        except Exception:
+            logger.exception("Failed to persist partial report")
+        generated = report.get("generated_at")
+        parsed_n = sum(
+            1
+            for r in (report.get("rows") or [])
+            if isinstance(r, dict) and r.get("shops") and not r.get("partial")
+        )
+        if brand:
+            _flush_brand_checkpoint(
+                brand,
+                report_scope,
+                job_catalog,
+                checkpoint_rows,
+                started_at=parse_started_at,
+                force=True,
+            )
+            _update_brand_status(
+                brand,
+                state="done",
+                last_parsed_at=generated,
+                total=report.get("catalog_total") or report.get("total"),
+                source="brand_report",
+                error=None,
+            )
+        append_parse_event(
+            level="warn",
+            kind="job",
+            brand=brand,
+            message=f"Збережено частковий звіт ({parsed_n or len(report.get('rows') or [])} рядків)"
+            + (" · зупинено" if cancelled else ""),
+        )
+        _publish_status(
+            {
+                "state": "cancelled" if cancelled else "done",
+                "phase": "cancelled" if cancelled else "partial",
+                "current": parsed_n or len(report.get("rows") or []),
+                "total": report.get("catalog_total") or report.get("total"),
+                "brand": brand,
+                "product": "збережено частково",
+                "generated_at": generated,
+            },
+            force=True,
+        )
+        if brand:
+            _rotation_mark_finished(brand, ok=True)
+        _schedule_night_chain()
+
     def _finalize_err(exc: Exception) -> None:
         logger.exception("Parser report failed")
+        if brand and (checkpoint_rows or _LIVE_ROWS):
+            try:
+                by_id = dict(checkpoint_rows)
+                for rid, slim in _LIVE_ROWS.items():
+                    if rid not in by_id and isinstance(slim, dict):
+                        by_id[rid] = slim
+                partial = build_merged_brand_report(
+                    report_scope,
+                    job_catalog,
+                    by_id,
+                    partial=True,
+                    started_at=parse_started_at,
+                )
+                _persist_report(partial)
+                _finalize_partial_saved(partial, cancelled="зупин" in str(exc).lower())
+                return
+            except Exception:
+                logger.exception("Failed to save partial report after error")
         append_parse_event(
             level="error",
             kind="job",
@@ -2204,8 +2376,24 @@ def _run_report_job(*, brand: str | None = None, lane: str = "remote") -> None:
                     )
                 else:
                     try:
+                        if report.get("partial") and brand:
+                            by_id: dict[Any, dict] = {}
+                            for r in report.get("rows") or []:
+                                if isinstance(r, dict) and r.get("id") is not None:
+                                    by_id[r["id"]] = r
+                            by_id.update(checkpoint_rows)
+                            report = build_merged_brand_report(
+                                report_scope,
+                                job_catalog,
+                                by_id,
+                                partial=True,
+                                started_at=parse_started_at,
+                            )
                         _persist_report(report)
-                        _finalize_ok(report)
+                        if report.get("partial"):
+                            _finalize_partial_saved(report, cancelled=True)
+                        else:
+                            _finalize_ok(report)
                     except Exception as exc:
                         _finalize_err(exc)
                     return
@@ -2247,6 +2435,13 @@ def _run_report_job(*, brand: str | None = None, lane: str = "remote") -> None:
             write_excel_file=True,
             catalog=job_catalog,
         )
+        if report.get("partial"):
+            try:
+                _persist_report(report)
+            except Exception:
+                logger.exception("Failed to persist partial report")
+            _finalize_partial_saved(report, cancelled=True)
+            return
         _finalize_ok(report)
     except Exception as exc:
         _finalize_err(exc)
@@ -2946,26 +3141,33 @@ def _save_stopped_brand_report(brand: str | None, lane: str | None = None) -> No
     """Зберегти вже зібрані ціни, щоб зупинка не стирала таблицю."""
     if not brand:
         return
-    rows = [r for r in store.load_live_rows(lane) if isinstance(r, dict) and not r.get("partial")]
-    if not rows:
-        rows = [r for r in store.load_live_rows(lane) if isinstance(r, dict)]
-    if not rows:
+    catalog = catalog_for_brand(brand)
+    scope = brand_slug(brand)
+    by_id: dict[Any, dict] = {}
+    for r in store.load_live_rows(lane):
+        if isinstance(r, dict) and r.get("id") is not None:
+            by_id[r["id"]] = r
+    for r in _LIVE_ROWS.values():
+        if isinstance(r, dict) and r.get("id") is not None:
+            by_id[r["id"]] = r
+    if not by_id:
+        prev = store.load_report(scope)
+        if prev and (prev.get("rows") or []):
+            return
         return
-    generated = datetime.now(KYIV_TZ).isoformat(timespec="seconds")
-    report = {
-        "generated_at": generated,
-        "total": len(rows),
-        "catalog_total": len(rows),
-        "rows": rows,
-        "partial": False,
-        "stopped": True,
-    }
-    store.save_report(brand_slug(brand), report)
+    report = build_merged_brand_report(
+        scope,
+        catalog,
+        by_id,
+        partial=True,
+    )
+    report["stopped"] = True
+    store.save_report(scope, report)
     _update_brand_status(
         brand,
         state="done",
-        last_parsed_at=generated,
-        total=len(rows),
+        last_parsed_at=report.get("generated_at"),
+        total=report.get("catalog_total") or len(catalog),
         source="brand_report",
         error=None,
     )
@@ -3257,15 +3459,29 @@ def _confirm_worker_started(proc: subprocess.Popen, status: dict, *, timeout: fl
     return message
 
 
-def format_parsed_at(value: str | None) -> str:
-    if not value:
-        return "Ще не парсився"
+def parsed_at_datetime(value: str | None) -> datetime | None:
+    """Останній парсинг бренду (Europe/Kyiv для наївних дат з БД)."""
+    if not value or not str(value).strip():
+        return None
     try:
-        # accept with/without timezone
-        raw = value.replace("Z", "+00:00")
+        raw = str(value).replace("Z", "+00:00")
         dt = datetime.fromisoformat(raw)
-        if dt.tzinfo is not None:
-            dt = dt.astimezone()
-        return dt.strftime("%d.%m.%Y %H:%M")
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=KYIV_TZ)
+        else:
+            dt = dt.astimezone(KYIV_TZ)
+        return dt
     except ValueError:
-        return value
+        return None
+
+
+def parsed_at_timestamp(value: str | None) -> int | None:
+    dt = parsed_at_datetime(value)
+    return int(dt.timestamp()) if dt else None
+
+
+def format_parsed_at(value: str | None) -> str:
+    dt = parsed_at_datetime(value)
+    if not dt:
+        return "Ще не парсився" if not value else str(value)
+    return dt.strftime("%d.%m.%Y %H:%M")

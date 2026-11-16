@@ -504,7 +504,33 @@ def _run_catalog(job_id: str, products: list[dict], settings: dict, brand: str |
         )
     except ParserJobCancelled:
         logger.info("Worker catalog job %s stopped", job_id)
-        _update(job_id, state="error", phase="cancelled", error="Зупинено вручну", product="зупинено")
+        with _LOCK:
+            job = _JOBS.get(job_id) or {}
+            rows = [_slim_row(r) for r in (job.get("rows") or []) if isinstance(r, dict)]
+        partial_report = None
+        try:
+            from catalog_report import _load_saved_report  # type: ignore
+
+            partial_report = _load_saved_report(f"worker_{job_id}")
+        except Exception:
+            partial_report = None
+        if not partial_report or not partial_report.get("rows"):
+            partial_report = {
+                "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "total": len(products),
+                "catalog_total": len(products),
+                "rows": rows,
+                "partial": True,
+            }
+        _update(
+            job_id,
+            state="error",
+            phase="cancelled",
+            error="Зупинено вручну",
+            product="зупинено",
+            rows=rows,
+            report=partial_report,
+        )
     except Exception as exc:
         logger.exception("Worker catalog job %s failed", job_id)
         _update(job_id, state="error", phase="error", error=str(exc))

@@ -3,9 +3,11 @@
 {% block title %}Парсер — бренди — Cosmy Agent{% endblock %}
 {% block mobile_title %}Парсер{% endblock %}
 {% block head %}
-<link rel="stylesheet" href="/static/css/parser.css?v=20261104b">
+<link rel="stylesheet" href="/static/css/parser.css?v=20261116a">
 {% endblock %}
 {% block content %}
+{% set brand_sort = brand_sort|default('name') %}
+{% set brand_parsed_filter = brand_parsed_filter|default('all') %}
 {% set enabled_n = brands|selectattr('enabled')|list|length %}
 <div class="parser-shell">
     <div class="page-header page-header-with-actions">
@@ -52,11 +54,36 @@
                     </span>
                 </p>
             </div>
-            <label class="parser-field" style="min-width:220px;margin:0">
-                <span class="label">Пошук бренду</span>
-                <input type="search" id="brandFilter" placeholder="Назва бренду…" autocomplete="off">
-            </label>
+            <div class="parser-brands-filters">
+                <label class="parser-field" style="min-width:200px;margin:0">
+                    <span class="label">Пошук бренду</span>
+                    <input type="search" id="brandFilter" placeholder="Назва бренду…" autocomplete="off">
+                </label>
+                <label class="parser-field" style="min-width:200px;margin:0">
+                    <span class="label">Коли парсили</span>
+                    <select id="brandParsedFilter" aria-label="Фільтр за датою парсингу">
+                        <option value="all" {% if brand_parsed_filter == 'all' %}selected{% endif %}>Усі</option>
+                        <option value="today" {% if brand_parsed_filter == 'today' %}selected{% endif %}>Сьогодні</option>
+                        <option value="7d" {% if brand_parsed_filter == '7d' %}selected{% endif %}>Останні 7 днів</option>
+                        <option value="30d" {% if brand_parsed_filter == '30d' %}selected{% endif %}>Останні 30 днів</option>
+                        <option value="stale" {% if brand_parsed_filter == 'stale' %}selected{% endif %}>Давно / не оновлювали</option>
+                        <option value="never" {% if brand_parsed_filter == 'never' %}selected{% endif %}>Ще не парсились</option>
+                    </select>
+                </label>
+                <label class="parser-field" style="min-width:200px;margin:0">
+                    <span class="label">Сортування</span>
+                    <select id="brandSort" aria-label="Сортування брендів">
+                        <option value="name" {% if brand_sort == 'name' %}selected{% endif %}>За назвою</option>
+                        <option value="recent" {% if brand_sort == 'recent' %}selected{% endif %}>Нещодавно парсені зверху</option>
+                        <option value="stale" {% if brand_sort == 'stale' %}selected{% endif %}>Найдавніші зверху</option>
+                    </select>
+                </label>
+            </div>
         </div>
+        <p class="parser-muted parser-brands-meta" id="brandListMeta" style="margin:0.35rem 0 0.75rem">
+            Показано <strong id="brandVisibleCount">{{ brands|length }}</strong> з {{ brands|length }} ·
+            нещодавно (7 днів): <strong id="brandRecent7Count">—</strong>
+        </p>
 
         <div class="table-wrapper">
             <table class="data-table parser-brands-table" id="brandsTable">
@@ -74,7 +101,12 @@
                 <tbody>
                     {% for b in brands %}
                     {% set st = b.stats or {} %}
-                    <tr data-href="{{ b.url }}" data-brand="{{ b.name|lower }}" class="{% if not b.enabled %}is-disabled{% endif %}">
+                    {% set pts = parsed_at_timestamp(b.last_parsed_at) %}
+                    <tr data-href="{{ b.url }}"
+                        data-brand="{{ b.name|lower }}"
+                        data-parsed-ts="{{ pts if pts is not none else '' }}"
+                        data-parsed-never="{{ '1' if not b.last_parsed_at else '0' }}"
+                        class="{% if not b.enabled %}is-disabled{% endif %}">
                         <td class="brand-idx">{{ loop.index }}</td>
                         <td onclick="event.stopPropagation()">
                             <label class="parser-switch" title="{% if b.enabled %}Вимкнути з парсингу{% else %}Увімкнути в парсинг{% endif %}">
@@ -152,23 +184,112 @@
     row.addEventListener('click', function () { window.location = row.getAttribute('data-href'); });
   });
   var filter = document.getElementById('brandFilter');
+  var parsedFilter = document.getElementById('brandParsedFilter');
+  var sortSel = document.getElementById('brandSort');
   var empty = document.getElementById('brandFilterEmpty');
-  if (filter) {
-    filter.addEventListener('input', function () {
-      var q = (filter.value || '').trim().toLowerCase();
-      var visible = 0;
-      document.querySelectorAll('#brandsTable tbody tr[data-brand]').forEach(function (row, i) {
-        var ok = !q || (row.getAttribute('data-brand') || '').indexOf(q) !== -1;
-        row.hidden = !ok;
-        if (ok) {
-          visible += 1;
-          var idx = row.querySelector('.brand-idx');
-          if (idx) idx.textContent = String(visible);
-        }
-      });
-      if (empty) empty.hidden = visible > 0 || !q;
-    });
+  var visibleEl = document.getElementById('brandVisibleCount');
+  var recent7El = document.getElementById('brandRecent7Count');
+  var tbody = document.querySelector('#brandsTable tbody');
+  var DAY = 86400;
+
+  function startOfTodaySec() {
+    var d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return Math.floor(d.getTime() / 1000);
   }
+
+  function passesDate(row, mode) {
+    if (!mode || mode === 'all') return true;
+    var never = row.getAttribute('data-parsed-never') === '1';
+    var ts = Number(row.getAttribute('data-parsed-ts') || 0);
+    var now = Math.floor(Date.now() / 1000);
+    if (mode === 'never') return never;
+    if (never) return mode === 'stale';
+    if (mode === 'today') return ts >= startOfTodaySec();
+    if (mode === '7d') return ts >= now - 7 * DAY;
+    if (mode === '30d') return ts >= now - 30 * DAY;
+    if (mode === 'stale') return ts < now - 30 * DAY;
+    return true;
+  }
+
+  function syncUrl() {
+    var params = new URLSearchParams(location.search);
+    var pf = parsedFilter ? parsedFilter.value : 'all';
+    var st = sortSel ? sortSel.value : 'name';
+    if (pf === 'all') params.delete('parsed'); else params.set('parsed', pf);
+    if (st === 'name') params.delete('sort'); else params.set('sort', st);
+    var qs = params.toString();
+    var url = location.pathname + (qs ? '?' + qs : '');
+    if (url !== location.pathname + location.search) {
+      history.replaceState({}, '', url);
+    }
+  }
+
+  function resortIfNeeded() {
+    if (!tbody || !sortSel || sortSel.value === 'name') return;
+    var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-brand]'));
+    var desc = sortSel.value === 'recent';
+    rows.sort(function (a, b) {
+      var ta = Number(a.getAttribute('data-parsed-ts') || 0);
+      var tb = Number(b.getAttribute('data-parsed-ts') || 0);
+      if (ta === tb) {
+        return (a.getAttribute('data-brand') || '').localeCompare(b.getAttribute('data-brand') || '', 'uk');
+      }
+      return desc ? tb - ta : ta - tb;
+    });
+    rows.forEach(function (r) { tbody.appendChild(r); });
+  }
+
+  function applyBrandFilters() {
+    var q = (filter && filter.value || '').trim().toLowerCase();
+    var mode = parsedFilter ? parsedFilter.value : 'all';
+    var visible = 0;
+    var recent7 = 0;
+    var now = Math.floor(Date.now() / 1000);
+    document.querySelectorAll('#brandsTable tbody tr[data-brand]').forEach(function (row) {
+      var nameOk = !q || (row.getAttribute('data-brand') || '').indexOf(q) !== -1;
+      var dateOk = passesDate(row, mode);
+      var ok = nameOk && dateOk;
+      row.hidden = !ok;
+      var ts = Number(row.getAttribute('data-parsed-ts') || 0);
+      if (ts >= now - 7 * DAY) {
+        recent7 += 1;
+        row.classList.add('is-recent-parse');
+      } else {
+        row.classList.remove('is-recent-parse');
+      }
+      if (ok) {
+        visible += 1;
+        var idx = row.querySelector('.brand-idx');
+        if (idx) idx.textContent = String(visible);
+      }
+    });
+    if (visibleEl) visibleEl.textContent = String(visible);
+    if (recent7El) recent7El.textContent = String(recent7);
+    if (empty) empty.hidden = visible > 0;
+    syncUrl();
+  }
+
+  function onSortChange() {
+    var st = sortSel ? sortSel.value : 'name';
+    if (st === 'name') {
+      var qs = new URLSearchParams(location.search);
+      if (qs.get('sort') && qs.get('sort') !== 'name') {
+        qs.delete('sort');
+        location.search = qs.toString() ? '?' + qs.toString() : '';
+        return;
+      }
+    }
+    resortIfNeeded();
+    applyBrandFilters();
+    syncUrl();
+  }
+
+  if (filter) filter.addEventListener('input', applyBrandFilters);
+  if (parsedFilter) parsedFilter.addEventListener('change', applyBrandFilters);
+  if (sortSel) sortSel.addEventListener('change', onSortChange);
+  resortIfNeeded();
+  applyBrandFilters();
   var csrf = document.getElementById('parserCsrf').value;
   var btn = document.getElementById('parserFullReportBtn');
   var hint = document.getElementById('parserReportHint');
