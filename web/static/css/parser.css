@@ -370,6 +370,19 @@
   margin: 0;
 }
 
+.parser-live-job__open {
+  display: block;
+  flex: 1 1 16rem;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.parser-live-job__open:hover {
+  color: var(--accent-ink, #1e40af);
+}
+
 .parser-status {
   display: inline-flex;
   align-items: center;

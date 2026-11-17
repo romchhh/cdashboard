@@ -59,9 +59,9 @@ def _clear_engine_caches(full: bool = False) -> None:
 
             clear_brand_presence_cache()
         else:
-            from cosmy_parse import clear_scrape_runtime_caches  # type: ignore
+            from cosmy_parse import clear_http_memory_cache  # type: ignore
 
-            clear_scrape_runtime_caches()
+            clear_http_memory_cache()
     except Exception:
         try:
             from cosmy_parse import clear_http_cache  # type: ignore

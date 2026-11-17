@@ -243,21 +243,22 @@
   /* ——— аналітика рядка ——— */
   function analyze(r) {
     if (r._an && r._an.src === r.shops) return r._an;
-    var matches = [], brandShops = 0, odd = 0, weak = 0;
+    var matches = [], brandShops = 0, odd = 0, weak = 0, dead = 0;
     var shops = r.shops || {};
     var our = r.our_price != null ? Number(r.our_price) : null;
     SITES.forEach(function (s) {
       var i = shops[s];
       if (!i) return;
       var st = effectiveStatus(i, our);
-      if (st !== 'no_brand' && !DEAD[st]) brandShops++;
+      if (DEAD[st]) dead++;
+      else if (st !== 'no_brand') brandShops++;
       if (st === 'match' && i.price != null) matches.push({ site: s, price: Number(i.price), score: i.match });
       else if (st === 'odd_price') odd++;
       else if (st === 'low_match') weak++;
     });
     var prices = matches.map(function (m) { return m.price; });
     var out = {
-      src: r.shops, matches: matches, found: matches.length, brandShops: brandShops,
+      src: r.shops, matches: matches, found: matches.length, brandShops: brandShops, dead: dead,
       odd: odd, weak: weak,
       min: prices.length ? Math.min.apply(null, prices) : null,
       max: prices.length ? Math.max.apply(null, prices) : null,
@@ -325,7 +326,11 @@
     });
     list.sort(function (a, b) { return a.price - b.price; });
     if (!list.length) {
-      var hint = r.partial ? 'шукаю…' : (an.brandShops ? 'товар не знайдено' : 'немає бренду в магазинах');
+      var hint = 'немає бренду в магазинах';
+      if (r.partial) hint = 'шукаю…';
+      else if (an.brandShops && an.dead) hint = 'немає збігу · частина сайтів не відповіла';
+      else if (an.brandShops) hint = 'товар не знайдено';
+      else if (an.dead) hint = 'сайти не відповіли';
       return '<td class="c-competitors pmx-competitors"><span class="pmx-competitors-empty">' + hint + '</span></td>';
     }
     var chips = list.map(function (x) {

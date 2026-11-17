@@ -32,6 +32,13 @@
         <span class="parser-schedule-card__label">Два парсери</span>
         {% for lane in report_status.lanes %}
         <div class="parser-live-job" data-live-brand="{{ (lane.brand or '')|lower }}" data-live-lane="{{ lane.lane or 'remote' }}">
+            {% if lane.state == 'running' and lane.slug %}
+            <a class="parser-live-job__open" href="/parser/brands/{{ lane.slug }}">
+                <strong>{{ lane.lane_label }}</strong>
+                <span>· {{ lane.brand }}</span>
+                <div class="parser-muted js-live-progress">{{ lane.current or 0 }} / {{ lane.total or '—' }}{% if lane.product %} · {{ lane.product }}{% endif %}</div>
+            </a>
+            {% else %}
             <div>
                 <strong>{{ lane.lane_label }}</strong>
                 {% if lane.state == 'running' %}
@@ -41,6 +48,7 @@
                 <span class="parser-muted">· вільний, можна запустити інший бренд</span>
                 {% endif %}
             </div>
+            {% endif %}
             {% if lane.state == 'running' %}
             <div class="parser-actions-row">
                 <form method="post" action="/parser/restart" onsubmit="return confirm('Перезапустити цей парсинг? Поточний прогін зупиниться і почнеться знову.');">
@@ -65,11 +73,19 @@
         <span class="parser-schedule-card__label">Активні парсинги</span>
         {% for job in active_jobs %}
         <div class="parser-live-job" data-live-brand="{{ (job.brand or '')|lower }}" data-live-lane="{{ job.lane or 'remote' }}">
+            {% if job.slug %}
+            <a class="parser-live-job__open" href="/parser/brands/{{ job.slug }}">
+                <strong>{{ job.brand }}</strong>
+                <span class="parser-muted">· {{ job.lane_label or job.lane or 'парсер' }}</span>
+                <div class="parser-muted js-live-progress">{{ job.current or 0 }} / {{ job.total or '—' }}{% if job.product %} · {{ job.product }}{% endif %}</div>
+            </a>
+            {% else %}
             <div>
                 <strong>{{ job.brand or 'Весь каталог' }}</strong>
                 <span class="parser-muted">· {{ job.lane_label or job.lane or 'парсер' }}</span>
                 <div class="parser-muted js-live-progress">{{ job.current or 0 }} / {{ job.total or '—' }}{% if job.product %} · {{ job.product }}{% endif %}</div>
             </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>

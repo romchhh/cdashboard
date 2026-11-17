@@ -1924,15 +1924,17 @@ def _search_results_for_query(query: str, items: list) -> list:
     return _article_filtered_results(query, items)
 
 
-def find_html_search_results(site: SiteConfig, query: str, debug: bool = False) -> list:
+def find_html_search_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     found = []
     seen = set()
+    responded = False
     for q in query_variants(query):
         for pattern in site.search_url_patterns:
             url = pattern.format(q=quote(q))
             soup = fetch(url, debug=debug)
             if soup is None:
                 continue
+            responded = True
             items = collect_result_links(site, soup)
             if debug:
                 print(
@@ -1948,11 +1950,14 @@ def find_html_search_results(site: SiteConfig, query: str, debug: bool = False) 
                 return _search_results_for_query(query, found)
         if results_good_enough(site, query, found):
             return _search_results_for_query(query, found)
+    if not responded:
+        return None
     return _search_results_for_query(query, found)
 
 
-def find_woocommerce_results(site: SiteConfig, query: str, debug: bool = False) -> list:
+def find_woocommerce_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     products = []
+    responded = False
     for q in query_variants(query):
         url = site.api_url.format(q=quote(q))
         data = fetch_text(
@@ -1961,6 +1966,9 @@ def find_woocommerce_results(site: SiteConfig, query: str, debug: bool = False) 
             extra_headers={"Accept": "application/json"},
             as_json=True,
         )
+        if data is None:
+            continue
+        responded = True
         if not isinstance(data, list) or not data:
             continue
         for item in data:
@@ -1994,11 +2002,19 @@ def find_woocommerce_results(site: SiteConfig, query: str, debug: bool = False) 
             )
         if results_good_enough(site, query, products):
             return products
-    return products or find_html_search_results(site, query, debug=debug)
+    if products:
+        return products
+    html = find_html_search_results(site, query, debug=debug)
+    if html:
+        return html
+    if html is None and not responded:
+        return None
+    return html or []
 
 
-def find_live_search_results(site: SiteConfig, query: str, debug: bool = False) -> list:
+def find_live_search_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     products = []
+    responded = False
     for q in query_variants(query):
         url = site.api_url.format(q=quote(q))
         data = fetch_text(
@@ -2010,6 +2026,9 @@ def find_live_search_results(site: SiteConfig, query: str, debug: bool = False) 
             },
             as_json=True,
         )
+        if data is None:
+            continue
+        responded = True
         items = []
         if isinstance(data, dict):
             items = data.get("products") or data.get("items") or []
@@ -2034,7 +2053,14 @@ def find_live_search_results(site: SiteConfig, query: str, debug: bool = False) 
             )
         if results_good_enough(site, query, products):
             return products
-    return products or find_html_search_results(site, query, debug=debug)
+    if products:
+        return products
+    html = find_html_search_results(site, query, debug=debug)
+    if html:
+        return html
+    if html is None and not responded:
+        return None
+    return html or []
 
 
 def _card_text(card, selectors: str) -> str:
@@ -2287,10 +2313,13 @@ def parse_single_product_page(site: SiteConfig, soup, fallback_url: str = "") ->
     }
 
 
-def find_card_results(site: SiteConfig, query: str, debug: bool = False) -> list:
+def find_card_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
+    """None — жодна сторінка пошуку не відкрилась. [] — магазин відповів порожньою видачею."""
     products, seen = [], set()
+    responded = False
     for q in query_variants(query):
         for url, soup in _iter_search_pages(site, q, debug=debug):
+            responded = True
             # Редірект на PDP: related-картки зі сторінки товару гірші за сам товар.
             # Ніколи не плутати сторінку пошуку (Krasota h1.product-title «Пошук») з товаром.
             cards = []
@@ -2314,6 +2343,8 @@ def find_card_results(site: SiteConfig, query: str, debug: bool = False) -> list
                 return _search_results_for_query(query, products)
         if results_good_enough(site, query, products):
             return _search_results_for_query(query, products)
+    if not responded:
+        return None
     return _search_results_for_query(query, products)
 
 
@@ -2371,13 +2402,15 @@ def parse_jsonld_list(site: SiteConfig, soup) -> list:
     return items
 
 
-def find_jsonld_results(site: SiteConfig, query: str, debug: bool = False) -> list:
+def find_jsonld_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     products, seen = [], set()
+    responded = False
     for q in query_variants(query):
         for pattern in site.search_url_patterns:
             soup = fetch(pattern.format(q=quote(q)), debug=debug)
             if soup is None:
                 continue
+            responded = True
             cards = parse_jsonld_list(site, soup)
             if not cards:
                 cards = parse_microdata_products(site, soup)
@@ -2391,6 +2424,8 @@ def find_jsonld_results(site: SiteConfig, query: str, debug: bool = False) -> li
                 return _search_results_for_query(query, products)
         if results_good_enough(site, query, products):
             return _search_results_for_query(query, products)
+    if not responded:
+        return None
     return _search_results_for_query(query, products)
 
 
@@ -2454,11 +2489,21 @@ def brand_slug(brand: str) -> str:
 
 _LISTING_CACHE: dict = {}
 _LISTING_LOCKS: dict = {}
+_LISTING_PARTIAL: set = set()
 _LISTING_GUARD = threading.Lock()
 
 
-def brand_listing(site: SiteConfig, brand: str, debug: bool = False) -> list:
-    """Увесь асортимент бренду в магазині (з пагінацією). Кешується на процес."""
+def listing_is_partial(site_name: str, brand: str) -> bool:
+    """Каталог бренду обірвався на помилці мережі, тож відсутність SKU ще не доведена."""
+    return (site_name, brand) in _LISTING_PARTIAL
+
+
+def brand_listing(site: SiteConfig, brand: str, debug: bool = False) -> list | None:
+    """Увесь асортимент бренду в магазині (з пагінацією). Кешується на процес.
+
+    None — сторінка бренду не відкрилась. Порожній список — магазин відповів і товарів немає.
+    Частковий список після обриву пагінації не вважається повним каталогом.
+    """
     key = (site.name, brand)
     with _LISTING_GUARD:
         lock = _LISTING_LOCKS.setdefault(key, threading.Lock())
@@ -2466,6 +2511,7 @@ def brand_listing(site: SiteConfig, brand: str, debug: bool = False) -> list:
         if key in _LISTING_CACHE:
             return _LISTING_CACHE[key]
         items, seen = [], set()
+        stopped_on_error = False
         if site.brand_page_url:
             for slug in brand_slugs(brand):
                 for page in range(1, site.max_pages + 1):
@@ -2473,6 +2519,7 @@ def brand_listing(site: SiteConfig, brand: str, debug: bool = False) -> list:
                     url = template.format(slug=slug, page=page)
                     soup = fetch(url, debug=debug)
                     if soup is None:
+                        stopped_on_error = True
                         break
                     cards = [card for card in parse_cards(site, soup) if card["url"] not in seen]
                     if debug:
@@ -2482,8 +2529,14 @@ def brand_listing(site: SiteConfig, brand: str, debug: bool = False) -> list:
                     for card in cards:
                         seen.add(card["url"])
                         items.append(card)
-                if items:
+                if items or stopped_on_error:
                     break
+        if stopped_on_error and not items:
+            return None
+        if stopped_on_error:
+            _LISTING_PARTIAL.add(key)
+        else:
+            _LISTING_PARTIAL.discard(key)
         _LISTING_CACHE[key] = items
         return items
 
@@ -2502,6 +2555,7 @@ NO_RESULTS_RE = re.compile(
 def clear_listing_cache() -> None:
     with _LISTING_GUARD:
         _LISTING_CACHE.clear()
+        _LISTING_PARTIAL.clear()
 
 
 def clear_presence_cache() -> None:
@@ -2517,6 +2571,12 @@ def clear_scrape_runtime_caches() -> None:
         reset_host_state()
     except NameError:
         pass
+
+
+def clear_http_memory_cache() -> None:
+    """Лише тіла сторінок. Cookies і «хост лежить» лишаються, інакше середина прогону
+    знову б'є вже заблоковані магазини і пише хибне «не знайдено»."""
+    clear_http_cache()
 
 
 def clear_brand_presence_cache() -> None:
@@ -2694,13 +2754,15 @@ def parse_microdata_products(site: SiteConfig, soup) -> list:
     return items
 
 
-def find_microdata_results(site: SiteConfig, query: str, debug: bool = False) -> list:
+def find_microdata_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     products, seen = [], set()
+    responded = False
     for q in query_variants(query):
         for pattern in site.search_url_patterns:
             soup = fetch(pattern.format(q=quote(q)), debug=debug)
             if soup is None:
                 continue
+            responded = True
             cards = parse_microdata_products(site, soup)
             if debug:
                 print(f"    [debug] {site.name} «{q}» — {len(cards)} карток мікророзмітки")
@@ -2712,6 +2774,8 @@ def find_microdata_results(site: SiteConfig, query: str, debug: bool = False) ->
                 break
         if results_good_enough(site, query, products):
             return products
+    if not responded:
+        return None
     return products
 
 
@@ -2790,7 +2854,7 @@ def find_search_results(site: SiteConfig, query: str, debug: bool = False):
             return listing
         if site.search_url_patterns:
             return find_card_results(site, query, debug=debug)
-        return []
+        return listing
     return find_html_search_results(site, query, debug=debug)
 
 
@@ -4111,15 +4175,23 @@ def search_one_site(
             "reason": "бренду немає в асортименті магазину",
         }
 
+    incomplete_catalog = False
     if site.kind == "brand_catalog":
         brand = extract_brand(query)
         listing = brand_listing(site, brand, debug=debug)
-        if listing:
+        incomplete_catalog = listing_is_partial(site.name, brand or "")
+        searched = None
+        if site.search_url_patterns and (listing is None or incomplete_catalog):
+            searched = find_card_results(site, query, debug=debug)
+        if searched:
+            raw_results = searched
+            incomplete_catalog = False
+        elif listing:
             raw_results = listing
-        elif site.search_url_patterns:
-            raw_results = find_card_results(site, query, debug=debug) or []
         else:
-            raw_results = []
+            raw_results = searched
+            if searched == []:
+                incomplete_catalog = False
     else:
         raw_results = find_search_results(site, query, debug=debug)
     codes = all_article_codes(query)
@@ -4142,7 +4214,13 @@ def search_one_site(
                 if extra:
                     raw_results = extra
                     break
-    if raw_results is None or not raw_results:
+    if raw_results is None:
+        return {
+            "site": site.name,
+            "status": "unavailable",
+            "reason": "сайт не відповів",
+        }
+    if not raw_results:
         return {
             "site": site.name,
             "status": "not_found" if carries else "unavailable",
@@ -4246,6 +4324,12 @@ def search_one_site(
             )
 
     if not candidates:
+        if incomplete_catalog:
+            return {
+                "site": site.name,
+                "status": "unavailable",
+                "reason": "каталог бренду завантажився не повністю",
+            }
         return {
             "site": site.name,
             "status": "not_found",
@@ -4382,7 +4466,8 @@ def _site_strike(name: str, *, slow: bool) -> None:
 
 # Глобальний ліміт паралельних магазинів у search_all (None = усі).
 # Worker виставляє низьке значення, щоб catalog×sites не вбивав VPS OOM.
-SITE_SEARCH_WORKERS: Optional[int] = None
+# Однаковий fan-out для локального прогону і ParserService (там ще раз ставиться MAX_SITE_WORKERS).
+SITE_SEARCH_WORKERS: Optional[int] = 8
 
 
 RETRY_SEARCH_DEADLINE = 120.0
