@@ -1,4 +1,4 @@
-"""Розклад парсера: бренди діляться на 14 днів і не губляться при переносі черги."""
+"""Черга парсера: бренди старше 10 днів, незавершене не губиться."""
 
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from web.parser_service import (
     CYCLE_DAYS,
     KYIV_TZ,
+    brands_due_for_refresh,
     brands_for_rotation_day,
     in_rotation_night,
     is_weekend_kyiv,
@@ -21,7 +22,7 @@ def test_brands_split_evenly_across_cycle():
     for day in range(CYCLE_DAYS):
         chunk = brands_for_rotation_day(names, day)
         assert chunk
-        assert len(chunk) in (1, 2)
+        assert len(chunk) in (2, 3)
         seen.extend(chunk)
     assert sorted(seen, key=str.lower) == sorted(names, key=str.lower)
     assert len(seen) == len(set(seen))
@@ -40,17 +41,36 @@ def test_blank_and_placeholder_brands_are_skipped():
     assert brands_for_rotation_day(["Sesderma", "—"], 1) == []
 
 
-def test_carry_over_merges_pending_with_new_day_slot():
+def test_due_brands_are_oldest_and_skip_fresh():
+    today = date(2026, 10, 12)  # Monday, limit 10
+    names = ["Academie", "Sesderma", "Abril", "Moroccanoil"]
+    last = {
+        "Academie": "2026-10-10",
+        "Sesderma": "2026-09-01",
+        "Abril": "2026-10-02",
+        "Moroccanoil": "2026-10-01",
+    }
+    assert brands_due_for_refresh(names, today, last) == ["Sesderma", "Moroccanoil", "Abril"]
+
+
+def test_friday_pulls_brands_that_would_age_over_weekend():
+    friday = date(2026, 10, 16)
+    names = ["Academie", "Sesderma"]
+    last = {"Academie": "2026-10-08", "Sesderma": "2026-10-12"}  # 8 днів і 4 дні
+    assert brands_due_for_refresh(names, friday, last) == ["Academie"]
+
+
+def test_carry_over_merges_pending_with_due_brands():
     today = date(2026, 10, 12)
     names = ["Academie", "Sesderma", "Abril"]
     state = {"built_for": "2026-10-11", "pending": ["Academie"], "day": 1}
-    planned = plan_rotation_update(state, today, names)
+    last = {"Academie": "2026-09-01", "Sesderma": "2026-09-01", "Abril": "2026-10-12"}
+    planned = plan_rotation_update(state, today, names, last)
     assert planned is not None
     assert planned["built_for"] == "2026-10-12"
     assert planned["pending"][0] == "Academie"
-    today_slot = brands_for_rotation_day(names, today.toordinal() % CYCLE_DAYS)
-    for brand in today_slot:
-        assert brand in planned["pending"]
+    assert "Sesderma" in planned["pending"]
+    assert "Abril" not in planned["pending"]
 
 
 def test_same_day_pending_is_not_rebuilt():
@@ -79,14 +99,17 @@ def test_parse_log_keeps_shop_errors(tmp_path, monkeypatch):
     assert ps.load_parse_log() == []
 
 
-def test_new_day_builds_only_that_days_brands():
+def test_new_day_queues_only_stale_brands():
     today = date(2026, 10, 12)
     names = [f"Brand {index:02d}" for index in range(20)]
-    planned = plan_rotation_update({"pending": [], "built_for": "2026-10-11"}, today, names)
+    fresh = {name: "2026-10-11" for name in names}
+    fresh["Brand 00"] = "2026-09-01"
+    fresh["Brand 03"] = None
+    planned = plan_rotation_update({"pending": [], "built_for": "2026-10-11"}, today, names, fresh)
     assert planned is not None
     assert planned["built_for"] == "2026-10-12"
-    assert planned["pending"] == brands_for_rotation_day(names, today.toordinal() % CYCLE_DAYS)
-    assert plan_rotation_update(planned, today, names) is None
+    assert planned["pending"] == ["Brand 03", "Brand 00"]
+    assert plan_rotation_update(planned, today, names, fresh) is None
 
 
 def test_rotation_night_window_kyiv():

@@ -26,11 +26,11 @@
     {% endif %}
 
     <div class="parser-panel">
-        <h2>Розклад на 14 днів</h2>
+        <h2>Оновлення кожні {{ rotation.cycle_days }} днів</h2>
         <p class="panel-lead">
             Сьогодні {{ rotation.today }}, слот <strong>{{ rotation.day }}</strong> з {{ rotation.cycle_days }}.
             Увімкнено брендів: <strong>{{ rotation.enabled_total }}</strong>.
-            Автозапуск у будні (пн–пт), {{ rotation.night_label }} (Київ), включно з днем. Черга дня збирається після {{ "%02d"|format(rotation.queue_hour) }}:05, далі ланцюжок + опитування кожну хв.
+            Автозапуск у будні (пн–пт), {{ rotation.night_label }} (Київ). У чергу потрапляють бренди, які не парсились {{ rotation.cycle_days }} днів або довше. Далі обидва парсери забирають наступний бренд, щойно звільняються.
         </p>
         <div class="parser-day-row">
             {% for day in rotation.per_day %}
@@ -50,7 +50,7 @@
         {% elif rotation.built_for == rotation.today %}
         <p class="panel-lead">Черга на сьогодні вже розібрана.</p>
         {% else %}
-        <p class="panel-lead">Черга збереться вночі після {{ "%02d"|format(rotation.queue_hour) }}:20. Удень автоматичний старт не виконується.</p>
+        <p class="panel-lead">Черга збереться з {{ "%02d"|format(rotation.queue_hour) }}:00, далі парсери забирають бренди весь день до 22:00.</p>
         {% endif %}
         {% if rotation.today_brands %}
         <p class="panel-lead">Бренди цього слота: {{ rotation.today_brands|join(", ") }}.</p>

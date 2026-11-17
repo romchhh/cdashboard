@@ -31,13 +31,13 @@ BRANDS_DIR = DATA_DIR / "brands"
 REPORT_XLSX = DATA_DIR / "price_report.xlsx"
 JOBS_DIR = DATA_DIR / "jobs"
 JOB_LOG = JOBS_DIR / "job.log"
-# Усі увімкнені бренди оновлюються за 14 днів: щодня своя частка, по одному бренду.
-CYCLE_DAYS = 14
+# Увімкнені бренди оновлюються не рідше ніж раз на 10 днів.
+CYCLE_DAYS = 10
 KYIV_TZ = ZoneInfo("Europe/Kiev")
-# Автопарсинг у будні (Київ): черга після синку ~03:00 і далі весь день до 22:00.
-ROTATION_NIGHT_START_HOUR = 1   # з 01:00 — доробка вчорашньої черги
+# Автопарсинг у будні (Київ): черга з 01:00 і далі весь день до 22:00.
+ROTATION_NIGHT_START_HOUR = 1   # з 01:00 — черга і доробка
 ROTATION_NIGHT_END_HOUR = 22    # до 22:00 (не включно), включно з днем
-ROTATION_QUEUE_HOUR = 3
+ROTATION_QUEUE_HOUR = 1
 MAX_HISTORY = 40
 # option SKU ids must not collide with product_id from the Cosmy feed
 _OPTION_ID_OFFSET = 1_000_000_000
@@ -2548,13 +2548,63 @@ def _next_weekday_on_or_after(day: date) -> date:
 
 
 def brands_for_rotation_day(names: list[str], day: int, cycle: int = CYCLE_DAYS) -> list[str]:
-    """Рівна частка брендів на один день циклу. День стабільний для позиції в алфавіті."""
+    """Рівна частка брендів на один день циклу. Лише для підказки в UI."""
     ordered = sorted(
         {(name or "").strip() for name in names if (name or "").strip() and (name or "").strip() != "—"},
         key=str.lower,
     )
     slot = day % cycle
     return [name for index, name in enumerate(ordered) if index % cycle == slot]
+
+
+def _parse_parsed_day(value: str | None) -> date | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw[:10])
+    except ValueError:
+        return None
+
+
+def refresh_age_limit(day: date) -> int:
+    """П’ятниця забирає бренди, які за вихідні перетнуть 10 днів."""
+    if day.weekday() == 4:
+        return max(1, CYCLE_DAYS - 2)
+    return CYCLE_DAYS
+
+
+def brands_due_for_refresh(
+    names: list[str],
+    today: date,
+    last_parsed: dict[str, str | None] | None = None,
+) -> list[str]:
+    """Бренди без дати або старші за ліміт. Найдавніші — першими."""
+    ordered = sorted(
+        {(name or "").strip() for name in names if (name or "").strip() and (name or "").strip() != "—"},
+        key=str.lower,
+    )
+    limit = refresh_age_limit(today)
+    lookup = {str(k).strip().lower(): v for k, v in (last_parsed or {}).items()}
+    due: list[tuple[date, str, str]] = []
+    for name in ordered:
+        parsed = _parse_parsed_day(lookup.get(name.lower()))
+        age = 10**6 if parsed is None else (today - parsed).days
+        if age >= limit:
+            due.append((parsed or date.min, name.lower(), name))
+    due.sort()
+    return [name for _parsed, _key, name in due]
+
+
+def _last_parsed_map() -> dict[str, str | None]:
+    out: dict[str, str | None] = {}
+    try:
+        for name, row in load_brand_status().items():
+            if isinstance(row, dict) and row.get("last_parsed_at"):
+                out[name] = row.get("last_parsed_at")
+    except Exception:
+        logger.exception("Failed to read brand parse dates for rotation")
+    return out
 
 
 def brand_rotation_day(name: str, names: list[str], cycle: int = CYCLE_DAYS) -> int | None:
@@ -2579,23 +2629,26 @@ def next_date_for_rotation_day(slot: int, today: date | None = None, cycle: int 
     return start
 
 
-def plan_rotation_update(state: dict, today: date, names: list[str]) -> dict | None:
-    """Нова денна черга або доповнення незавершеної з попередньої ночі.
+def plan_rotation_update(
+    state: dict,
+    today: date,
+    names: list[str],
+    last_parsed: dict[str, str | None] | None = None,
+) -> dict | None:
+    """Черга на сьогодні: усе, що не парсилось 10+ днів, плюс хвіст учорашньої черги.
 
-    Якщо вчорашня черга не допарсилась — сьогоднішній слот додається в кінець (catch-up).
     Свіжу чергу з нуля збираємо лише коли pending порожній і built_for != сьогодні.
     """
     today_s = today.isoformat()
     pending = list(state.get("pending") or [])
     built = state.get("built_for")
+    due = brands_due_for_refresh(names, today, last_parsed)
 
     if pending:
         if built == today_s:
             return None
-        slot = today.toordinal() % CYCLE_DAYS
-        today_brands = brands_for_rotation_day(names, slot)
         seen = {(b or "").strip().lower() for b in pending if (b or "").strip()}
-        for brand in today_brands:
+        for brand in due:
             key = (brand or "").strip().lower()
             if key and key not in seen:
                 pending.append(brand)
@@ -2603,7 +2656,8 @@ def plan_rotation_update(state: dict, today: date, names: list[str]) -> dict | N
         return {
             **state,
             "built_for": today_s,
-            "day": slot,
+            "day": 0,
+            "cycle_days": CYCLE_DAYS,
             "pending": pending,
             "done": list(state.get("done") or []),
             "skipped": list(state.get("skipped") or []),
@@ -2615,11 +2669,11 @@ def plan_rotation_update(state: dict, today: date, names: list[str]) -> dict | N
     if built == today_s:
         return None
 
-    slot = today.toordinal() % CYCLE_DAYS
     return {
         "built_for": today_s,
-        "day": slot,
-        "pending": brands_for_rotation_day(names, slot),
+        "day": 0,
+        "cycle_days": CYCLE_DAYS,
+        "pending": due,
         "done": [],
         "skipped": [],
         "current": None,
@@ -2644,6 +2698,7 @@ def next_rotation_info(
     moment = now or _kyiv_now()
     today = moment.date()
     enabled = names if names is not None else _enabled_brand_names()
+    parsed = _last_parsed_map() if names is None else None
     rot = state if state is not None else _load_rotation()
     pending = list(rot.get("pending") or [])
     night = in_rotation_night(moment)
@@ -2671,9 +2726,15 @@ def next_rotation_info(
         )
 
     brand_slot = brand_rotation_day(brand, enabled) if brand else None
-    brand_next_day = (
-        next_date_for_rotation_day(brand_slot, today) if brand_slot is not None else None
-    )
+    brand_next_day = None
+    if brand:
+        last_day = _parse_parsed_day((parsed or {}).get(brand) if parsed else None)
+        if last_day is None and parsed is None:
+            last_day = _parse_parsed_day(_last_parsed_map().get(brand))
+        if last_day is None:
+            brand_next_day = _next_weekday_on_or_after(today)
+        else:
+            brand_next_day = _next_weekday_on_or_after(last_day + timedelta(days=CYCLE_DAYS))
 
     if running:
         nxt = {
@@ -2694,7 +2755,7 @@ def next_rotation_info(
             "pending_count": len(pending),
         }
     elif auto_allowed and moment.hour >= ROTATION_QUEUE_HOUR and rot.get("built_for") != today.isoformat():
-        planned = brands_for_rotation_day(enabled, today.toordinal() % CYCLE_DAYS)
+        planned = brands_due_for_refresh(enabled, today, parsed)
         at = night_start_on(today)
         if moment > at:
             at = moment
@@ -2702,7 +2763,7 @@ def next_rotation_info(
             "kind": "build",
             "at": at,
             "at_label": _format_kyiv(at),
-            "summary": f"Сьогодні черга дня {today.toordinal() % CYCLE_DAYS + 1}",
+            "summary": f"Сьогодні в чергу: {len(planned)} бренд(ів) старше {CYCLE_DAYS} дн.",
             "brands": planned[:8],
             "pending_count": len(planned),
         }
@@ -2725,7 +2786,7 @@ def next_rotation_info(
         at = night_start_on(target_day)
         if moment >= at and target_day == today and not built_today:
             at = moment
-        planned = brands_for_rotation_day(enabled, target_day.toordinal() % CYCLE_DAYS)
+        planned = brands_due_for_refresh(enabled, target_day, parsed)
         nxt = {
             "kind": "tonight" if target_day == today else "next_night",
             "at": at,
@@ -2753,8 +2814,8 @@ def next_rotation_info(
             brand_at_label = _format_kyiv(brand_at)
         else:
             brand_summary = (
-                f"«{brand}» у циклі раз на {CYCLE_DAYS} дн. — наступний день "
-                f"{brand_next_day.strftime('%d.%m.%Y')} після {ROTATION_QUEUE_HOUR:02d}:20"
+                f"«{brand}» оновлюється кожні {CYCLE_DAYS} дн. — наступне не пізніше "
+                f"{brand_next_day.strftime('%d.%m.%Y')}"
             )
             brand_at_label = _format_kyiv(brand_at)
         brand_info = {
@@ -2937,7 +2998,7 @@ def _trim_job_log() -> None:
 
 
 def _requeue_failed_night_brand(state: dict, job: dict) -> dict:
-    """Якщо нічний бренд упав після старту — один повтор у черзі (не чекати 14 днів)."""
+    """Якщо нічний бренд упав після старту — один повтор у черзі (не чекати 10 днів)."""
     current = (state.get("current") or "").strip()
     if not current:
         return state
@@ -3069,13 +3130,17 @@ def _advance_parser_rotation_locked() -> dict:
         today = now.date()
         today_s = today.isoformat()
         names = _enabled_brand_names()
+        parsed_map = _last_parsed_map()
+        if int(state.get("cycle_days") or 0) != CYCLE_DAYS:
+            state["built_for"] = None
+            state["cycle_days"] = CYCLE_DAYS
         pending_before = list(state.get("pending") or [])
         built = state.get("built_for")
         planned = None
         if pending_before and built != today_s:
-            planned = plan_rotation_update(state, today, names)
+            planned = plan_rotation_update(state, today, names, parsed_map)
         elif not pending_before and built != today_s and now.hour >= ROTATION_QUEUE_HOUR:
-            planned = plan_rotation_update(state, today, names)
+            planned = plan_rotation_update(state, today, names, parsed_map)
         if planned is not None:
             carry = bool(pending_before and built != today_s)
             prev = state.get("built_for")
@@ -3097,7 +3162,7 @@ def _advance_parser_rotation_locked() -> dict:
             _save_rotation(state)
             pending_n = len(state.get("pending") or [])
             msg = (
-                f"Черга парсера на {today.isoformat()}: день {state['day'] + 1} з {CYCLE_DAYS}, "
+                f"Черга парсера на {today.isoformat()}: бренди старше {CYCLE_DAYS} дн., "
                 f"брендів {pending_n} (вікно {ROTATION_NIGHT_START_HOUR:02d}:00–"
                 f"{ROTATION_NIGHT_END_HOUR:02d}:00)"
             )

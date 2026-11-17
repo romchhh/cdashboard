@@ -207,12 +207,12 @@ def setup_scheduler() -> AsyncIOScheduler:
     )
     logger.info("✅ Задача: Резервна копія БД → Telegram (01:30 щодня)")
 
-    # Парсер: автооновлення у будні 01:00–22:00, включно з днем. Черга після синку ~03:05, drain кожну хв.
+    # Парсер: будні 01:00–22:00. Черга брендів старше 10 днів з 01:05, drain кожну хв.
     scheduler.add_job(
         _guard(rotate_parser_brands),
         trigger=CronTrigger(hour=3, minute=5),
         id="parser_brand_rotation",
-        name="Парсер: черга брендів (цикл 14 днів)",
+        name="Парсер: черга брендів (кожні 10 днів)",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
@@ -239,7 +239,7 @@ def setup_scheduler() -> AsyncIOScheduler:
         misfire_grace_time=300,
     )
     logger.info(
-        "✅ Задача: Парсер брендів (будні 01:00–22:00, і вдень; черга з 03:05, drain 1 хв + ланцюжок)"
+        "✅ Задача: Парсер брендів (будні 01:00–22:00; чергу з 01:05, далі щохвилини)"
     )
 
     # Запустити планувальник

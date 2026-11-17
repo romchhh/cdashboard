@@ -1119,6 +1119,7 @@ def load_rotation() -> dict:
             "skipped": buckets.get("skipped") or [],
             "start_retries": dict(meta.get("start_retries") or {}),
             "run_retries": dict(meta.get("run_retries") or {}),
+            "cycle_days": meta.get("cycle_days"),
         }
     finally:
         conn.close()
@@ -1128,6 +1129,7 @@ def save_rotation(state: dict) -> None:
     meta = {
         "start_retries": state.get("start_retries") or {},
         "run_retries": state.get("run_retries") or {},
+        "cycle_days": state.get("cycle_days"),
     }
     with transaction() as conn:
         _ensure_schema_extras(conn)
