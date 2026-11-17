@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -22,15 +23,23 @@ router = APIRouter(
 
 def _ctx(request: Request, **extra):
     try:
+        brands = extra.pop("brands", None)
+        if brands is None:
+            brands = ps.list_brands()
         sites = ps.site_names()
         site_meta = ps.site_meta()
         settings = ps.load_settings()
-        report_status = ps.report_status()
-        brands = ps.list_brands()
-        catalog_count = len(ps.load_catalog())
+        report_status = extra.pop("report_status", None)
+        if report_status is None:
+            report_status = ps.report_status()
+        catalog_count = extra.pop("catalog_count", None)
+        if catalog_count is None:
+            catalog_count = sum(int(b.get("catalog_count") or 0) for b in brands)
         parsed_sum = sum(int(b.get("parsed_count") or 0) for b in brands)
-        log_error_count = sum(1 for item in ps.load_parse_log(120) if item.get("level") == "error")
-        rotation = ps.rotation_overview()
+        log_error_count = ps.recent_log_error_count(120)
+        rotation = extra.pop("rotation", None)
+        if rotation is None:
+            rotation = ps.rotation_overview()
         load_error = None
     except Exception as exc:  # noqa: BLE001
         sites, site_meta, brands = [], [], []
@@ -74,41 +83,38 @@ async def parser_brands(request: Request):
     sort = (request.query_params.get("sort") or "name").strip()
     if sort not in ("name", "recent", "stale"):
         sort = "name"
-    brands = list(ps.list_brands())
-    if sort == "recent":
-        brands = sorted(
-            brands,
-            key=lambda b: ps.parsed_at_timestamp(b.get("last_parsed_at")) or 0,
-            reverse=True,
-        )
-    elif sort == "stale":
-        brands = sorted(
-            brands,
-            key=lambda b: ps.parsed_at_timestamp(b.get("last_parsed_at")) or 0,
-        )
     parsed_since = (request.query_params.get("parsed") or "all").strip()
     if parsed_since not in ("all", "today", "7d", "30d", "stale", "never"):
         parsed_since = "all"
-    return templates.TemplateResponse(
-        "parser/brands.html",
-        _ctx(
+    notice = request.query_params.get("notice")
+    error = request.query_params.get("error")
+
+    def _build():
+        brands = list(ps.list_brands())
+        if sort == "recent":
+            brands.sort(key=lambda b: ps.parsed_at_timestamp(b.get("last_parsed_at")) or 0, reverse=True)
+        elif sort == "stale":
+            brands.sort(key=lambda b: ps.parsed_at_timestamp(b.get("last_parsed_at")) or 0)
+        return _ctx(
             request,
             page="brands",
             brands=brands,
             brand_sort=sort,
             brand_parsed_filter=parsed_since,
-            notice=request.query_params.get("notice"),
-            error=request.query_params.get("error"),
-        ),
-    )
+            notice=notice,
+            error=error,
+        )
+
+    return templates.TemplateResponse("parser/brands.html", await asyncio.to_thread(_build))
 
 
 @router.get("/search", response_class=HTMLResponse)
 async def parser_search_page(request: Request):
-    history = [ps.history_preview(i) for i in ps.load_history()]
     return templates.TemplateResponse(
         "parser/search.html",
-        _ctx(request, page="search", history=history),
+        await asyncio.to_thread(
+            lambda: _ctx(request, page="search", history=[ps.history_preview(i) for i in ps.load_history()]),
+        ),
     )
 
 
@@ -117,23 +123,24 @@ async def parser_logs_page(request: Request):
     level = (request.query_params.get("level") or "all").strip()
     if level not in ("all", "error", "schedule"):
         level = "all"
-    events = ps.load_parse_log(250)
-    if level == "error":
-        events = [item for item in events if item.get("level") == "error"]
-    elif level == "schedule":
-        events = [item for item in events if item.get("kind") == "schedule"]
-    return templates.TemplateResponse(
-        "parser/logs.html",
-        _ctx(
+    notice = request.query_params.get("notice")
+
+    def _build():
+        events = ps.load_parse_log(250)
+        if level == "error":
+            events = [item for item in events if item.get("level") == "error"]
+        elif level == "schedule":
+            events = [item for item in events if item.get("kind") == "schedule"]
+        return _ctx(
             request,
             page="logs",
             events=events,
             level=level,
-            rotation=ps.rotation_overview(),
             brand_slug=ps.brand_slug,
-            notice=request.query_params.get("notice"),
-        ),
-    )
+            notice=notice,
+        )
+
+    return templates.TemplateResponse("parser/logs.html", await asyncio.to_thread(_build))
 
 
 @router.post("/logs/clear")
@@ -144,48 +151,48 @@ async def parser_logs_clear(_csrf: None = Depends(verify_csrf_dependency)):
 
 @router.get("/settings", response_class=HTMLResponse)
 async def parser_settings_page(request: Request):
+    notice = request.query_params.get("notice")
     return templates.TemplateResponse(
         "parser/settings.html",
-        _ctx(
-            request,
-            page="settings",
-            notice=request.query_params.get("notice"),
-        ),
+        await asyncio.to_thread(lambda: _ctx(request, page="settings", notice=notice)),
     )
 
 
 @router.get("/brands/{brand_slug}", response_class=HTMLResponse)
 async def parser_brand_detail(request: Request, brand_slug: str):
-    brands = ps.list_brands()
-    brand = ps.brand_from_slug(brand_slug, [b["name"] for b in brands])
-    if not brand:
-        return RedirectResponse(url="/parser/brands?error=not_found", status_code=302)
-    report = ps.load_brand_report(brand)
-    brand_info = next((b for b in brands if b["name"] == brand), None)
-    rows = ps.merge_brand_rows(brand, report)
-    current_sites = ps.site_names()
-    # Лише актуальні магазини: старі (Kasta/Prom/…) у збереженому звіті більше не показуємо.
-    shop_cols = list(current_sites)
-    price_stats = ps.compute_price_stats(rows)
-    rotation = ps.rotation_overview(brand=brand)
-    return templates.TemplateResponse(
-        "parser/brand_detail.html",
-        _ctx(
+    notice = request.query_params.get("notice")
+    error = request.query_params.get("error")
+
+    def _build():
+        brands = ps.list_brands()
+        brand = ps.brand_from_slug(brand_slug, [b["name"] for b in brands])
+        if not brand:
+            return None
+        report = ps.load_brand_report(brand)
+        brand_info = next((b for b in brands if b["name"] == brand), None)
+        rows = ps.merge_brand_rows(brand, report)
+        shop_cols = list(ps.site_names())
+        return _ctx(
             request,
             page="brand",
+            brands=brands,
             brand=brand,
             brand_info=brand_info,
-            report=report,
-            rows=rows,
-            rows_json=[ps.slim_row(r) for r in rows],
+            report={"ok": True} if report and report.get("rows") else None,
+            has_rows=bool(rows),
+            rows_json_raw=json.dumps([ps.slim_row(r) for r in rows], ensure_ascii=False).replace("<", "\\u003c"),
             shop_cols=shop_cols,
-            price_stats=price_stats,
-            notice=request.query_params.get("notice"),
-            error=request.query_params.get("error"),
+            price_stats=ps.compute_price_stats(rows),
+            notice=notice,
+            error=error,
             report_status=ps.report_status_for_brand(brand),
-            rotation=rotation,
-        ),
-    )
+            rotation=ps.rotation_overview(brand=brand),
+        )
+
+    ctx = await asyncio.to_thread(_build)
+    if ctx is None:
+        return RedirectResponse(url="/parser/brands?error=not_found", status_code=302)
+    return templates.TemplateResponse("parser/brand_detail.html", ctx)
 
 
 @router.post("/settings")
@@ -259,7 +266,8 @@ async def parser_history_clear(_csrf: None = Depends(verify_csrf_dependency)):
 
 @router.get("/api/report/status")
 async def parser_report_status():
-    return JSONResponse(ps.report_status())
+    payload = await asyncio.to_thread(ps.report_status)
+    return JSONResponse(payload)
 
 
 @router.get("/api/brands/{brand_slug}/live")
@@ -268,7 +276,8 @@ async def parser_brand_live(brand_slug: str, known: str = ""):
     if not brand:
         return JSONResponse({"error": "not_found"}, status_code=404)
     known_ids = {x for x in (known or "").split(",") if x}
-    return JSONResponse(ps.live_brand_snapshot(brand, known_ids))
+    payload = await asyncio.to_thread(ps.live_brand_snapshot, brand, known_ids)
+    return JSONResponse(payload)
 
 
 @router.post("/api/report/run")

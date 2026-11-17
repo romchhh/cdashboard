@@ -221,11 +221,11 @@ _READY_DB_PATHS: set[str] = set()
 
 def connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=120)
+    conn = sqlite3.connect(DB_PATH, timeout=8)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA busy_timeout=120000")
+    conn.execute("PRAGMA busy_timeout=8000")
     key = str(DB_PATH)
     if key not in _READY_DB_PATHS:
         with _INIT_LOCK:
@@ -768,6 +768,52 @@ def load_stat_reports() -> list[dict]:
             )
         ]
         return [report for scope in scopes if (report := _tag_scope(conn, scope))]
+    finally:
+        conn.close()
+
+
+def load_report_stat_rows() -> list[dict]:
+    """Легкі поля для списку брендів: без магазинів і карток товарів."""
+    conn = connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT r.scope, r.generated_at, r.brand AS report_brand,
+                   rr.brand, rr.diff_min_pct, rr.price_position, rr.found
+            FROM reports r
+            JOIN report_rows rr ON rr.scope = r.scope
+            WHERE r.scope != ? AND r.scope != ?
+            """,
+            (LIVE_SCOPE, LIVE_LOCAL_SCOPE),
+        ).fetchall()
+        return [
+            {
+                "scope": row["scope"],
+                "generated_at": row["generated_at"],
+                "report_brand": row["report_brand"],
+                "brand": row["brand"],
+                "diff_min_pct": row["diff_min_pct"],
+                "position": row["price_position"],
+                "found": row["found"],
+            }
+            for row in rows
+        ]
+    finally:
+        conn.close()
+
+
+def count_recent_error_events(limit: int = 120) -> int:
+    conn = connect()
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS n FROM (
+                SELECT level FROM parse_events ORDER BY id DESC LIMIT ?
+            ) WHERE level = 'error'
+            """,
+            (max(1, int(limit)),),
+        ).fetchone()
+        return int(row["n"] or 0) if row else 0
     finally:
         conn.close()
 

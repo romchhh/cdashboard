@@ -41,7 +41,7 @@ ROTATION_QUEUE_HOUR = 3
 MAX_HISTORY = 40
 # option SKU ids must not collide with product_id from the Cosmy feed
 _OPTION_ID_OFFSET = 1_000_000_000
-_CATALOG_CACHE_TTL = 60.0
+_CATALOG_CACHE_TTL = 180.0
 
 _REPORT_LOCK = threading.Lock()
 _SEARCH_LOCK = threading.Lock()
@@ -59,6 +59,10 @@ _LAST_FLUSH = 0.0
 _LAST_LIVE_FLUSH = 0.0
 _JOB_LOG_HANDLE = None
 _CATALOG_CACHE: dict[str, Any] = {"at": 0.0, "items": None}
+_STATS_CACHE: dict[str, Any] = {"at": 0.0, "index": None}
+_BRANDS_CACHE: dict[str, Any] = {"at": 0.0, "items": None}
+_LOG_COUNT_CACHE: dict[str, Any] = {"at": 0.0, "n": None}
+_READ_CACHE_TTL = 20.0
 _ASYNC_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="parser-async")
 _JOB_FLUSH_INTERVAL = 0.6
 _LIVE_FLUSH_INTERVAL = 1.25
@@ -975,6 +979,7 @@ def load_catalog(*, force: bool = False) -> list[dict]:
         fallback = _normalize_catalog_items(data if isinstance(data, list) else [])
         _CATALOG_CACHE["items"] = fallback
         _CATALOG_CACHE["at"] = now
+        _BRANDS_CACHE["at"] = 0.0
         return list(fallback)
 
     try:
@@ -983,6 +988,7 @@ def load_catalog(*, force: bool = False) -> list[dict]:
             normalized = _normalize_catalog_items(items)
             _CATALOG_CACHE["items"] = normalized
             _CATALOG_CACHE["at"] = now
+            _BRANDS_CACHE["at"] = 0.0
             return list(normalized)
     except Exception:
         logger.exception("Failed to load parser catalog from products feed DB")
@@ -991,6 +997,7 @@ def load_catalog(*, force: bool = False) -> list[dict]:
     fallback = _normalize_catalog_items(data if isinstance(data, list) else [])
     _CATALOG_CACHE["items"] = fallback
     _CATALOG_CACHE["at"] = now
+    _BRANDS_CACHE["at"] = 0.0
     return list(fallback)
 
 
@@ -1000,6 +1007,7 @@ def replace_catalog(products: list[dict]) -> dict:
     store.save_catalog_products(rows)
     _CATALOG_CACHE["items"] = list(rows)
     _CATALOG_CACHE["at"] = time.monotonic()
+    _BRANDS_CACHE["at"] = 0.0
     return {"ok": True, "count": len(rows)}
 
 
@@ -1162,6 +1170,12 @@ def load_brand_status() -> dict:
     return store.load_brand_status()
 
 
+def _invalidate_read_caches() -> None:
+    _STATS_CACHE["at"] = 0.0
+    _BRANDS_CACHE["at"] = 0.0
+    _LOG_COUNT_CACHE["at"] = 0.0
+
+
 def _update_brand_status(brand: str, **fields: Any) -> None:
     def _apply(status: dict) -> None:
         row = dict(status.get(brand) or {})
@@ -1170,6 +1184,7 @@ def _update_brand_status(brand: str, **fields: Any) -> None:
         status[brand] = row
 
     store.mutate_brand_status(_apply)
+    _invalidate_read_caches()
 
 
 def _fail_brand_status(brand: str, error: str) -> None:
@@ -1415,7 +1430,30 @@ def compute_price_stats(rows: list[dict] | None) -> dict:
 
 
 def _reports_stats_by_brand() -> dict[str, dict]:
-    """Швидкий індекс: бренд → {parsed_count, last_parsed_at, stats} зі збережених звітів."""
+    """Бренд → лічильники зі звітів. Без завантаження магазинів."""
+    now = time.monotonic()
+    cached = _STATS_CACHE.get("index")
+    if cached is not None and (now - float(_STATS_CACHE.get("at") or 0)) < _READ_CACHE_TTL:
+        return cached
+
+    grouped: dict[str, dict] = {}
+    for row in store.load_report_stat_rows():
+        scope = str(row.get("scope") or "")
+        bucket = grouped.setdefault(
+            scope,
+            {"generated_at": row.get("generated_at"), "report_brand": row.get("report_brand"), "rows": []},
+        )
+        brand = (row.get("brand") or row.get("report_brand") or "").strip() or "—"
+        bucket["rows"].append(
+            {
+                "brand": brand,
+                "diff_min_pct": row.get("diff_min_pct"),
+                "position": row.get("position"),
+                "found": row.get("found"),
+                "from_report": True,
+            }
+        )
+
     index: dict[str, dict] = {}
 
     def _ingest(brand: str, rows: list, generated_at: str | None) -> None:
@@ -1430,37 +1468,45 @@ def _reports_stats_by_brand() -> dict[str, dict]:
             "stats": stats,
         }
 
-    full_later: list[tuple[str | None, str, list]] = []
-    for report in store.load_stat_reports():
-        rows = report.get("rows") or []
+    full_later: list[tuple] = []
+    for scope, bucket in grouped.items():
+        rows = bucket["rows"]
         if not rows:
             continue
-        generated = report.get("generated_at")
-        if report.get("_scope") == store.FULL_SCOPE:
+        generated = bucket.get("generated_at")
+        if scope == store.FULL_SCOPE:
             by_brand: dict[str, list] = {}
             for row in rows:
-                brand = (row.get("brand") or "").strip() or "—"
-                by_brand.setdefault(brand, []).append(row)
+                by_brand.setdefault(row["brand"], []).append(row)
             for brand, brand_rows in by_brand.items():
                 full_later.append((generated, brand, brand_rows))
             continue
-        brand = next((r.get("brand") for r in rows if r.get("brand")), None) or "—"
+        brand = next((r.get("brand") for r in rows if r.get("brand")), None) or bucket.get("report_brand") or "—"
         _ingest(str(brand), rows, generated)
     for generated, brand, brand_rows in full_later:
         _ingest(brand, brand_rows, generated)
+
+    _STATS_CACHE["index"] = index
+    _STATS_CACHE["at"] = now
     return index
 
 
 def list_brands() -> list[dict]:
+    now = time.monotonic()
+    cached = _BRANDS_CACHE.get("items")
+    if cached is not None and (now - float(_BRANDS_CACHE.get("at") or 0)) < _READ_CACHE_TTL:
+        return list(cached)
+
     catalog = load_catalog()
     counts: dict[str, int] = {}
     for item in catalog:
         brand = (item.get("brand") or "").strip() or "—"
         counts[brand] = counts.get(brand, 0) + 1
-    _seed_brand_status_from_report()
     report_index = _reports_stats_by_brand()
-    _reconcile_brand_status(report_index, counts)
     status = load_brand_status()
+    if any((row.get("state") or "") in ("running", "error") for row in status.values()):
+        _reconcile_brand_status(report_index, counts)
+        status = load_brand_status()
     disabled = disabled_brand_set()
     out = []
     for brand, total in sorted(counts.items(), key=lambda x: x[0].lower()):
@@ -1494,7 +1540,24 @@ def list_brands() -> list[dict]:
                 "url": f"/parser/brands/{quote(brand_slug(brand), safe='')}",
             }
         )
-    return out
+    _BRANDS_CACHE["items"] = out
+    _BRANDS_CACHE["at"] = now
+    return list(out)
+
+
+def recent_log_error_count(limit: int = 120) -> int:
+    now = time.monotonic()
+    cached = _LOG_COUNT_CACHE.get("n")
+    if cached is not None and (now - float(_LOG_COUNT_CACHE.get("at") or 0)) < _READ_CACHE_TTL:
+        return int(cached)
+    try:
+        n = store.count_recent_error_events(limit)
+    except Exception:
+        logger.exception("Failed to count parser log errors")
+        n = 0
+    _LOG_COUNT_CACHE["n"] = n
+    _LOG_COUNT_CACHE["at"] = now
+    return n
 
 
 def brand_report_paths(brand: str) -> tuple[Path, Path]:
@@ -2731,6 +2794,7 @@ def append_parse_event(
         site=site or None,
         message=message,
     )
+    _LOG_COUNT_CACHE["at"] = 0.0
 
 
 def load_parse_log(limit: int = 250) -> list[dict]:
@@ -3196,11 +3260,13 @@ def stop_report(*, brand: str | None = None, lane: str | None = None) -> tuple[d
             logger.exception("Failed to cancel remote parser job %s", remote_id)
             cancelled_remote = False
         if not cancelled_remote:
-            return {
-                "state": "running",
-                "error": "Воркер не зупинив job. Перезапустіть ParserService і натисніть «Зупинити» ще раз.",
-                "brand": job_brand,
-            }, 502
+            # Воркер не відповів (рестарт, мережа). Локальний статус все одно знімаємо,
+            # інакше UI вічно лишається «running» після Stop.
+            logger.warning(
+                "Stop %s: worker не підтвердив cancel job %s — знімаємо локальний прогін",
+                job_brand or lane,
+                remote_id,
+            )
     _kill_parser_process(job.get("pid"))
     stopped = {
         **{k: v for k, v in job.items() if k != "row"},
@@ -3372,12 +3438,19 @@ def start_report(*, brand: str | None = None, lane: str | None = None, replace_b
             _JOB_LOG_HANDLE = open(JOB_LOG, "a", encoding="utf-8")
             _JOB_LOG_HANDLE.write(f"\n--- start {datetime.now().isoformat(timespec='seconds')} brand={brand or '*'} ---\n")
             _JOB_LOG_HANDLE.flush()
+            def _low_priority() -> None:
+                try:
+                    os.nice(12)
+                except OSError:
+                    pass
+
             proc = subprocess.Popen(
                 [sys.executable, "-u", str(script), brand or "", lane],
                 cwd=str(ROOT),
                 start_new_session=True,
                 stdout=_JOB_LOG_HANDLE,
                 stderr=subprocess.STDOUT,
+                preexec_fn=_low_priority,
             )
         except OSError as exc:
             logger.exception("Failed to start parser process")

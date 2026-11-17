@@ -516,6 +516,8 @@ def run_catalog(
                 on_site=on_site,
             )
             return idx, _live_row(product, payload, partial=False)
+        except CatalogRunCancelled:
+            raise
         except Exception as exc:
             return idx, {
                 **product,
@@ -537,6 +539,12 @@ def run_catalog(
             for fut in as_completed(futs):
                 try:
                     idx, row = fut.result()
+                except CatalogRunCancelled:
+                    run_cancelled = True
+                    for pending in futs:
+                        pending.cancel()
+                    _write_partial(final=False)
+                    break
                 except Exception:
                     continue
                 rows[idx] = row

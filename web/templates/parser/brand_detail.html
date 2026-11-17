@@ -9,7 +9,7 @@
 {% block content %}
 {% set shop_cols = shop_cols if shop_cols is defined and shop_cols else (report.sites if report and report.sites else sites) %}
 {% set st = price_stats if price_stats is defined and price_stats else {} %}
-{% set parsed_n = st.parsed if st.parsed is defined else (rows|selectattr('from_report')|list|length) %}
+{% set parsed_n = st.parsed if st.parsed is defined else 0 %}
 {% set brand_enabled = brand_info.enabled if brand_info is defined and brand_info and brand_info.enabled is defined else True %}
 {% set brand_slug_val = brand_info.slug if brand_info else brand %}
 <div class="parser-shell parser-shell--wide pmx" id="parserBrandPage"
@@ -76,11 +76,11 @@
     <div class="parser-alert parser-alert--err" id="liveError" hidden></div>
     {% if not brand_enabled %}
     <div class="parser-alert parser-alert--warn">{{ ui_icon('info') }} Цей бренд вимкнено — він не потрапить у повний прогін каталогу.</div>
-    {% elif rows and not report %}
+    {% elif has_rows and not report %}
     <div class="parser-alert parser-alert--warn" id="pendingHint">{{ ui_icon('info') }} Нижче — усі товари бренду з фіда. Натисніть «Запустити моніторинг», щоб зібрати ціни конкурентів.</div>
     {% endif %}
 
-    {% if rows %}
+    {% if has_rows %}
     <div class="pmx-kpis" id="pmxKpis"></div>
 
     <div class="pmx-legend" aria-label="Легенда кольорів">
@@ -121,7 +121,7 @@
             </table>
         </div>
     </div>
-    <script type="application/json" id="rowsData">{{ rows_json | tojson }}</script>
+    <script type="application/json" id="rowsData">{{ rows_json_raw | safe }}</script>
     {% else %}
     <div class="parser-panel">
         <h2>Немає товарів бренду</h2>

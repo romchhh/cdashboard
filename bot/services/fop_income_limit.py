@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 RECONCILE_PATH = Path(ROOT_DIR) / "databases" / "fop_income_reconcile.json"
 WARN_DELTA_UAH = 5.0
+_YTD_CACHE: dict[str, Any] = {"at": 0.0, "rows": None}
+_YTD_CACHE_TTL = 45.0
 
 
 def load_reconcile_cache() -> dict[str, Any]:
@@ -53,6 +56,10 @@ def save_reconcile_cache(payload: dict[str, Any]) -> None:
 
 async def load_ytd_income_by_fop(session: AsyncSession) -> list[dict[str, Any]]:
     """Надходження YTD з БД по прізвищу ФОП (Моно + NovaPay, без готівки/переміщень)."""
+    now = time.monotonic()
+    cached = _YTD_CACHE.get("rows")
+    if cached is not None and (now - float(_YTD_CACHE.get("at") or 0)) < _YTD_CACHE_TTL:
+        return [dict(row) for row in cached]
     date_from, date_to = calendar_year_to_date()
     skip_names = set(CASH_MOVEMENT_CATEGORY_NAMES) | {"Богдан"}
     rows = (
@@ -143,6 +150,8 @@ async def load_ytd_income_by_fop(session: AsyncSession) -> list[dict[str, Any]]:
         )
         out.append(item)
     out.sort(key=lambda x: (-x["over_limit"], -x["used_pct"], x["name"]))
+    _YTD_CACHE["rows"] = out
+    _YTD_CACHE["at"] = time.monotonic()
     return out
 
 

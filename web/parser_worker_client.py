@@ -149,19 +149,22 @@ def worker_reachable(base_url: str | None = None, timeout: float | None = None) 
 
 
 def cancel_catalog_job(job_id: str, base_url: str | None = None) -> bool:
-    """Попросити worker зупинити scrape. False, якщо ендпоінта ще немає або job уже завершився."""
+    """Попросити worker зупинити scrape.
+
+    200 — прапорець поставлено. 404 — job уже немає (рестарт ParserService) = теж зупинено.
+    """
     if not job_id or not _base(base_url):
         return False
     try:
         resp = _SESSION.post(
             _url(f"/v1/jobs/{job_id}/cancel", base_url),
             headers=_headers(),
-            timeout=_START_TIMEOUT,
+            timeout=8,
         )
     except (requests.Timeout, requests.ConnectionError) as exc:
         logger.warning("Worker cancel %s: %s", job_id, exc)
         return False
-    if resp.status_code == 200:
+    if resp.status_code in (200, 404):
         return True
     logger.warning("Worker cancel %s HTTP %s", job_id, resp.status_code)
     return False

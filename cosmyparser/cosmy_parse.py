@@ -4403,7 +4403,12 @@ def search_all(
     misses = []
     limit = SEARCH_DEADLINE if deadline is None else deadline
 
+    cancelled: BaseException | None = None
+
     def emit(item: dict) -> None:
+        nonlocal cancelled
+        if cancelled is not None:
+            return
         if item.get("status") == "ok":
             hits.append(item)
         else:
@@ -4412,7 +4417,10 @@ def search_all(
             return
         try:
             on_site(item)
-        except Exception:
+        except Exception as exc:
+            if type(exc).__name__ in ("ParserJobCancelled", "CatalogRunCancelled"):
+                cancelled = exc
+                return
             if debug:
                 print(f"    [debug] on_site упав для {item.get('site')}")
 
@@ -4460,6 +4468,8 @@ def search_all(
             if not done:
                 break
             for fut in done:
+                if cancelled is not None:
+                    break
                 site = futs[fut]
                 try:
                     item = fut.result()
@@ -4469,6 +4479,8 @@ def search_all(
                 else:
                     _site_strike(site.name, slow=False)
                 emit(item)
+            if cancelled is not None:
+                break
     finally:
         for fut in list(pending):
             site = futs[fut]
@@ -4480,6 +4492,9 @@ def search_all(
             fut.cancel()
         # не чекаємо «зависли» запити — вони доробляться у фоні й кешуються
         pool.shutdown(wait=False, cancel_futures=True)
+
+    if cancelled is not None:
+        raise cancelled
 
     hits.sort(key=lambda r: r.get("price") or 0)
     misses.sort(key=lambda r: r.get("site") or "")
