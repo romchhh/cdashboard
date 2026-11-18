@@ -8,7 +8,8 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Optional
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, exists, func, select
+from sqlalchemy.orm import aliased
 
 from bot.database.products_engine import AsyncProductsSessionLocal
 from bot.database.products_models import (
@@ -36,10 +37,12 @@ async def _aggregate_history_rows(
     """
     Агрегує історію по датах без подвійного обліку SKU.
 
-    Товари без опцій — лише product-level записи (product_option_id IS NULL).
-    Товари з опціями — лише option-level записи (has_options=1).
+    Товари без варіацій — product-level (product_option_id IS NULL), якщо того дня
+    немає зрізу опцій. Варіації — завжди option-level, навіть якщо has_options у
+    картці товару збитий: інакше лінія залишку падає в нуль, хоча склад є.
     """
     frozen_expr = _frozen_value_expr()
+    option_same_day = aliased(ProductSalesHistory)
     metrics = (
         func.coalesce(func.sum(ProductSalesHistory.sales_qty), 0).label("sales"),
         func.coalesce(func.sum(ProductSalesHistory.stock_qty), 0).label("stock"),
@@ -51,6 +54,13 @@ async def _aggregate_history_rows(
         ProductSalesHistory.date >= cutoff,
         ProductSalesHistory.product_option_id.is_(None),
         Product.has_options.is_(False),
+        ~exists(
+            select(option_same_day.id).where(
+                option_same_day.product_id == ProductSalesHistory.product_id,
+                option_same_day.date == ProductSalesHistory.date,
+                option_same_day.product_option_id.isnot(None),
+            )
+        ),
     ]
     if brand_id is not None:
         no_opt_filters.append(Product.brand_id == brand_id)
@@ -66,7 +76,6 @@ async def _aggregate_history_rows(
     opt_filters = [
         ProductSalesHistory.date >= cutoff,
         ProductSalesHistory.product_option_id.isnot(None),
-        Product.has_options.is_(True),
     ]
     if brand_id is not None:
         opt_filters.append(Product.brand_id == brand_id)

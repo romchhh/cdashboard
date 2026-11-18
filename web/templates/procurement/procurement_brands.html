@@ -114,7 +114,7 @@
 .brands-chart-hint { margin: 0; font-size: 12px; color: #6b7280; line-height: 1.45; max-width: 640px; }
 .brands-chart-periods { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .brands-chart-periods__sep { width: 1px; height: 22px; background: #e5e7eb; margin: 0 2px; }
-.brands-chart-wrap { position: relative; height: 340px; }
+.brands-chart-wrap { position: relative; height: 380px; overflow: hidden; }
 .brands-chart-empty { margin: 0; padding: 24px; text-align: center; color: #9ca3af; font-size: 14px; }
 .brands-chart-legend-wrap {
     margin-top: 12px;
@@ -723,20 +723,8 @@ document.addEventListener('DOMContentLoaded', function() {
             labels: labels,
             datasets: [
                 {
-                    label: 'Залишок (шт)',
-                    data: rows.map(function (d) { return d.stock; }),
-                    borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                    yAxisID: 'yStock',
-                    tension: 0.35,
-                    fill: false,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHitRadius: 8,
-                },
-                {
                     label: 'Продажі (шт)',
-                    data: rows.map(function (d) { return d.sales; }),
+                    data: rows.map(function (d) { return Number(d.sales) || 0; }),
                     borderColor: '#3b82f6',
                     backgroundColor: 'rgba(59, 130, 246, 0.08)',
                     yAxisID: 'ySales',
@@ -745,10 +733,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     borderWidth: 2,
                     pointRadius: 0,
                     pointHitRadius: 8,
+                    order: 2,
+                },
+                {
+                    label: 'Залишок (шт)',
+                    data: rows.map(function (d) { return Number(d.stock) || 0; }),
+                    borderColor: '#059669',
+                    backgroundColor: 'rgba(5, 150, 105, 0.14)',
+                    yAxisID: 'yStock',
+                    tension: 0.25,
+                    fill: true,
+                    borderWidth: 2.5,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                    order: 0,
                 },
                 {
                     label: 'Заморожено (₴)',
-                    data: rows.map(function (d) { return d.frozen; }),
+                    data: rows.map(function (d) { return Number(d.frozen) || 0; }),
                     borderColor: '#ec4899',
                     backgroundColor: 'rgba(236, 72, 153, 0.06)',
                     yAxisID: 'yMoney',
@@ -760,7 +762,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 {
                     label: 'Виручка (₴)',
-                    data: rows.map(function (d) { return d.revenue; }),
+                    data: rows.map(function (d) { return Number(d.revenue) || 0; }),
                     borderColor: '#f59e0b',
                     backgroundColor: 'rgba(245, 158, 11, 0.12)',
                     yAxisID: 'yMoney',
@@ -799,12 +801,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 yStock: {
                     type: 'linear',
+                    axis: 'y',
                     position: 'left',
+                    stack: 'stock',
                     beginAtZero: true,
-                    title: { display: true, text: 'Залишок, шт', font: { size: 11 }, color: '#10b981' },
+                    title: { display: true, text: 'Залишок, шт', font: { size: 11 }, color: '#059669' },
                     ticks: {
                         font: { size: 11 },
-                        color: '#10b981',
+                        color: '#059669',
                         callback: function (v) {
                             if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
                             if (v >= 1000) return (v / 1000).toFixed(0) + 'k';
@@ -814,7 +818,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 ySales: {
                     type: 'linear',
+                    axis: 'y',
                     position: 'right',
+                    stack: 'sales',
                     beginAtZero: true,
                     grid: { drawOnChartArea: false },
                     title: { display: true, text: 'Продажі, шт', font: { size: 11 }, color: '#3b82f6' },
@@ -822,7 +828,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         font: { size: 11 },
                         color: '#3b82f6',
                         callback: function (v) {
-                            if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M';
                             if (v >= 1000) return (v / 1000).toFixed(0) + 'k';
                             return v;
                         },
@@ -830,8 +835,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 yMoney: {
                     type: 'linear',
+                    axis: 'y',
                     position: 'right',
-                    offset: true,
+                    stack: 'money',
                     beginAtZero: true,
                     grid: { drawOnChartArea: false },
                     title: { display: true, text: '₴', font: { size: 11 }, color: '#ec4899' },
