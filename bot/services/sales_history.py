@@ -304,9 +304,42 @@ def _densify_daily_history(rows: list[dict]) -> list[dict]:
     return dense
 
 
+def _backfill_leading_inventory(rows: list[dict]) -> list[dict]:
+    """Поки зрізу ще не було, не малювати склад нулем: тримати перший відомий рівень.
+
+    Інакше графік стартує з 0 і різко стрибає в день, коли збір історії нарешті почався.
+    Продажі та виручка цих днів не чіпаємо.
+    """
+    first_stock = 0
+    first_frozen = 0.0
+    first_idx = None
+    for i, row in enumerate(rows):
+        stock = int(row.get("stock") or 0)
+        frozen = float(row.get("frozen") or 0)
+        if stock > 0 or frozen > 0:
+            first_stock = stock
+            first_frozen = frozen
+            first_idx = i
+            break
+    if first_idx is None or first_idx == 0:
+        return rows
+    out: list[dict] = []
+    for i, row in enumerate(rows):
+        if i >= first_idx:
+            out.append(row)
+            continue
+        carried = dict(row)
+        carried["stock"] = first_stock
+        carried["frozen"] = first_frozen
+        carried["has_warehouse_snapshot"] = False
+        out.append(carried)
+    return out
+
+
 def _finalize_warehouse_history_series(rows: list[dict]) -> list[dict]:
     rows = _impute_spurious_zero_snapshots(rows)
-    return _densify_daily_history(rows)
+    rows = _densify_daily_history(rows)
+    return _backfill_leading_inventory(rows)
 
 
 async def get_brand_sales_history(brand_id: int, days: int = 90) -> list[dict]:

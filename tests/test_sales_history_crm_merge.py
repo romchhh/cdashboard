@@ -3,6 +3,7 @@
 from datetime import date
 
 from bot.services.sales_history import (
+    _finalize_warehouse_history_series,
     _impute_spurious_zero_snapshots,
     _merge_crm_daily_sales_into_history,
     aggregate_history_granularity,
@@ -127,3 +128,23 @@ def test_impute_spurious_zero_snapshot_between_nonempty_days():
     by = {r["date"]: r for r in out}
     assert by[d2]["stock"] == 8000
     assert by[d2]["frozen"] == 1_000_000.0
+
+
+def test_leading_gap_keeps_first_known_stock_not_zero():
+    early = date(2026, 5, 22)
+    before = date(2026, 5, 23)
+    first = date(2026, 6, 2)
+    rows = _merge_crm_daily_sales_into_history(
+        [{"date": first, "sales": 0, "stock": 12000, "revenue": 0.0, "frozen": 4_200_000.0}],
+        {
+            early: {"sales": 40, "revenue": 900_000.0},
+            before: {"sales": 12, "revenue": 250_000.0},
+        },
+    )
+    out = _finalize_warehouse_history_series(rows)
+    by = {r["date"]: r for r in out}
+    assert by[early]["stock"] == 12000
+    assert by[early]["frozen"] == 4_200_000.0
+    assert by[early]["sales"] == 40
+    assert by[before]["revenue"] == 250_000.0
+    assert by[first]["stock"] == 12000
