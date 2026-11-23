@@ -1018,20 +1018,15 @@ async def clients_sync_post(
     user: str = Depends(require_admin),
     _csrf: None = Depends(verify_csrf_dependency),
 ):
-    from web.sync_progress import fail, finish, start
+    from web.sync_progress import finish, launch
 
     async def run_clients_sync() -> None:
-        try:
-            from bot.services.clients_sync import sync_clients_from_feed
-            from web.integrations.crm_analytics_cache import cache_invalidate_all
+        from bot.services.clients_sync import sync_clients_from_feed
+        from web.integrations.crm_analytics_cache import cache_invalidate_all
 
-            await sync_clients_from_feed()
-            cache_invalidate_all()
-            finish("clients", "Клієнтів оновлено з фіду")
-        except Exception as exc:
-            logger.error("❌ Помилка синхронізації клієнтів: %s", exc, exc_info=True)
-            fail("clients", exc)
+        await sync_clients_from_feed()
+        cache_invalidate_all()
+        finish("clients", "Клієнтів оновлено з фіду")
 
-    start("clients", "Завантажую фід клієнтів")
-    asyncio.create_task(run_clients_sync())
+    launch("clients", "Завантажую фід клієнтів", run_clients_sync)
     return RedirectResponse(url="/sync", status_code=302)

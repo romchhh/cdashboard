@@ -1481,25 +1481,20 @@ async def sync_post(
     else:
         days = SYNC_PERIOD_DAYS.get(period, 31)
 
-    from web.sync_progress import fail, finish, start, update
+    from web.sync_progress import finish, launch, update
 
     async def run_sync_jobs() -> None:
-        try:
-            if period == "year":
-                update("transactions", "З початку року: Monobank і NovaPay", 0, 2)
-                await sync_fop_ytd_and_reconcile()
-            else:
-                update("transactions", f"Транзакції за {days} дн.", 0, 2)
-                await sync_all_transactions(days=days)
-            update("transactions", "Баланси карток", 1, 2)
-            await sync_balances()
-            finish("transactions", "Транзакції і баланси оновлено")
-        except Exception as exc:
-            logger.error("Фонова синхронізація транзакцій: %s", exc, exc_info=True)
-            fail("transactions", exc)
+        if period == "year":
+            update("transactions", "З початку року: Monobank і NovaPay", 0, 2)
+            await sync_fop_ytd_and_reconcile()
+        else:
+            update("transactions", f"Транзакції за {days} дн.", 0, 2)
+            await sync_all_transactions(days=days)
+        update("transactions", "Баланси карток", 1, 2)
+        await sync_balances()
+        finish("transactions", "Транзакції і баланси оновлено")
 
-    start("transactions", "Запуск синхронізації транзакцій")
-    asyncio.create_task(run_sync_jobs())
+    launch("transactions", "Запуск синхронізації транзакцій", run_sync_jobs)
 
     return RedirectResponse(url="/sync", status_code=302)
 

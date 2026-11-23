@@ -34,6 +34,12 @@ async def lifespan(app: FastAPI):
     from bot.database.clients_engine import init_clients_db
     from bot.database.products_engine import init_products_db
 
+    from web.sync_progress import mark_interrupted
+
+    stopped = mark_interrupted()
+    if stopped:
+        logger.warning("Синхронізації перервані перезапуском: %s", ", ".join(stopped))
+
     logger.info("=" * 60)
     logger.info("Ініціалізація бази даних...")
     await init_db()

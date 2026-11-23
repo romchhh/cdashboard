@@ -14,11 +14,11 @@ Cron-задачі для планувальника (APScheduler).
 Продукти / Procurement Copilot:
   sync_products_from_feed      — щодня о 03:00     → повний цикл (дані для веб Procurement; у Telegram не шлеться):
                                                        1. sync_cosmy_products   — парсинг XML-фіда, оновлення БД
-                                                       2. sync_clients_from_feed — CRM-замовлення
-                                                       3. apply_success_crm_sales — продажі лише успішних замовлень
-                                                       4. collect_daily_sales_snapshot — щоденний зріз продажів
-                                                       5. calculate_all_analytics      — розрахунок аналітики
-                                                       6. calculate_abc_analysis       — ABC-класифікація
+                                                       2. apply_success_crm_sales — продажі з уже завантажених замовлень
+                                                       3. collect_daily_sales_snapshot — щоденний зріз продажів
+                                                       4. calculate_all_analytics      — розрахунок аналітики
+                                                       5. calculate_abc_analysis       — ABC-класифікація
+                                                       Фід клієнтів тут не качається (окрема задача о 05:00).
 
 Реклама (кеш API):
   refresh_ad_cache             — щодня о 02:00 → завантажує Google Ads / Meta Ads / GSC у файловий кеш.

@@ -33,30 +33,28 @@ def _referer_redirect(referer: str | None, fallback: str, query: str) -> Redirec
     return RedirectResponse(url=f"{base}?{query}", status_code=302)
 
 
-async def _run_products_full_sync_and_clear_report_caches() -> None:
-    """Фід + зріз продажів + аналітика + ABC; скидає in-memory кеші звітів закупівель."""
-    from bot.services.products_sync import sync_and_recalculate
-    from bot.services.abc_analysis import abc_analysis_service, reports_service
+def _spawn_product_sync() -> bool:
+    from web.sync_progress import fail, finish, launch, update
 
-    await sync_and_recalculate()
-    abc_analysis_service.clear_cache()
-    reports_service.clear_cache()
+    async def run_products_sync() -> None:
+        def _progress(message: str, done: int, total: int) -> None:
+            update("products", message, done, total)
 
+        from bot.services.products_sync import sync_and_recalculate
+        from bot.services.abc_analysis import abc_analysis_service, reports_service
 
-async def _run_products_analytics_only() -> None:
-    from bot.services.analytics import analytics_service as _analytics_service
-    from bot.services.abc_analysis import abc_analysis_service, reports_service
+        notes = await sync_and_recalculate(progress=_progress)
+        abc_analysis_service.clear_cache()
+        reports_service.clear_cache()
+        if any(str(note).startswith("аналітика") for note in notes):
+            fail("products", "; ".join(str(note) for note in notes))
+            return
+        if notes:
+            finish("products", "Каталог оновлено. Не вдалося: " + "; ".join(str(note) for note in notes))
+            return
+        finish("products", "Каталог, аналітика і ABC оновлено")
 
-    logger.info("📊 [1/2] Розрахунок аналітики (ручний запуск)...")
-    await _analytics_service.calculate_all_analytics()
-    logger.info("✅ [1/2] Аналітику розраховано")
-
-    logger.info("🎯 [2/2] ABC-аналіз...")
-    await abc_analysis_service.calculate_abc_analysis(days=30)
-    logger.info("✅ [2/2] ABC-аналіз виконано")
-
-    abc_analysis_service.clear_cache()
-    reports_service.clear_cache()
+    return launch("products", "Запуск оновлення продуктів", run_products_sync)
 
 
 @router.post("/products/sync")
@@ -66,26 +64,7 @@ async def products_sync_post(
     _csrf: None = Depends(verify_csrf_dependency),
 ):
     """Ручна синхронізація продуктів Cosmy з фіда + повний цикл аналітики + скидання кешу звітів."""
-    from web.sync_progress import fail, finish, start, update
-
-    async def run_products_sync() -> None:
-        try:
-            def _progress(message: str, done: int, total: int) -> None:
-                update("products", message, done, total)
-
-            from bot.services.products_sync import sync_and_recalculate
-            from bot.services.abc_analysis import abc_analysis_service, reports_service
-
-            await sync_and_recalculate(progress=_progress)
-            abc_analysis_service.clear_cache()
-            reports_service.clear_cache()
-            finish("products", "Каталог, аналітика і ABC оновлено")
-        except Exception as exc:
-            logger.error("❌ Помилка синхронізації продуктів: %s", exc, exc_info=True)
-            fail("products", exc)
-
-    start("products", "Запуск оновлення продуктів")
-    asyncio.create_task(run_products_sync())
+    _spawn_product_sync()
     return RedirectResponse(url="/sync", status_code=302)
 
 
@@ -96,29 +75,24 @@ async def products_calculate_analytics_post(
     _csrf: None = Depends(verify_csrf_dependency),
 ):
     """Тільки розрахунок аналітики + ABC (без синхронізації фіду)."""
-    from web.sync_progress import fail, finish, start, update
+    from web.sync_progress import finish, launch, update
 
     async def run_analytics() -> None:
-        try:
-            def _progress(message: str, done: int, total: int) -> None:
-                update("analytics", message, done, total)
+        def _progress(message: str, done: int, total: int) -> None:
+            update("analytics", message, done, total)
 
-            from bot.services.analytics import analytics_service as _analytics_service
-            from bot.services.abc_analysis import abc_analysis_service, reports_service
+        from bot.services.analytics import analytics_service as _analytics_service
+        from bot.services.abc_analysis import abc_analysis_service, reports_service
 
-            update("analytics", "Статуси і заморожений капітал", 0, 2)
-            await _analytics_service.calculate_all_analytics(progress=_progress)
-            update("analytics", "ABC-аналіз", 1, 2)
-            await abc_analysis_service.calculate_abc_analysis(days=30)
-            abc_analysis_service.clear_cache()
-            reports_service.clear_cache()
-            finish("analytics", "Аналітику і ABC перераховано")
-        except Exception as exc:
-            logger.error("❌ Помилка розрахунку аналітики: %s", exc, exc_info=True)
-            fail("analytics", exc)
+        update("analytics", "Статуси і заморожений капітал", 0, 2)
+        await _analytics_service.calculate_all_analytics(progress=_progress)
+        update("analytics", "ABC-аналіз", 1, 2)
+        await abc_analysis_service.calculate_abc_analysis(days=30)
+        abc_analysis_service.clear_cache()
+        reports_service.clear_cache()
+        finish("analytics", "Аналітику і ABC перераховано")
 
-    start("analytics", "Запуск перерахунку аналітики")
-    asyncio.create_task(run_analytics())
+    launch("analytics", "Запуск перерахунку аналітики", run_analytics)
     return RedirectResponse(url="/sync", status_code=302)
 
 
@@ -128,14 +102,8 @@ async def calculate_analytics_post(
     user: str = Depends(require_admin),
     _csrf: None = Depends(verify_csrf_dependency),
 ):
-    """Застарілий URL: той самий повний цикл, що «Оновити продукти зараз» на /sync."""
-    async def run_products_sync() -> None:
-        try:
-            await _run_products_full_sync_and_clear_report_caches()
-        except Exception as exc:
-            logger.error("❌ Помилка розрахунку аналітики: %s", exc, exc_info=True)
-
-    asyncio.create_task(run_products_sync())
+    """Застарілий URL: той самий повний цикл, що «Оновити продукти» на /sync."""
+    _spawn_product_sync()
     return RedirectResponse(url="/procurement/dashboard?calculated=1", status_code=302)
 
 

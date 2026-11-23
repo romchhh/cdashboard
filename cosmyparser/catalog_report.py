@@ -32,6 +32,7 @@ from cosmy_parse import (
     extract_volumes,
     format_volume,
     market_summary,
+    RETRY_SEARCH_DEADLINE,
     search_all,
     set_search_feed_model,
     site_carries_brand,
@@ -317,6 +318,84 @@ def merge_search_payload(base: dict, patch: dict) -> dict:
     return merged
 
 
+_KEEP_AS_HIT = frozenset({"match", "other_volume", "out_of_stock", "odd_price", "low_match"})
+_RETRY_PER_ROW = 4
+
+
+def _shops_to_payload(shops: dict, skip: set) -> dict:
+    results, misses = [], []
+    for site, info in (shops or {}).items():
+        if site in skip:
+            continue
+        if info.get("status") in _KEEP_AS_HIT and info.get("url"):
+            results.append({
+                "site": site,
+                "status": "ok",
+                "title": info.get("title"),
+                "price": info.get("price"),
+                "url": info.get("url"),
+                "volume": info.get("volume"),
+                "match": info.get("match") or 0,
+                "in_stock": info.get("in_stock", True),
+                "price_note": info.get("note"),
+                "alternatives": info.get("alternatives") or [],
+            })
+        else:
+            misses.append({
+                "site": site,
+                "status": info.get("status") or "not_found",
+                "reason": info.get("reason"),
+                "best_title": info.get("title"),
+                "best_url": info.get("url"),
+                "best_price": info.get("price"),
+                "match": info.get("match"),
+                "near": info.get("near") or [],
+            })
+    return {"results": results, "misses": misses}
+
+
+def _retry_thin_coverage(rows: list) -> None:
+    """Повтор лише магазинів, які в цьому бренді вже дали збіг, але на частині SKU не встигли."""
+    proven: Counter = Counter()
+    for row in rows:
+        if not row:
+            continue
+        for site, info in (row.get("shops") or {}).items():
+            if info.get("status") == "match":
+                proven[site] += 1
+    worthy = {site for site, count in proven.items() if count >= 1}
+    if not worthy:
+        return
+    for row in rows:
+        if not row or int(row.get("found") or 0) >= 2:
+            continue
+        sites = [
+            site
+            for site, info in (row.get("shops") or {}).items()
+            if site in worthy and info.get("status") in RETRY_SHOP_STATUSES
+        ][:_RETRY_PER_ROW]
+        if not sites:
+            continue
+        set_search_feed_model(row.get("model"))
+        try:
+            patch = search_all(
+                row.get("query") or "",
+                our_price=row.get("our_price"),
+                site_names=tuple(sites),
+                deadline=RETRY_SEARCH_DEADLINE,
+            )
+        except Exception:
+            continue
+        finally:
+            set_search_feed_model(None)
+        base = _shops_to_payload(row.get("shops") or {}, set(sites))
+        base["query"] = row.get("query")
+        base["our_price"] = row.get("our_price")
+        rebuilt = build_row(row, merge_search_payload(base, patch))
+        row.clear()
+        row.update(rebuilt)
+
+
 def build_row(product: dict, payload: dict) -> dict:
     our = product.get("our_price")
     results = payload.get("results") or []
@@ -594,7 +673,8 @@ def run_catalog(
             )
         return report
 
-    # ENABLE_SHOP_RETRY=False: магазин «н/д» лишається як є, без другого кола.
+    # Друге коло лише по магазинах, які в цьому бренді вже знайшли хоча б один товар.
+    _retry_thin_coverage(rows)
     report = _write_partial(final=True)
     report["total"] = total
     report["partial"] = False

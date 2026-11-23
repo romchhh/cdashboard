@@ -1924,16 +1924,28 @@ def _search_results_for_query(query: str, items: list) -> list:
     return _article_filtered_results(query, items)
 
 
+def _stop_silent_variants(opened: bool, silent: list) -> bool:
+    """Два варіанти запиту підряд без відповіді сайту — далі не гатимо дедлайн."""
+    if opened:
+        silent[0] = 0
+        return False
+    silent[0] += 1
+    return silent[0] >= 2
+
+
 def find_html_search_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     found = []
     seen = set()
     responded = False
+    silent = [0]
     for q in query_variants(query):
+        opened = False
         for pattern in site.search_url_patterns:
             url = pattern.format(q=quote(q))
             soup = fetch(url, debug=debug)
             if soup is None:
                 continue
+            opened = True
             responded = True
             items = collect_result_links(site, soup)
             if debug:
@@ -1950,6 +1962,8 @@ def find_html_search_results(site: SiteConfig, query: str, debug: bool = False) 
                 return _search_results_for_query(query, found)
         if results_good_enough(site, query, found):
             return _search_results_for_query(query, found)
+        if _stop_silent_variants(opened, silent):
+            break
     if not responded:
         return None
     return _search_results_for_query(query, found)
@@ -1958,6 +1972,7 @@ def find_html_search_results(site: SiteConfig, query: str, debug: bool = False) 
 def find_woocommerce_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     products = []
     responded = False
+    silent = [0]
     for q in query_variants(query):
         url = site.api_url.format(q=quote(q))
         data = fetch_text(
@@ -1967,8 +1982,11 @@ def find_woocommerce_results(site: SiteConfig, query: str, debug: bool = False) 
             as_json=True,
         )
         if data is None:
+            if _stop_silent_variants(False, silent):
+                break
             continue
         responded = True
+        _stop_silent_variants(True, silent)
         if not isinstance(data, list) or not data:
             continue
         for item in data:
@@ -2015,6 +2033,7 @@ def find_woocommerce_results(site: SiteConfig, query: str, debug: bool = False) 
 def find_live_search_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     products = []
     responded = False
+    silent = [0]
     for q in query_variants(query):
         url = site.api_url.format(q=quote(q))
         data = fetch_text(
@@ -2027,8 +2046,11 @@ def find_live_search_results(site: SiteConfig, query: str, debug: bool = False) 
             as_json=True,
         )
         if data is None:
+            if _stop_silent_variants(False, silent):
+                break
             continue
         responded = True
+        _stop_silent_variants(True, silent)
         items = []
         if isinstance(data, dict):
             items = data.get("products") or data.get("items") or []
@@ -2317,8 +2339,11 @@ def find_card_results(site: SiteConfig, query: str, debug: bool = False) -> list
     """None — жодна сторінка пошуку не відкрилась. [] — магазин відповів порожньою видачею."""
     products, seen = [], set()
     responded = False
+    silent = [0]
     for q in query_variants(query):
+        opened = False
         for url, soup in _iter_search_pages(site, q, debug=debug):
+            opened = True
             responded = True
             # Редірект на PDP: related-картки зі сторінки товару гірші за сам товар.
             # Ніколи не плутати сторінку пошуку (Krasota h1.product-title «Пошук») з товаром.
@@ -2343,6 +2368,8 @@ def find_card_results(site: SiteConfig, query: str, debug: bool = False) -> list
                 return _search_results_for_query(query, products)
         if results_good_enough(site, query, products):
             return _search_results_for_query(query, products)
+        if _stop_silent_variants(opened, silent):
+            break
     if not responded:
         return None
     return _search_results_for_query(query, products)
@@ -2405,11 +2432,14 @@ def parse_jsonld_list(site: SiteConfig, soup) -> list:
 def find_jsonld_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     products, seen = [], set()
     responded = False
+    silent = [0]
     for q in query_variants(query):
+        opened = False
         for pattern in site.search_url_patterns:
             soup = fetch(pattern.format(q=quote(q)), debug=debug)
             if soup is None:
                 continue
+            opened = True
             responded = True
             cards = parse_jsonld_list(site, soup)
             if not cards:
@@ -2424,6 +2454,8 @@ def find_jsonld_results(site: SiteConfig, query: str, debug: bool = False) -> li
                 return _search_results_for_query(query, products)
         if results_good_enough(site, query, products):
             return _search_results_for_query(query, products)
+        if _stop_silent_variants(opened, silent):
+            break
     if not responded:
         return None
     return _search_results_for_query(query, products)
@@ -2635,13 +2667,9 @@ def site_carries_brand(site: SiteConfig, query: str, samples: tuple = (), debug:
                 if not items:
                     saw_confirmed_empty = True
                 else:
+                    # Чужі картки на ім'я бренду не доводять, що бренду немає:
+                    # пошук «Abril» ловить інші товари, а точна назва ще знаходиться.
                     saw_unrelated_hits = True
-                    probe_n = normalize_text(probe)
-                    brand_probes = {normalize_text(brand), *[normalize_text(a) for a in aliases[:3]]}
-                    if probe_n in brand_probes:
-                        # «Acnemy» → 30 карток Academie: бренду в магазині немає.
-                        result = False
-                        break
             if result is None:
                 if got_response and saw_confirmed_empty and not saw_unrelated_hits:
                     result = False
@@ -2757,11 +2785,14 @@ def parse_microdata_products(site: SiteConfig, soup) -> list:
 def find_microdata_results(site: SiteConfig, query: str, debug: bool = False) -> list | None:
     products, seen = [], set()
     responded = False
+    silent = [0]
     for q in query_variants(query):
+        opened = False
         for pattern in site.search_url_patterns:
             soup = fetch(pattern.format(q=quote(q)), debug=debug)
             if soup is None:
                 continue
+            opened = True
             responded = True
             cards = parse_microdata_products(site, soup)
             if debug:
@@ -2774,6 +2805,8 @@ def find_microdata_results(site: SiteConfig, query: str, debug: bool = False) ->
                 break
         if results_good_enough(site, query, products):
             return products
+        if _stop_silent_variants(opened, silent):
+            break
     if not responded:
         return None
     return products
@@ -4532,7 +4565,7 @@ def search_all(
             pool_size = max(1, len(active))
     # 63 магазини × низький pool — інакше дедлайн зрізає хвіст як «unavailable».
     waves = (len(active) + pool_size - 1) // pool_size if active else 1
-    min_limit = waves * 14.0 + 20.0
+    min_limit = waves * 20.0 + 24.0
     if limit <= 0 or limit < min_limit:
         limit = max(SEARCH_DEADLINE, min_limit)
     pool = ThreadPoolExecutor(max_workers=pool_size)

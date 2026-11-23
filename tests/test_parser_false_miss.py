@@ -94,3 +94,32 @@ def test_failed_brand_page_is_not_cached_as_empty(monkeypatch):
     assert cp.brand_listing(site, "sesderma") is None
     assert cp.brand_listing(site, "sesderma") is None
     assert calls["n"] == 2
+
+
+def test_unrelated_cards_do_not_mark_brand_absent(monkeypatch):
+    cp.clear_brand_presence_cache()
+    site = cp.SiteConfig(
+        name="Noisy",
+        base_url="https://noisy.example",
+        kind="cards",
+        search_url_patterns=["https://noisy.example/search?q={q}"],
+    )
+    monkeypatch.setattr(
+        cp,
+        "raw_search",
+        lambda *args, **kwargs: [{"title": "April Skin cream", "url": "https://noisy.example/p"}],
+    )
+    monkeypatch.setattr(cp, "brand_matches", lambda *args, **kwargs: False)
+    assert cp.site_carries_brand(site, "Abril et Nature Nature-Plex Mask") is None
+
+
+def test_empty_brand_search_still_means_absent(monkeypatch):
+    cp.clear_brand_presence_cache()
+    site = cp.SiteConfig(
+        name="EmptyShop",
+        base_url="https://empty.example",
+        kind="cards",
+        search_url_patterns=["https://empty.example/search?q={q}"],
+    )
+    monkeypatch.setattr(cp, "raw_search", lambda *args, **kwargs: [])
+    assert cp.site_carries_brand(site, "Abril et Nature Nature-Plex Mask") is False

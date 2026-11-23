@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
 _PATH = Path(__file__).resolve().parents[1] / "databases" / "sync_jobs.json"
 _LOCK = threading.Lock()
+_TASKS: set[asyncio.Task] = set()
 
 JOBS = ("transactions", "products", "analytics", "clients", "ads")
 
@@ -60,6 +65,34 @@ def snapshot() -> dict:
         return {"jobs": _load()}
 
 
+def is_running(job: str) -> bool:
+    with _LOCK:
+        row = _load().get(job) or {}
+        return row.get("state") == "running"
+
+
+def launch(job: str, message: str, factory) -> bool:
+    """Тримає фонову задачу, щоб її не прибрав збирач сміття, і не стартує другу копію."""
+    if is_running(job):
+        return False
+    start(job, message)
+
+    async def _guard() -> None:
+        try:
+            await factory()
+        except asyncio.CancelledError:
+            fail(job, "Зупинено перезапуском. Запустіть ще раз.")
+            raise
+        except Exception as exc:
+            logger.exception("Синхронізація %s впала", job)
+            fail(job, exc)
+
+    task = asyncio.create_task(_guard(), name=f"sync-{job}")
+    _TASKS.add(task)
+    task.add_done_callback(_TASKS.discard)
+    return True
+
+
 def start(job: str, message: str) -> None:
     _set(job, state="running", message=message, error="", done=0, total=0)
 
@@ -70,6 +103,24 @@ def update(job: str, message: str, done: int = 0, total: int = 0) -> None:
 
 def finish(job: str, message: str) -> None:
     _set(job, state="ok", message=message, error="")
+
+
+def mark_interrupted(reason: str = "Процес перезапущено під час цього кроку. Запустіть ще раз.") -> list[str]:
+    """Завислі running-стани після systemctl restart не є живою задачею."""
+    stopped: list[str] = []
+    with _LOCK:
+        data = _load()
+        for job, row in data.items():
+            if row.get("state") != "running":
+                continue
+            row["state"] = "error"
+            row["error"] = reason
+            row["updated_at"] = _now()
+            data[job] = row
+            stopped.append(job)
+        if stopped:
+            _save(data)
+    return stopped
 
 
 def fail(job: str, error: str) -> None:

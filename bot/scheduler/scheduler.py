@@ -156,7 +156,7 @@ def setup_scheduler() -> AsyncIOScheduler:
     logger.info("✅ Задача: Синхронізація клієнтів Cosmy (05:00 щодня)")
 
     # 8. Нічне оновлення кешу рекламних API (02:00 за Києвом).
-    # CRM-фід тут не качаємо: його пише синк клієнтів о 05:00 (і закупки о 03:00).
+    # CRM-фід тут не качаємо: його пише синк клієнтів о 05:00.
     scheduler.add_job(
         _guard(refresh_ad_cache),
         trigger=CronTrigger(hour=2, minute=0),

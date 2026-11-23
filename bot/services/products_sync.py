@@ -452,72 +452,81 @@ async def _import_products_feed(path) -> None:
 
 
 
-async def sync_and_recalculate(progress=None) -> None:
+async def sync_and_recalculate(progress=None) -> list[str]:
     """
-    Повний цикл оновлення даних продуктів:
-    1. Синхронізація XML-фіда
-    2. Синхронізація CRM-замовлень (для продажів лише успішних)
-    3. Перерахунок sales_qty з CRM (успішні замовлення)
-    4. Щоденний зріз продажів
-    5. Розрахунок аналітики (всі товари та варіації)
-    6. ABC-аналіз
+    Повний цикл каталогу без повторного фіду клієнтів.
+
+    Фід клієнтів качає лише окрема синхронізація. Тут беруться вже збережені
+    замовлення. Збій продажів, зрізу або ABC не зупиняє аналітику і не лишає
+    задачу назавжди в стані «йде».
     """
-    from bot.services.clients_sync import sync_clients_from_feed
     from bot.services.procurement_crm_sales import apply_success_crm_sales_to_products
     from bot.services.sales_history import collect_daily_sales_snapshot
     from bot.services.analytics import analytics_service
     from bot.services.abc_analysis import abc_analysis_service
 
-    def _step(message: str, done: int, total: int = 6) -> None:
+    notes: list[str] = []
+    total = 5
+
+    def _step(message: str, done: int) -> None:
         if progress:
             progress(message, done, total)
 
-    logger.info("🛒 [1/6] Синхронізація продуктів із фіда...")
+    logger.info("🛒 [1/5] Синхронізація продуктів із фіда...")
     _step("Завантажую фід продуктів", 0)
     await sync_cosmy_products()
-    logger.info("✅ [1/6] Продукти синхронізовано")
+    logger.info("✅ [1/5] Продукти синхронізовано")
     _step("Каталог оновлено", 1)
 
-    logger.info("👥 [2/6] Синхронізація CRM-замовлень...")
+    logger.info("📦 [2/5] Продажі з уже завантажених замовлень...")
+    _step("Продажі з замовлень CRM", 1)
     try:
-        stats = await sync_clients_from_feed()
+        crm_stats = await apply_success_crm_sales_to_products()
         logger.info(
-            "✅ [2/6] CRM: клієнтів %s, замовлень %s",
-            stats.get("customers"),
-            stats.get("orders"),
+            "✅ [2/5] CRM-продажі: %s product_id, %s товарів",
+            crm_stats.get("crm_product_ids"),
+            crm_stats.get("products_updated"),
         )
-    except Exception as e:
-        logger.warning("⚠️ [2/6] CRM-синхронізація не вдалась, використовуємо наявні дані: %s", e)
-        _step(f"CRM не оновився: {e}", 2)
-    else:
-        _step("Замовлення CRM оновлено", 2)
+        _step("Продажі перераховано", 2)
+    except Exception as exc:
+        logger.exception("Продажі CRM не перерахувались, аналітика піде з фіду")
+        notes.append(f"продажі CRM: {exc}")
+        _step("Продажі CRM пропущено", 2)
 
-    logger.info("📦 [3/6] Продажі для закупівель — лише успішні замовлення CRM...")
-    crm_stats = await apply_success_crm_sales_to_products()
-    logger.info(
-        "✅ [3/6] CRM-продажі: %s product_id, %s товарів",
-        crm_stats.get("crm_product_ids"),
-        crm_stats.get("products_updated"),
-    )
-    _step("Продажі з успішних замовлень", 3)
+    logger.info("📊 [3/5] Збір щоденного зрізу продажів...")
+    _step("Зріз продажів", 2)
+    try:
+        await collect_daily_sales_snapshot()
+        logger.info("✅ [3/5] Зріз зібрано")
+        _step("Зріз зібрано", 3)
+    except Exception as exc:
+        logger.exception("Зріз продажів не зібрано")
+        notes.append(f"зріз продажів: {exc}")
+        _step("Зріз продажів пропущено", 3)
 
-    logger.info("📊 [4/6] Збір щоденного зрізу продажів...")
-    _step("Зріз продажів", 3)
-    await collect_daily_sales_snapshot()
-    logger.info("✅ [4/6] Зріз зібрано")
+    logger.info("🔍 [4/5] Розрахунок аналітики...")
+    _step("Статуси і заморожений капітал", 3)
 
-    logger.info("🔍 [5/6] Розрахунок аналітики...")
-    _step("Статуси і заморожений капітал", 4)
+    def _analytics_progress(message: str, done: int, total_items: int) -> None:
+        _step(message, 3)
 
-    def _analytics_progress(message: str, done: int, total: int) -> None:
-        _step(message, 4)
+    try:
+        await analytics_service.calculate_all_analytics(progress=_analytics_progress)
+        logger.info("✅ [4/5] Аналітику розраховано")
+        _step("Аналітика готова", 4)
+    except Exception as exc:
+        logger.exception("Аналітика не розрахувалась")
+        notes.append(f"аналітика: {exc}")
+        _step("Аналітика не записалась", 4)
 
-    await analytics_service.calculate_all_analytics(progress=_analytics_progress)
-    logger.info("✅ [5/6] Аналітику розраховано")
-
-    logger.info("🎯 [6/6] ABC-аналіз...")
-    _step("ABC-аналіз", 5)
-    await abc_analysis_service.calculate_abc_analysis(days=30)
-    logger.info("✅ [6/6] ABC-аналіз виконано")
-    _step("Готово", 6)
+    logger.info("🎯 [5/5] ABC-аналіз...")
+    _step("ABC-аналіз", 4)
+    try:
+        await abc_analysis_service.calculate_abc_analysis(days=30)
+        logger.info("✅ [5/5] ABC-аналіз виконано")
+    except Exception as exc:
+        logger.exception("ABC-аналіз не виконано")
+        notes.append(f"ABC: {exc}")
+    _step("Готово", 5)
+    return notes
 

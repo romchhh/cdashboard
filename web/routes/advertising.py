@@ -681,18 +681,13 @@ async def advertising_sync_post(
     """Ручне оновлення кешу рекламної аналітики (Google Ads, Meta, GSC, GA4) + CRM."""
     from bot.scheduler.tasks import refresh_ad_cache
 
-    from web.sync_progress import fail, finish, start
+    from web.sync_progress import finish, launch
 
     async def run_ad_cache_refresh() -> None:
-        try:
-            await refresh_ad_cache()
-            finish("ads", "Рекламний кеш оновлено")
-        except Exception as exc:
-            logger.error("❌ Помилка синхронізації рекламної аналітики: %s", exc, exc_info=True)
-            fail("ads", exc)
+        await refresh_ad_cache()
+        finish("ads", "Рекламний кеш оновлено")
 
-    start("ads", "Оновлюю Google Ads, Meta, Search Console і GA4")
-    asyncio.create_task(run_ad_cache_refresh())
+    launch("ads", "Оновлюю Google Ads, Meta, Search Console і GA4", run_ad_cache_refresh)
     return RedirectResponse(url="/sync", status_code=302)
 
 
