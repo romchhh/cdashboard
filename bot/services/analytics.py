@@ -71,10 +71,14 @@ class ProductAnalyticsService:
         except Exception as e:
             logger.warning("⚠️ Не вдалося завантажити налаштування: %s", e)
 
-    async def calculate_all_analytics(self) -> None:
+    async def calculate_all_analytics(self, progress=None, use_history: bool = False) -> None:
         """
         Розраховує аналітику для всіх товарів і варіацій.
         Викликається щоденно після синхронізації фіда.
+
+        use_history=False: статуси й капітал з агрегатів фіду, без окремого
+        запиту історії на кожен SKU. Повний імпорт щойно стирає зрізи, тож
+        ці запити лише затягують коміт — і дашборд лишається на нулях.
         """
         logger.info("🔍 Початок розрахунку аналітики для всіх товарів...")
 
@@ -84,16 +88,9 @@ class ProductAnalyticsService:
             # Завантажуємо налаштування з БД
             await self._load_settings()
 
-            # 1. Розраховуємо для основних продуктів (без варіацій)
             products_result = await session.execute(select(Product))
             products = products_result.scalars().all()
 
-            analytics_updated = 0
-            for product in products:
-                await self._calculate_product_analytics(product.id, None)
-                analytics_updated += 1
-
-            # 2. Розраховуємо для варіацій (ProductOption)
             options_result = await session.execute(
                 select(ProductOption).where(
                     (ProductOption.sales_avg_per_day_30d.isnot(None))
@@ -102,50 +99,107 @@ class ProductAnalyticsService:
             )
             options = options_result.scalars().all()
 
+            total = len(products) + len(options)
+            done = 0
+            failed = 0
+            if progress:
+                progress("Рахую статуси і заморожений капітал", done, total)
+
+            analytics_updated = 0
+            for product in products:
+                try:
+                    await self._calculate_product_analytics(
+                        product.id, None, item=product, use_history=use_history
+                    )
+                    analytics_updated += 1
+                except Exception:
+                    failed += 1
+                    logger.exception("Аналітика товару id=%s", product.id)
+                done += 1
+                if done % 400 == 0:
+                    await session.commit()
+                    if progress:
+                        progress("Рахую статуси і заморожений капітал", done, total)
+
             options_updated = 0
             for option in options:
-                await self._calculate_product_analytics(option.product_id, option.id)
-                options_updated += 1
+                try:
+                    await self._calculate_product_analytics(
+                        option.product_id,
+                        option.id,
+                        item=option,
+                        use_history=use_history,
+                    )
+                    options_updated += 1
+                except Exception:
+                    failed += 1
+                    logger.exception("Аналітика варіації id=%s", option.id)
+                done += 1
+                if done % 400 == 0:
+                    await session.commit()
+                    if progress:
+                        progress("Рахую статуси і заморожений капітал", done, total)
 
             await session.commit()
+            if failed and analytics_updated + options_updated == 0:
+                raise RuntimeError(f"Аналітика не записалась: {failed} помилок")
             logger.info(
-                "✅ Аналітика розрахована: %d товарів, %d варіацій",
+                "✅ Аналітика розрахована: %d товарів, %d варіацій, помилок %d",
                 analytics_updated,
                 options_updated,
+                failed,
             )
+            if progress:
+                progress(
+                    f"Аналітика: {analytics_updated} товарів, {options_updated} варіацій"
+                    + (f", помилок {failed}" if failed else ""),
+                    total,
+                    total,
+                )
 
-            # Після розрахунку аналітики — генеруємо алерти
-            await self._generate_alerts()
+            try:
+                await self._generate_alerts()
+            except Exception:
+                logger.exception("Генерація алертів після аналітики")
+                if progress:
+                    progress("Аналітику записано, алерти не згенерувались", total, total)
 
     async def _calculate_product_analytics(
         self,
         product_id: int,
         product_option_id: Optional[int] = None,
+        item=None,
+        use_history: bool = True,
     ) -> None:
         """Розраховує аналітику для конкретного товару/варіації."""
 
-        if product_option_id:
-            result = await self.session.execute(
-                select(ProductOption).where(ProductOption.id == product_option_id)
-            )
-            item = result.scalar_one_or_none()
-        else:
-            result = await self.session.execute(
-                select(Product).where(Product.id == product_id)
-            )
-            item = result.scalar_one_or_none()
+        if item is None:
+            if product_option_id:
+                result = await self.session.execute(
+                    select(ProductOption).where(ProductOption.id == product_option_id)
+                )
+                item = result.scalar_one_or_none()
+            else:
+                result = await self.session.execute(
+                    select(Product).where(Product.id == product_id)
+                )
+                item = result.scalar_one_or_none()
 
         if not item:
             return
 
-        # Отримуємо історію продажів
-        history = await self._get_sales_history(product_id, product_option_id, days=90)
-        history_30d_ago = await self._get_sales_history_range(
-            product_id, product_option_id, days_from=60, days_to=30
-        )
-        history_1y_ago = await self._get_sales_history_range(
-            product_id, product_option_id, days_from=395, days_to=365
-        )
+        if use_history:
+            history = await self._get_sales_history(product_id, product_option_id, days=90)
+            history_30d_ago = await self._get_sales_history_range(
+                product_id, product_option_id, days_from=60, days_to=30
+            )
+            history_1y_ago = await self._get_sales_history_range(
+                product_id, product_option_id, days_from=395, days_to=365
+            )
+        else:
+            history = []
+            history_30d_ago = []
+            history_1y_ago = []
 
         # Основні метрики
         stock_qty = item.stock_qty or 0
@@ -449,9 +503,9 @@ class ProductAnalyticsService:
 
         Пріоритет:
         1. out_of_stock — немає залишку
-        2. dead_stock   — 90+ днів без продажів (незалежно від довжини history)
-        3. new          — менше 7 записів в history І немає чітких ознак dead/slow
-        4. slow_mover / fast_mover — за швидкістю продажів
+        2. fast / medium — за середніми продажами з фіду
+        3. dead_stock   — 90+ днів без продажів
+        4. new          — немає ні історії, ні продажів у фіді
         """
         stock_qty = item.stock_qty or 0
 
@@ -467,7 +521,10 @@ class ProductAnalyticsService:
         # sales_qty_30d == 0 означає що за 30 днів продажів не було (слабший сигнал).
         if days_without_sales == 999 or len(history) < self.DEAD_STOCK_DAYS_WITHOUT_SALES:
             sales_30d = getattr(item, "sales_qty_30d", None)
-            if sales_30d is not None and sales_30d == 0:
+            # 999 означає «історії немає», не «давно не продавалось».
+            if sales_30d is not None and sales_30d > 0 and days_without_sales == 999:
+                days_without_sales = 0
+            elif sales_30d is not None and sales_30d == 0:
                 # Немає продажів за 30 днів → перевіряємо last_sale_date з фіду
                 last_sale_raw = getattr(item, "last_sale_date", None)
                 if last_sale_raw:
@@ -496,21 +553,22 @@ class ProductAnalyticsService:
                     days_without_sales, self.DEAD_STOCK_DAYS_WITHOUT_SALES
                 )
 
+        # Швидкість з фіду важливіша за довжину історії: повний імпорт
+        # стирає зрізи, і бестселер інакше лишається «новим».
+        if avg_daily_sales >= self.FAST_MOVER_AVG_DAILY_SALES:
+            return "fast_mover"
+
+        if avg_daily_sales >= self.MEDIUM_MOVER_AVG_DAILY_SALES:
+            return "medium_mover"
+
         if days_without_sales >= self.DEAD_STOCK_DAYS_WITHOUT_SALES:
             return "dead_stock"
 
         if days_without_sales >= self.SLOW_MOVER_DAYS_WITHOUT_SALES:
             return "slow_mover"
 
-        # Тільки після перевірки dead/slow — перевіряємо чи є достатньо history
-        if len(history) < 7:
+        if len(history) < 7 and avg_daily_sales <= 0:
             return "new"
-
-        if avg_daily_sales >= self.FAST_MOVER_AVG_DAILY_SALES:
-            return "fast_mover"
-
-        if avg_daily_sales >= self.MEDIUM_MOVER_AVG_DAILY_SALES:
-            return "medium_mover"
 
         return "slow_mover"
 

@@ -20,6 +20,17 @@
     </div>
     {% endif %}
 
+    <section class="sync-live" id="sync-live" aria-live="polite">
+        <h2 class="sync-live-title">Хід синхронізації</h2>
+        <ul class="sync-live-list" id="sync-live-list">
+            <li class="sync-live-item" data-job="transactions"><span class="sync-live-name">Транзакції</span><span class="sync-live-state">очікує</span></li>
+            <li class="sync-live-item" data-job="products"><span class="sync-live-name">Продукти</span><span class="sync-live-state">очікує</span></li>
+            <li class="sync-live-item" data-job="analytics"><span class="sync-live-name">Аналітика</span><span class="sync-live-state">очікує</span></li>
+            <li class="sync-live-item" data-job="clients"><span class="sync-live-name">Клієнти</span><span class="sync-live-state">очікує</span></li>
+            <li class="sync-live-item" data-job="ads"><span class="sync-live-name">Реклама</span><span class="sync-live-state">очікує</span></li>
+        </ul>
+    </section>
+
     {# —— Транзакції (головна картка) —— #}
     <section class="sync-hero-card">
         <div class="sync-hero-top">
@@ -63,7 +74,7 @@
                 {{ ui_icon('info') }}
                 <p>
                     Для ліміту ФОП обирайте <strong>З початку року</strong>.
-                    Після запуску одразу поверне на дашборд.
+                    Хід і помилки лишаються на цій сторінці.
                     Monobank: 1 запит/хв — рік може зайняти час.
                 </p>
             </div>
@@ -187,9 +198,97 @@
     </div>
 </div>
 
+<script>
+(function () {
+    var labels = { idle: "очікує", running: "йде", ok: "готово", error: "помилка" };
+    function paint(job, row) {
+        var item = document.querySelector('.sync-live-item[data-job="' + job + '"]');
+        if (!item || !row) return;
+        var state = row.state || "idle";
+        item.dataset.state = state;
+        var text = labels[state] || state;
+        if (state === "running" && row.total) {
+            text = row.done + " / " + row.total;
+        }
+        var detail = state === "error" ? (row.error || "") : (row.message || "");
+        item.querySelector(".sync-live-state").textContent = text;
+        var note = item.querySelector(".sync-live-note");
+        if (!note) {
+            note = document.createElement("span");
+            note.className = "sync-live-note";
+            item.appendChild(note);
+        }
+        note.textContent = detail;
+        var bar = item.querySelector(".sync-live-bar");
+        if (state === "running" && row.total > 0) {
+            if (!bar) {
+                bar = document.createElement("span");
+                bar.className = "sync-live-bar";
+                item.appendChild(bar);
+            }
+            bar.style.width = Math.min(100, Math.round((row.done / row.total) * 100)) + "%";
+        } else if (bar) {
+            bar.remove();
+        }
+    }
+    function tick() {
+        fetch("/sync/status", { headers: { "Accept": "application/json" } })
+            .then(function (res) { return res.ok ? res.json() : null; })
+            .then(function (data) {
+                if (!data || !data.jobs) return;
+                Object.keys(data.jobs).forEach(function (job) { paint(job, data.jobs[job]); });
+            })
+            .catch(function () {});
+    }
+    tick();
+    setInterval(tick, 2000);
+})();
+</script>
+
 <style>
 .sync-page {
     max-width: 960px;
+}
+.sync-live {
+    margin: 0 0 1.15rem;
+    padding: 0.9rem 1rem 0.4rem;
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+    border-radius: var(--radius, 20px);
+}
+.sync-live-title {
+    margin: 0 0 0.55rem;
+    font-size: 0.95rem;
+}
+.sync-live-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.sync-live-item {
+    position: relative;
+    display: grid;
+    grid-template-columns: 8.5rem 5.5rem 1fr;
+    gap: 0.6rem;
+    align-items: baseline;
+    padding: 0.45rem 0 0.55rem;
+    border-top: 1px solid var(--border, rgba(24, 24, 27, 0.08));
+    font-size: 0.92rem;
+    overflow: hidden;
+}
+.sync-live-name { font-weight: 600; }
+.sync-live-state { color: var(--text-muted, #71717a); }
+.sync-live-item[data-state="running"] .sync-live-state { color: var(--accent-ink, #1e40af); }
+.sync-live-item[data-state="ok"] .sync-live-state { color: #166534; }
+.sync-live-item[data-state="error"] .sync-live-state { color: #991b1b; font-weight: 600; }
+.sync-live-note { color: var(--text-muted, #52525b); }
+.sync-live-item[data-state="error"] .sync-live-note { color: #991b1b; }
+.sync-live-bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--accent, #2563eb);
 }
 .sync-page-header {
     margin-bottom: 1.35rem;

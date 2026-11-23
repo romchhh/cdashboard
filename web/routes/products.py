@@ -66,16 +66,27 @@ async def products_sync_post(
     _csrf: None = Depends(verify_csrf_dependency),
 ):
     """Ручна синхронізація продуктів Cosmy з фіда + повний цикл аналітики + скидання кешу звітів."""
-    referer = request.headers.get("referer") or "/products"
+    from web.sync_progress import fail, finish, start, update
 
     async def run_products_sync() -> None:
         try:
-            await _run_products_full_sync_and_clear_report_caches()
+            def _progress(message: str, done: int, total: int) -> None:
+                update("products", message, done, total)
+
+            from bot.services.products_sync import sync_and_recalculate
+            from bot.services.abc_analysis import abc_analysis_service, reports_service
+
+            await sync_and_recalculate(progress=_progress)
+            abc_analysis_service.clear_cache()
+            reports_service.clear_cache()
+            finish("products", "Каталог, аналітика і ABC оновлено")
         except Exception as exc:
             logger.error("❌ Помилка синхронізації продуктів: %s", exc, exc_info=True)
+            fail("products", exc)
 
+    start("products", "Запуск оновлення продуктів")
     asyncio.create_task(run_products_sync())
-    return _referer_redirect(referer, "/products", "synced=1")
+    return RedirectResponse(url="/sync", status_code=302)
 
 
 @router.post("/products/calculate-analytics")
@@ -85,16 +96,30 @@ async def products_calculate_analytics_post(
     _csrf: None = Depends(verify_csrf_dependency),
 ):
     """Тільки розрахунок аналітики + ABC (без синхронізації фіду)."""
-    referer = request.headers.get("referer") or "/sync"
+    from web.sync_progress import fail, finish, start, update
 
     async def run_analytics() -> None:
         try:
-            await _run_products_analytics_only()
+            def _progress(message: str, done: int, total: int) -> None:
+                update("analytics", message, done, total)
+
+            from bot.services.analytics import analytics_service as _analytics_service
+            from bot.services.abc_analysis import abc_analysis_service, reports_service
+
+            update("analytics", "Статуси і заморожений капітал", 0, 2)
+            await _analytics_service.calculate_all_analytics(progress=_progress)
+            update("analytics", "ABC-аналіз", 1, 2)
+            await abc_analysis_service.calculate_abc_analysis(days=30)
+            abc_analysis_service.clear_cache()
+            reports_service.clear_cache()
+            finish("analytics", "Аналітику і ABC перераховано")
         except Exception as exc:
             logger.error("❌ Помилка розрахунку аналітики: %s", exc, exc_info=True)
+            fail("analytics", exc)
 
+    start("analytics", "Запуск перерахунку аналітики")
     asyncio.create_task(run_analytics())
-    return _referer_redirect(referer, "/sync", "analytics_calculated=1")
+    return RedirectResponse(url="/sync", status_code=302)
 
 
 @router.post("/procurement/calculate-analytics")

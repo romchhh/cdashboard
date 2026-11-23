@@ -452,7 +452,7 @@ async def _import_products_feed(path) -> None:
 
 
 
-async def sync_and_recalculate() -> None:
+async def sync_and_recalculate(progress=None) -> None:
     """
     Повний цикл оновлення даних продуктів:
     1. Синхронізація XML-фіда
@@ -468,9 +468,15 @@ async def sync_and_recalculate() -> None:
     from bot.services.analytics import analytics_service
     from bot.services.abc_analysis import abc_analysis_service
 
+    def _step(message: str, done: int, total: int = 6) -> None:
+        if progress:
+            progress(message, done, total)
+
     logger.info("🛒 [1/6] Синхронізація продуктів із фіда...")
+    _step("Завантажую фід продуктів", 0)
     await sync_cosmy_products()
     logger.info("✅ [1/6] Продукти синхронізовано")
+    _step("Каталог оновлено", 1)
 
     logger.info("👥 [2/6] Синхронізація CRM-замовлень...")
     try:
@@ -482,6 +488,9 @@ async def sync_and_recalculate() -> None:
         )
     except Exception as e:
         logger.warning("⚠️ [2/6] CRM-синхронізація не вдалась, використовуємо наявні дані: %s", e)
+        _step(f"CRM не оновився: {e}", 2)
+    else:
+        _step("Замовлення CRM оновлено", 2)
 
     logger.info("📦 [3/6] Продажі для закупівель — лише успішні замовлення CRM...")
     crm_stats = await apply_success_crm_sales_to_products()
@@ -490,16 +499,25 @@ async def sync_and_recalculate() -> None:
         crm_stats.get("crm_product_ids"),
         crm_stats.get("products_updated"),
     )
+    _step("Продажі з успішних замовлень", 3)
 
     logger.info("📊 [4/6] Збір щоденного зрізу продажів...")
+    _step("Зріз продажів", 3)
     await collect_daily_sales_snapshot()
     logger.info("✅ [4/6] Зріз зібрано")
 
     logger.info("🔍 [5/6] Розрахунок аналітики...")
-    await analytics_service.calculate_all_analytics()
+    _step("Статуси і заморожений капітал", 4)
+
+    def _analytics_progress(message: str, done: int, total: int) -> None:
+        _step(message, 4)
+
+    await analytics_service.calculate_all_analytics(progress=_analytics_progress)
     logger.info("✅ [5/6] Аналітику розраховано")
 
     logger.info("🎯 [6/6] ABC-аналіз...")
+    _step("ABC-аналіз", 5)
     await abc_analysis_service.calculate_abc_analysis(days=30)
     logger.info("✅ [6/6] ABC-аналіз виконано")
+    _step("Готово", 6)
 

@@ -744,6 +744,47 @@ class ProcurementReportsService:
                 stock_with_opts_result.scalar() or 0
             )
 
+            # Імпорт стирає product_analytics до кінця перерахунку. Поки рядків
+            # немає, капітал і «немає в наявності» беремо прямо з каталогу.
+            if sum(status_distribution.values()) == 0 and total_unique_products > 0:
+                price_no = await session.execute(
+                    select(
+                        func.coalesce(
+                            func.sum(Product.stock_qty * Product.purchase_price), 0
+                        )
+                    ).where(Product.has_options == 0)
+                )
+                price_opt = await session.execute(
+                    select(
+                        func.coalesce(
+                            func.sum(ProductOption.stock_qty * ProductOption.purchase_price),
+                            0,
+                        )
+                    )
+                    .select_from(ProductOption)
+                    .join(Product, Product.id == ProductOption.product_id)
+                    .where(Product.has_options == 1)
+                )
+                total_frozen_capital = float(price_no.scalar() or 0) + float(
+                    price_opt.scalar() or 0
+                )
+                oos_no = await session.execute(
+                    select(func.count(Product.id)).where(
+                        Product.has_options == 0,
+                        func.coalesce(Product.stock_qty, 0) == 0,
+                    )
+                )
+                oos_opt_sub = (
+                    select(ProductOption.product_id)
+                    .join(Product, Product.id == ProductOption.product_id)
+                    .where(Product.has_options == 1)
+                    .group_by(ProductOption.product_id)
+                    .having(func.coalesce(func.sum(ProductOption.stock_qty), 0) == 0)
+                    .subquery()
+                )
+                oos_opt = await session.execute(select(func.count()).select_from(oos_opt_sub))
+                out_of_stock_products = int(oos_no.scalar() or 0) + int(oos_opt.scalar() or 0)
+
             # 2б. Заморожений капітал по статусах (теж коректно: no_options product-level + options option-level)
             frozen_by_status: Dict[str, float] = {}
             # Для товарів без опцій
@@ -2009,6 +2050,36 @@ class ProcurementReportsService:
                 items = items[:limit]
             return items
 
+    async def _catalog_rows_without_analytics(self, session):
+        """Статуси з полів фіду, коли product_analytics ще порожня."""
+        from types import SimpleNamespace
+
+        products = (
+            await session.execute(select(Product).where(Product.has_options == 0))
+        ).scalars().all()
+        options = (
+            await session.execute(
+                select(ProductOption)
+                .join(Product, Product.id == ProductOption.product_id)
+                .where(Product.has_options == 1)
+            )
+        ).scalars().all()
+
+        def analytics_for(item):
+            avg30 = float(getattr(item, "sales_avg_per_day_30d", 0) or 0)
+            avg7 = float(getattr(item, "sales_avg_per_day_7d", 0) or 0)
+            return SimpleNamespace(
+                days_without_sales=0 if (avg30 > 0 or avg7 > 0) else 999,
+                avg_daily_sales=avg30 or None,
+                avg_daily_sales_7d=avg7 or None,
+                frozen_capital=0,
+            )
+
+        return (
+            [(item, analytics_for(item)) for item in products],
+            [(item, analytics_for(item)) for item in options],
+        )
+
     async def get_status_distribution_for_horizon(self, horizon_days: int) -> Dict[str, any]:
         """
         Рахує розподіл статусів SKU (fast/medium/slow/dead/new/out_of_stock) та виручку
@@ -2055,6 +2126,9 @@ class ProcurementReportsService:
                 .where(option_level)
             )
             with_opts_rows = with_opts_result.all()
+
+            if not no_opts_rows and not with_opts_rows:
+                no_opts_rows, with_opts_rows = await self._catalog_rows_without_analytics(session)
 
             status_distribution: Dict[str, int] = {}
             frozen_by_status: Dict[str, float] = {}

@@ -1447,6 +1447,20 @@ async def sync_page(request: Request, user: str = Depends(require_admin)):
     )
 
 
+@router.get("/sync/status")
+async def sync_status(user: str = Depends(require_admin)):
+    from web.sync_progress import snapshot
+
+    return JSONResponse(snapshot())
+
+
+@router.get("/sync/status")
+async def sync_status(user: str = Depends(require_admin)):
+    from web.sync_progress import snapshot
+
+    return JSONResponse(snapshot())
+
+
 
 @router.post("/sync")
 async def sync_post(
@@ -1467,19 +1481,27 @@ async def sync_post(
     else:
         days = SYNC_PERIOD_DAYS.get(period, 31)
 
+    from web.sync_progress import fail, finish, start, update
+
     async def run_sync_jobs() -> None:
         try:
             if period == "year":
+                update("transactions", "З початку року: Monobank і NovaPay", 0, 2)
                 await sync_fop_ytd_and_reconcile()
             else:
+                update("transactions", f"Транзакції за {days} дн.", 0, 2)
                 await sync_all_transactions(days=days)
+            update("transactions", "Баланси карток", 1, 2)
             await sync_balances()
+            finish("transactions", "Транзакції і баланси оновлено")
         except Exception as exc:
             logger.error("Фонова синхронізація транзакцій: %s", exc, exc_info=True)
+            fail("transactions", exc)
 
+    start("transactions", "Запуск синхронізації транзакцій")
     asyncio.create_task(run_sync_jobs())
 
-    return RedirectResponse(url="/dashboard?synced=1", status_code=302)
+    return RedirectResponse(url="/sync", status_code=302)
 
 
 # --- Ручні витрати поза картами ---

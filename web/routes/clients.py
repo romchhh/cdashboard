@@ -1018,7 +1018,7 @@ async def clients_sync_post(
     user: str = Depends(require_admin),
     _csrf: None = Depends(verify_csrf_dependency),
 ):
-    referer = (request.headers.get("referer") or "/sync").split("?")[0] or "/sync"
+    from web.sync_progress import fail, finish, start
 
     async def run_clients_sync() -> None:
         try:
@@ -1027,8 +1027,11 @@ async def clients_sync_post(
 
             await sync_clients_from_feed()
             cache_invalidate_all()
+            finish("clients", "Клієнтів оновлено з фіду")
         except Exception as exc:
             logger.error("❌ Помилка синхронізації клієнтів: %s", exc, exc_info=True)
+            fail("clients", exc)
 
+    start("clients", "Завантажую фід клієнтів")
     asyncio.create_task(run_clients_sync())
-    return RedirectResponse(url=f"{referer}?clients_synced=1", status_code=302)
+    return RedirectResponse(url="/sync", status_code=302)
