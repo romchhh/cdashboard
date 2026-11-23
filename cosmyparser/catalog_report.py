@@ -319,7 +319,8 @@ def merge_search_payload(base: dict, patch: dict) -> dict:
 
 
 _KEEP_AS_HIT = frozenset({"match", "other_volume", "out_of_stock", "odd_price", "low_match"})
-_RETRY_PER_ROW = 4
+_RETRY_PER_ROW = 6
+_RETRY_UNTIL_MATCHES = 4
 
 
 def _shops_to_payload(shops: dict, skip: set) -> dict:
@@ -367,7 +368,7 @@ def _retry_thin_coverage(rows: list) -> None:
     if not worthy:
         return
     for row in rows:
-        if not row or int(row.get("found") or 0) >= 2:
+        if not row or int(row.get("found") or 0) >= _RETRY_UNTIL_MATCHES:
             continue
         sites = [
             site

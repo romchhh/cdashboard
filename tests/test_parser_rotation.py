@@ -177,13 +177,14 @@ def test_advance_parser_rotation_skips_during_day(monkeypatch):
     assert result["action"] == "daytime"
 
 
-def test_query_variants_add_compact_brand_and_product_forms():
+def test_query_variants_stay_short_and_readable():
     from cosmyparser.cosmy_parse import query_variants
 
     variants = query_variants("Sesderma C-Vit")
-    assert "sesdermacvit" in variants
-    assert "sesderma cvit" in variants
+    assert any("sesderma" in v and "vit" in v for v in variants)
+    assert "sesdermacvit" not in variants
+    assert len(variants) <= 6
 
     variants = query_variants("MOROCCANOIL Moisture Repair")
-    assert "moroccanoilmoisturerepair" in variants
-    assert "moroccanoilrepair" in variants
+    assert "moroccanoilmoisturerepair" not in variants
+    assert len(variants) <= 6

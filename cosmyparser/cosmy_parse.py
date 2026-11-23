@@ -610,6 +610,7 @@ SITES = [
         name="Notino",
         base_url="https://www.notino.ua",
         kind="jsonld",
+        listing_only=True,
         search_url_patterns=["https://www.notino.ua/search.asp?exps={q}"],
         min_similarity=0.6,
     ),
@@ -1098,6 +1099,82 @@ SITES = [
         card_image="img",
     ),
     SiteConfig(
+        name="Abril UA",
+        base_url="https://abril.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://abril.com.ua/index.php?route=product/search&search={q}",
+        ],
+        card_selector=".product-layout",
+        card_title=".caption h4 a",
+        card_price="p.price",
+        card_link=".caption h4 a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Beaver Professional",
+        base_url="https://beaver-professional.com.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=[
+            "https://beaver-professional.com.ua/index.php?route=product/search&search={q}",
+        ],
+        card_selector=".product-layout",
+        card_title=".us-module-title a",
+        card_price=".us-module-price-actual",
+        card_link=".us-module-title a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="MesoBeauty",
+        base_url="https://mesobeauty.com.ua",
+        kind="woocommerce",
+        api_url="https://mesobeauty.com.ua/wp-json/wc/store/v1/products?search={q}&per_page=10",
+        search_url_patterns=["https://mesobeauty.com.ua/?s={q}&post_type=product"],
+        result_link_selector="a[href*='/product/']",
+        result_href_contains="/product/",
+    ),
+    SiteConfig(
+        name="RevitaLash",
+        base_url="https://revitalash.ua",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://revitalash.ua/search?q={q}"],
+        card_selector="div.product[data-product]",
+        card_title=".product__ttl a",
+        card_price=".product__price-holder span.price",
+        card_link=".product__ttl a",
+        card_image="img",
+    ),
+    SiteConfig(
+        name="Maska Cosmetics",
+        base_url="https://maskacosmetics.com.ua",
+        kind="woocommerce",
+        api_url="https://maskacosmetics.com.ua/wp-json/wc/store/v1/products?search={q}&per_page=10",
+        search_url_patterns=["https://maskacosmetics.com.ua/?s={q}&post_type=product"],
+        result_link_selector="a.woocommerce-LoopProduct-link",
+        result_href_contains="/product/",
+    ),
+    SiteConfig(
+        name="EKABEAUTY",
+        base_url="https://ekabeauty.com.ua",
+        kind="woocommerce",
+        api_url="https://ekabeauty.com.ua/wp-json/wc/store/v1/products?search={q}&per_page=10",
+        search_url_patterns=["https://ekabeauty.com.ua/?s={q}"],
+        result_link_selector="a[href*='/product/']",
+        result_href_contains="/product/",
+    ),
+    SiteConfig(
+        name="Take Beauty",
+        base_url="https://takebeauty.com.ua",
+        kind="woocommerce",
+        api_url="https://takebeauty.com.ua/wp-json/wc/store/v1/products?search={q}&per_page=10",
+        search_url_patterns=["https://takebeauty.com.ua/?s={q}&post_type=product"],
+        result_link_selector="a[href*='/product/']",
+        result_href_contains="/product/",
+    ),
+    SiteConfig(
         name="Makoko",
         base_url="https://makoko.shop",
         kind="cards",
@@ -1164,6 +1241,7 @@ COOKIE_WARMUP_ORIGINS = {
 _HOST_SEMS: dict = {}
 _HOST_FAILS: dict = {}
 _HOST_DOWN_UNTIL: dict = {}
+_HOST_NOTE: dict = {}
 _HOST_WARMED: set = set()
 CARD_OOS_CLASS_RE = re.compile(
     r"outofstock|out.?of.?stock|cardisoutofstock|isoutofstock|sold.?out|outofstockfooter",
@@ -1204,6 +1282,7 @@ def reset_host_state() -> None:
     with _HTTP_LOCK:
         _HOST_FAILS.clear()
         _HOST_DOWN_UNTIL.clear()
+        _HOST_NOTE.clear()
         _HOST_WARMED.clear()
         _HOST_COOKIES.clear()
 
@@ -1293,11 +1372,16 @@ def fetch_text(url: str, debug: bool = False, extra_headers: Optional[dict] = No
                 continue
             if debug:
                 print(f"    [debug] GET {url} → статус {r.status_code}, {len(r.content)} байт")
+            if r.status_code == 429 or "перевірка безпеки" in (r.text or "")[:2500].lower():
+                with _HTTP_LOCK:
+                    _HOST_NOTE[host] = "магазин показав перевірку безпеки"
+                _host_result(host, False)
+                break
             if r.status_code == 403 and attempt < 2:
                 _warmup_host(host, headers, debug=debug)
                 time.sleep(0.6 * (attempt + 1))
                 continue
-            if (r.status_code >= 500 or r.status_code == 429) and attempt < 2:
+            if r.status_code >= 500 and attempt < 2:
                 time.sleep(1.5 * (attempt + 1))
                 continue
             if r.status_code >= 500 or r.status_code == 429 or r.status_code == 403:
@@ -1761,31 +1845,17 @@ def query_variants(query: str) -> list:
             glued = re.sub(r"(?<=\w)-(?=\w)", "", cleaned)
             for alt in (spaced, glued):
                 alt = re.sub(r"\s+", " ", alt).strip()
-                if alt and alt not in variants:
+                if alt and alt not in variants and len(alt.split()) <= 8:
                     variants.append(alt)
-        # Деякі магазини нормалізують пробіли/дефіси в один токен: Sesderma C Vit → sesdermacvit.
-        composite = re.sub(r"[\s_-]+", "", cleaned)
-        if composite and composite not in variants:
-            variants.append(composite)
-        if len(cleaned.split()) > 1:
-            words = [w for w in re.split(r"[\s_-]+", cleaned) if w]
-            if len(words) > 1:
-                compact_tail = "".join(words[1:])
-                merged = f"{words[0]}{compact_tail}"
-                if merged and merged not in variants:
-                    variants.append(merged)
-                if len(words) > 2:
-                    variants.append(f"{words[0]}{words[-1]}")
     # lowercase першим: Notino рідше віддає 403 на lower; інші магазини case-insensitive.
     ordered: list[str] = []
     for item in variants:
         low = item.lower()
         if low not in ordered:
             ordered.append(low)
-        if item not in ordered:
-            ordered.append(item)
-    # Занадто довгий список гальмує прогін — залишаємо найкорисніші.
-    cap = 12 if article_vars else 16
+    # Довгий список (склеєні «olaplexml» і дубль регістру) гатить сайт,
+    # і дедлайн ріже решту магазинів як «не відповів».
+    cap = 4 if article_vars else 5
     return ordered[:cap]
 
 
@@ -1820,10 +1890,16 @@ def _strong_listing_hit(query: str, item: dict, site: SiteConfig) -> bool:
 
 
 def results_good_enough(site: SiteConfig, query: str, items: list) -> bool:
+    branded = 0
     for item in items:
         if _strong_listing_hit(query, item, site):
             return True
-    return False
+        title = item.get("title") or "" if isinstance(item, dict) else ""
+        url = item.get("url") or "" if isinstance(item, dict) else ""
+        if brand_matches(query, title, url):
+            branded += 1
+    # Сторінка вже віддала картки бренду — далі перебирає скоринг, а не нові HTTP-запити.
+    return branded >= 6
 
 
 def normalize_product_url(url: str) -> str:
@@ -3664,6 +3740,8 @@ def spec_notes(query_specs: dict, product: dict) -> list:
 def normalize_text(text: str) -> str:
     text = fold_diacritics((text or "").lower().replace("ʼ", "'").replace("’", "'"))
     text = text.replace("мл", " ml ").replace("мг", " mg ")
+    text = text.replace("nº", " no ").replace("n°", " no ").replace("№", " no ")
+    text = re.sub(r"\bno\.?\s*(\d+)", r"no \1", text)
     text = re.sub(r"[^a-z0-9а-яіїєґё]+", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
@@ -4248,16 +4326,18 @@ def search_one_site(
                     raw_results = extra
                     break
     if raw_results is None:
+        note = _HOST_NOTE.get(urlparse(site.base_url).netloc)
         return {
             "site": site.name,
             "status": "unavailable",
-            "reason": "сайт не відповів",
+            "reason": note or "сайт не відповів",
         }
     if not raw_results:
+        # Порожній список — сторінка відкрилась. «Не відповів» лише коли fetch повернув None.
         return {
             "site": site.name,
-            "status": "not_found" if carries else "unavailable",
-            "reason": "товар не знайдено в пошуку" if carries else "сайт не відповів або пошук порожній",
+            "status": "not_found",
+            "reason": "товар не знайдено в пошуку",
         }
 
     unique, seen = [], set()
@@ -4456,9 +4536,9 @@ def market_summary(results: list, our_price: Optional[float] = None) -> dict:
     return summary
 
 
-# Ліміт часу на ОДИН товар (усі магазини паралельно). Хто не встиг — «не відповів» лише
-# для цього товару. Наступний товар питає магазин знову: під навантаженням живий сайт
-# часто не вкладається в 45 с, хоча сам відповідає за 4–12 с.
+# Запасний ліміт лише для явного deadline= у повторному проході.
+# Звичайний пошук його не використовує: магазин або відповідає у свій HTTP-таймаут,
+# або чекає своєї черги. Обривати хвіст черги як «не відповів» не можна.
 SEARCH_DEADLINE = 85.0
 # Залишено для ручного відключення магазину, який стабільно падає з винятком.
 SLOW_SITE_STRIKES = 6
@@ -4497,6 +4577,24 @@ def _site_strike(name: str, *, slow: bool) -> None:
             _SITE_STRIKES[name] = 0
 
 
+# Ці магазини дають майже всі точні ціни. Їх питаємо першими, щоб дедлайн
+# не зрізав саме їх як «не відповів».
+PRIORITY_SITES = (
+    "Kosmetolog",
+    "Beautis",
+    "Krasota.shop",
+    "Makeup",
+    "Dermal Cosmetics",
+    "Pleka",
+    "Laserhouse",
+    "VBeauty",
+    "Bonvivant",
+    "Japan Shampoo",
+    "The Beauty Room",
+    "Notino",
+)
+
+
 # Глобальний ліміт паралельних магазинів у search_all (None = усі).
 # Worker виставляє низьке значення, щоб catalog×sites не вбивав VPS OOM.
 # Однаковий fan-out для локального прогону і ParserService (там ще раз ставиться MAX_SITE_WORKERS).
@@ -4519,7 +4617,8 @@ def search_all(
     reset_site_strikes()
     hits = []
     misses = []
-    limit = SEARCH_DEADLINE if deadline is None else deadline
+    # None — чекаємо всі магазини. Число — лише повторний вузький прохід.
+    limit = deadline if deadline and deadline > 0 else None
 
     cancelled: BaseException | None = None
 
@@ -4555,6 +4654,7 @@ def search_all(
             })
         else:
             active.append(site)
+    active.sort(key=lambda site: PRIORITY_SITES.index(site.name) if site.name in PRIORITY_SITES else len(PRIORITY_SITES))
 
     cap = max_workers if max_workers is not None else SITE_SEARCH_WORKERS
     pool_size = max(1, len(active))
@@ -4563,18 +4663,13 @@ def search_all(
             pool_size = max(1, min(pool_size, int(cap)))
         except (TypeError, ValueError):
             pool_size = max(1, len(active))
-    # 63 магазини × низький pool — інакше дедлайн зрізає хвіст як «unavailable».
-    waves = (len(active) + pool_size - 1) // pool_size if active else 1
-    min_limit = waves * 20.0 + 24.0
-    if limit <= 0 or limit < min_limit:
-        limit = max(SEARCH_DEADLINE, min_limit)
     pool = ThreadPoolExecutor(max_workers=pool_size)
     futs = {
         pool.submit(search_one_site, site, query, debug, our_price, samples): site
         for site in active
     }
     pending = set(futs)
-    end = time.monotonic() + limit if limit and limit > 0 else None
+    end = time.monotonic() + limit if limit else None
     try:
         while pending:
             timeout = None
@@ -4602,10 +4697,11 @@ def search_all(
     finally:
         for fut in list(pending):
             site = futs[fut]
+            reason = f"не відповів за {limit:.0f} с" if limit else "не відповів"
             emit({
                 "site": site.name,
                 "status": "unavailable",
-                "reason": f"не відповів за {limit:.0f} с",
+                "reason": reason,
             })
             fut.cancel()
         # не чекаємо «зависли» запити — вони доробляться у фоні й кешуються
