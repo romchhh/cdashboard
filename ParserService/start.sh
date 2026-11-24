@@ -150,10 +150,19 @@ stop_all() {
 }
 
 ensure_runtime() {
-  local src="$ROOT/../cosmyparser/cosmy_parse.py"
+  local src_dir="$ROOT/../cosmyparser"
+  local src="$src_dir/cosmy_parse.py"
   local dst="$ROOT/runtime/cosmyparser/cosmy_parse.py"
   if [[ -f "$src" ]]; then
-    if [[ ! -f "$dst" || "$src" -nt "$dst" ]]; then
+    local stale=0
+    if [[ ! -f "$dst" ]]; then
+      stale=1
+    elif find "$src_dir" -type f \
+      ! -path '*/__pycache__/*' ! -name '*.pyc' ! -name '.DS_Store' \
+      -newer "$dst" | grep -q .; then
+      stale=1
+    fi
+    if [[ "$stale" -eq 1 ]]; then
       echo "Двигун у репозиторії новіший за runtime — збираю локальний парсер…"
       bash "$ROOT/pack.sh"
     fi
@@ -195,6 +204,8 @@ supervise_loop() {
   local py="$1"
   local child=0
   local rc=0
+  # На macOS немає setsid: без цього закриття оболонки гасить воркер одразу після старту.
+  trap '' HUP
   trap '[[ $child -gt 0 ]] && kill -TERM $child 2>/dev/null || true; exit 0' TERM INT
   while true; do
     rotate_log_if_huge
@@ -267,13 +278,10 @@ start_all() {
   fi
 
   mkdir -p "$ROOT/logs"
-  if command -v setsid >/dev/null 2>&1; then
-    setsid bash "$ROOT/start.sh" supervise "$py" >>"$LOG" 2>&1 &
-    echo $! >"$WATCHPID"
-  else
-    bash "$ROOT/start.sh" supervise "$py" >>"$LOG" 2>&1 &
-    echo $! >"$WATCHPID"
-  fi
+  # nohup лишає воркер живим після виходу start.sh. setsid на macOS зазвичай немає.
+  nohup bash "$ROOT/start.sh" supervise "$py" >>"$LOG" 2>&1 &
+  echo $! >"$WATCHPID"
+  disown "$!" 2>/dev/null || true
   sleep 1.5
   if [[ -f "$PIDFILE" ]] && kill -0 "$(tr -cd '0-9' <"$PIDFILE")" 2>/dev/null; then
     echo "Parser worker запущено (watchdog pid $(tr -cd '0-9' <"$WATCHPID"))."

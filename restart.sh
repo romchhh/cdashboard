@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Закриває веб-панель і Telegram-бота, потім відкриває обидва заново.
+# Закриває локальний ParserService, веб-панель і Telegram-бота, потім відкриває їх заново.
+# Парсер перед стартом збирає runtime з поточного cosmyparser.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

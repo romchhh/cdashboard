@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Запуск веб-панелі та Telegram-бота з кореня проєкту.
-# Якщо обидва вже працюють, другі процеси не створюються: ./restart.sh
+# Запуск веб-панелі, Telegram-бота і локального ParserService з кореня проєкту.
+# Якщо сервіси вже працюють, другі процеси не створюються: ./restart.sh
+# ./restart.sh зупиняє локальний парсер, збирає runtime з cosmyparser і піднімає його знову.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -170,7 +171,17 @@ os.execv(sys.argv[3], [sys.argv[3], "-u", sys.argv[4]])
   echo "Лог: $log"
 }
 
+parser_ctl() {
+  local script="$ROOT/ParserService/start.sh"
+  if [[ ! -f "$script" ]]; then
+    echo "Локальний парсер: немає $script" >&2
+    return 0
+  fi
+  bash "$script" "$1"
+}
+
 stop_all() {
+  parser_ctl stop || true
   stop_service "Веб-панель" "$ROOT/main_web.py" "$ROOT/logs/web.pid"
   stop_service "Telegram-бот" "$ROOT/main_bot.py" "$ROOT/logs/bot.pid"
 }
@@ -182,6 +193,9 @@ start_all() {
     echo "У корені проєкту: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt" >&2
     exit 127
   }
+  if ! parser_ctl start; then
+    echo "Локальний парсер не піднявся. Веб і бот запускаються далі." >&2
+  fi
   launch_service "Веб-панель" "$ROOT/main_web.py" "$ROOT/logs/web.pid" "$ROOT/logs/web.log" "$py"
   echo "Порт веб-панелі: $(web_port)"
   launch_service "Telegram-бот" "$ROOT/main_bot.py" "$ROOT/logs/bot.pid" "$ROOT/logs/bot.log" "$py"
