@@ -1272,10 +1272,24 @@ def _host_result(host: str, ok: bool) -> None:
     with _HTTP_LOCK:
         if ok:
             _HOST_FAILS[host] = 0
+            _HOST_DOWN_UNTIL.pop(host, None)
             return
         _HOST_FAILS[host] = _HOST_FAILS.get(host, 0) + 1
         if _HOST_FAILS[host] >= HOST_FAIL_LIMIT:
             _HOST_DOWN_UNTIL[host] = time.time() + HOST_COOLDOWN
+
+
+def _host_attempt_budget(host: str) -> int:
+    """Після серії збоїв хост не пропускаємо. Інакше 8 товарів паралельно ловлять
+    таймаут, магазин лягає на 40 с, і решта бренду пишеться «не відповів» без запиту.
+    """
+    with _HTTP_LOCK:
+        until = _HOST_DOWN_UNTIL.get(host, 0.0)
+    now = time.time()
+    if until and now < until:
+        time.sleep(min(8.0, until - now))
+        return 1
+    return 3
 
 
 def reset_host_state() -> None:
@@ -1343,16 +1357,13 @@ def fetch_text(url: str, debug: bool = False, extra_headers: Optional[dict] = No
             return hit[1]
 
     host = urlparse(url).netloc
-    if _host_is_down(host):
-        if debug:
-            print(f"    [debug] {host} тимчасово відкладено після серії збоїв")
-        return None
+    attempts = _host_attempt_budget(host)
     if host in COOKIE_WARMUP_ORIGINS:
         _warmup_host(host, headers, debug=debug)
     result = None
     cacheable = False
     sem = _host_sem(host)
-    for attempt in range(3):
+    for attempt in range(attempts):
         with _HTTP_LOCK:
             cookie = _HOST_COOKIES.get(host)
         req_headers = dict(headers)
@@ -1436,17 +1447,14 @@ def fetch_post_text(
             return hit[1]
 
     host = urlparse(url).netloc
-    if _host_is_down(host):
-        if debug:
-            print(f"    [debug] {host} тимчасово відкладено після серії збоїв")
-        return None
+    attempts = _host_attempt_budget(host)
     if host in COOKIE_WARMUP_ORIGINS:
         _warmup_host(host, headers, debug=debug)
 
     result = None
     cacheable = False
     sem = _host_sem(host)
-    for attempt in range(3):
+    for attempt in range(attempts):
         with _HTTP_LOCK:
             cookie = _HOST_COOKIES.get(host)
         req_headers = dict(headers)
@@ -1458,11 +1466,16 @@ def fetch_post_text(
             _merge_host_cookies(host, r)
             if debug:
                 print(f"    [debug] POST {url} → статус {r.status_code}, {len(r.content)} байт")
+            if r.status_code == 429 or "перевірка безпеки" in (r.text or "")[:2500].lower():
+                with _HTTP_LOCK:
+                    _HOST_NOTE[host] = "магазин показав перевірку безпеки"
+                _host_result(host, False)
+                break
             if r.status_code == 403 and attempt < 2:
                 _warmup_host(host, headers, debug=debug)
                 time.sleep(0.6 * (attempt + 1))
                 continue
-            if (r.status_code >= 500 or r.status_code == 429) and attempt < 2:
+            if r.status_code >= 500 and attempt < 2:
                 time.sleep(1.5 * (attempt + 1))
                 continue
             if r.status_code >= 500 or r.status_code == 429 or r.status_code == 403:
