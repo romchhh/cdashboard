@@ -150,12 +150,16 @@ stop_all() {
 }
 
 ensure_runtime() {
-  if [[ -f "$ROOT/runtime/cosmyparser/cosmy_parse.py" ]]; then
+  local src="$ROOT/../cosmyparser/cosmy_parse.py"
+  local dst="$ROOT/runtime/cosmyparser/cosmy_parse.py"
+  if [[ -f "$src" ]]; then
+    if [[ ! -f "$dst" || "$src" -nt "$dst" ]]; then
+      echo "Двигун у репозиторії новіший за runtime — збираю локальний парсер…"
+      bash "$ROOT/pack.sh"
+    fi
     return 0
   fi
-  if [[ -f "$ROOT/../cosmyparser/cosmy_parse.py" ]]; then
-    echo "runtime/ відсутній — збираю через pack.sh…"
-    bash "$ROOT/pack.sh"
+  if [[ -f "$dst" ]]; then
     return 0
   fi
   echo "Немає двигуна cosmy_parse." >&2
