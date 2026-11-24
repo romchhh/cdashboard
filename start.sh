@@ -173,6 +173,13 @@ os.execv(sys.argv[3], [sys.argv[3], "-u", sys.argv[4]])
 
 parser_ctl() {
   local script="$ROOT/ParserService/start.sh"
+  # Парсер у теці проєкту працює на сервері. На ноутбуці його не запускаємо.
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    if [[ "$1" == "stop" && -f "$script" ]]; then
+      bash "$script" stop || true
+    fi
+    return 0
+  fi
   if [[ ! -f "$script" ]]; then
     echo "Локальний парсер: немає $script" >&2
     return 0
