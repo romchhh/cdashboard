@@ -53,7 +53,8 @@ async def _aggregate_history_rows(
     no_opt_filters = [
         ProductSalesHistory.date >= cutoff,
         ProductSalesHistory.product_option_id.is_(None),
-        Product.has_options.is_(False),
+        # Прапорець has_options не відсікає рядок: після перезбору фіда він часто
+        # розходиться зі зрізом, і тоді весь залишок бренду зникає з графіка.
         ~exists(
             select(option_same_day.id).where(
                 option_same_day.product_id == ProductSalesHistory.product_id,
@@ -333,6 +334,39 @@ def _backfill_leading_inventory(rows: list[dict]) -> list[dict]:
         carried["frozen"] = first_frozen
         carried["has_warehouse_snapshot"] = False
         out.append(carried)
+    return out
+
+
+def apply_live_inventory_levels(
+    rows: list[dict],
+    *,
+    stock: int,
+    frozen: float,
+) -> list[dict]:
+    """Якщо в зрізах немає залишку чи замороженого — тримати поточний рівень каталогу.
+
+    Продажі й виручка приходять з CRM і без цього малюються, а склад лишається на нулі.
+    """
+    if not rows:
+        return rows
+    live_stock = int(stock or 0)
+    live_frozen = float(frozen or 0)
+    has_stock = any(int(row.get("stock") or 0) > 0 for row in rows)
+    has_frozen = any(float(row.get("frozen") or 0) > 0 for row in rows)
+    if (has_stock or live_stock <= 0) and (has_frozen or live_frozen <= 0):
+        return rows
+    out: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        if not has_stock and live_stock > 0:
+            item["stock"] = live_stock
+        if not has_frozen and live_frozen > 0:
+            row_stock = int(item.get("stock") or 0)
+            if has_stock and live_stock > 0:
+                item["frozen"] = round(live_frozen * row_stock / live_stock, 2)
+            else:
+                item["frozen"] = round(live_frozen, 2)
+        out.append(item)
     return out
 
 

@@ -7,6 +7,7 @@ from bot.services.sales_history import (
     _impute_spurious_zero_snapshots,
     _merge_crm_daily_sales_into_history,
     aggregate_history_granularity,
+    apply_live_inventory_levels,
     resolve_history_granularity,
 )
 
@@ -128,6 +129,27 @@ def test_impute_spurious_zero_snapshot_between_nonempty_days():
     by = {r["date"]: r for r in out}
     assert by[d2]["stock"] == 8000
     assert by[d2]["frozen"] == 1_000_000.0
+
+
+def test_empty_snapshots_keep_current_catalog_stock_and_frozen():
+    day = date(2026, 11, 20)
+    rows = [
+        {"date": day, "sales": 12, "revenue": 40_000.0, "stock": 0, "frozen": 0.0},
+    ]
+    out = apply_live_inventory_levels(rows, stock=6017, frozen=4_200_000.0)
+    assert out[0]["sales"] == 12
+    assert out[0]["stock"] == 6017
+    assert out[0]["frozen"] == 4_200_000.0
+
+
+def test_live_frozen_scales_when_stock_history_exists():
+    day = date(2026, 11, 20)
+    rows = [
+        {"date": day, "sales": 1, "revenue": 10.0, "stock": 3000, "frozen": 0.0},
+    ]
+    out = apply_live_inventory_levels(rows, stock=6000, frozen=4_000_000.0)
+    assert out[0]["stock"] == 3000
+    assert out[0]["frozen"] == 2_000_000.0
 
 
 def test_leading_gap_keeps_first_known_stock_not_zero():

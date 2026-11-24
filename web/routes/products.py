@@ -1794,6 +1794,7 @@ async def procurement_brands(
     from bot.services.abc_analysis import reports_service
     from bot.services.sales_history import (
         aggregate_history_granularity,
+        apply_live_inventory_levels,
         get_warehouse_sales_history,
         resolve_history_granularity,
     )
@@ -1813,6 +1814,11 @@ async def procurement_brands(
     )
     history_raw = await get_warehouse_sales_history(days=history_days_selected)
     history_raw = aggregate_history_granularity(history_raw, history_granularity_selected)
+    history_raw = apply_live_inventory_levels(
+        history_raw,
+        stock=int(warehouse_analytics.get("total_stock_qty") or 0),
+        frozen=float(total_frozen or warehouse_analytics.get("total_frozen_capital") or 0),
+    )
     history_data = [
         {
             "date": (h.get("date_label") or h["date"].strftime("%d.%m")),
@@ -1882,6 +1888,7 @@ async def procurement_brand_detail(
     from bot.services.abc_analysis import reports_service
     from bot.services.sales_history import (
         aggregate_history_granularity,
+        apply_live_inventory_levels,
         get_brand_sales_history,
         resolve_history_granularity,
     )
@@ -1898,6 +1905,11 @@ async def procurement_brand_detail(
     )
     history_raw = await get_brand_sales_history(brand_id, days=history_days_selected)
     history_raw = aggregate_history_granularity(history_raw, history_granularity_selected)
+    history_raw = apply_live_inventory_levels(
+        history_raw,
+        stock=int(brand_data.get("stock_qty") or 0),
+        frozen=float(brand_data.get("frozen_capital") or 0),
+    )
     history_data = [
         {
             "date": (h.get("date_label") or h["date"].strftime("%d.%m")),
