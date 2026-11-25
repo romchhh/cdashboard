@@ -353,6 +353,132 @@ def test_running_shop_that_hangs_does_not_block_the_others(monkeypatch):
     assert again_sites["Fast"]["status"] == "ok"
 
 
+def test_catalog_goes_in_batches_of_20(monkeypatch):
+    import catalog_report as cr
+
+    seen = []
+    resets = []
+
+    def search_all(query, **kwargs):
+        seen.append(query)
+        return {"results": [], "misses": [], "found": 0}
+
+    def reset():
+        resets.append(len(seen))
+
+    monkeypatch.setattr(cr, "search_all", search_all)
+    monkeypatch.setattr(cr, "release_host_pressure", reset)
+    monkeypatch.setattr(cr, "clear_brand_presence_cache", lambda: None)
+    monkeypatch.setattr(cr, "_save_report", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cr, "_load_saved_report", lambda *args, **kwargs: None)
+    products = [
+        {"id": i, "query": f"Atache item {i}", "name": f"n{i}", "brand": "Atache"}
+        for i in range(45)
+    ]
+    report = cr.run_catalog(
+        catalog=products,
+        workers=4,
+        write_excel_file=False,
+        report_scope="test-atache-batches",
+    )
+    assert report["total"] == 45
+    assert len(seen) == 45
+    assert resets == [20, 40]
+
+
+def test_release_host_pressure_keeps_shop_cookies():
+    cp.reset_host_state()
+    cp._HOST_COOKIES["makeup.example"] = "a=1"
+    cp._HOST_WARMED.add("makeup.example")
+    cp._HOST_FAILS["makeup.example"] = 9
+    cp._HOST_DOWN_UNTIL["makeup.example"] = time.time() + 100
+    cp._note_hung_site("Makeup")
+    cp.release_host_pressure()
+    assert cp._HOST_COOKIES.get("makeup.example") == "a=1"
+    assert "makeup.example" in cp._HOST_WARMED
+    assert not cp._HOST_FAILS.get("makeup.example")
+    assert "makeup.example" not in cp._HOST_DOWN_UNTIL
+    assert not cp._site_is_hung("Makeup")
+    cp.reset_host_state()
+    assert "makeup.example" not in cp._HOST_COOKIES
+
+
+def test_batch_repair_reasks_a_shop_that_already_answered(monkeypatch):
+    import catalog_report as cr
+
+    calls = []
+
+    def search_all(query, **kwargs):
+        calls.append((query, kwargs.get("site_names"), kwargs.get("deadline")))
+        return {
+            "results": [{
+                "site": "Makeup",
+                "status": "ok",
+                "title": "Atache C Vital Set",
+                "price": 7000,
+                "url": "https://makeup.example/p",
+                "match": 0.91,
+                "in_stock": True,
+            }],
+            "misses": [],
+        }
+
+    monkeypatch.setattr(cr, "search_all", search_all)
+    monkeypatch.setattr(cr, "release_host_pressure", lambda: None)
+    rich = {
+        "id": 1,
+        "query": "Atache Ampoules",
+        "name": "Atache Ampoules",
+        "brand": "Atache",
+        "our_price": 4320,
+        "found": 1,
+        "shops": {"Makeup": {"status": "match", "price": 4000, "url": "https://makeup.example/a"}},
+    }
+    thin = {
+        "id": 2,
+        "query": "Atache C Vital Set",
+        "name": "Atache C Vital Set",
+        "brand": "Atache",
+        "our_price": 10920,
+        "found": 0,
+        "shops": {"Makeup": {"status": "unavailable", "reason": "не відповів"}},
+    }
+    cr._repair_batch([rich, thin], {})
+    assert calls == [("Atache C Vital Set", ("Makeup",), None)]
+    assert thin["shops"]["Makeup"]["status"] == "match"
+    assert thin["found"] == 1
+
+
+def test_batch_repair_reasks_shops_skipped_without_a_request(monkeypatch):
+    import catalog_report as cr
+
+    calls = []
+
+    def search_all(query, **kwargs):
+        calls.append(query)
+        return {
+            "results": [],
+            "misses": [{"site": "Makeup", "status": "not_found", "reason": "товар не знайдено в пошуку"}],
+        }
+
+    monkeypatch.setattr(cr, "search_all", search_all)
+    monkeypatch.setattr(cr, "release_host_pressure", lambda: None)
+    rows = [
+        {
+            "id": i,
+            "query": f"Atache item {i}",
+            "name": f"Atache item {i}",
+            "brand": "Atache",
+            "our_price": 1000,
+            "found": 0,
+            "shops": {"Makeup": {"status": "unavailable", "reason": cr.HUNG_SITE_REASON}},
+        }
+        for i in range(3)
+    ]
+    cr._repair_batch(rows, {})
+    assert calls == ["Atache item 0", "Atache item 1", "Atache item 2"]
+
+
 def test_catalog_tail_still_reaches_every_shop(monkeypatch):
     _reset()
     calls = _install_network(monkeypatch, fail_budget={

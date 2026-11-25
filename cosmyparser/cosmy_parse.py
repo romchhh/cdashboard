@@ -1292,14 +1292,21 @@ def _host_attempt_budget(host: str) -> int:
     return 3
 
 
-def reset_host_state() -> None:
+def release_host_pressure() -> None:
+    """Зняти паузу, «завис» і пропуски. Cookie і прогрів лишаються — інакше наступна пачка знову ловить 403."""
     with _HTTP_LOCK:
         _HOST_FAILS.clear()
         _HOST_DOWN_UNTIL.clear()
         _HOST_NOTE.clear()
+    reset_hung_sites()
+    reset_site_strikes()
+
+
+def reset_host_state() -> None:
+    release_host_pressure()
+    with _HTTP_LOCK:
         _HOST_WARMED.clear()
         _HOST_COOKIES.clear()
-    reset_hung_sites()
 
 
 def _bounded_io(fn, sem):
@@ -4638,10 +4645,10 @@ def market_summary(results: list, our_price: Optional[float] = None) -> dict:
 # або чекає своєї черги. Обривати хвіст черги як «не відповів» не можна.
 SEARCH_DEADLINE = 85.0
 # Один магазин, чий пошук уже виконується і не повернувся. Черга, яка ще не стартувала, не чіпається.
-SITE_HARD_TIMEOUT = 45.0
+SITE_HARD_TIMEOUT = 50.0
 # Скільки один магазин може шукати один товар. Далі нові запити не шлемо,
 # потік звільняється, і черга магазинів іде далі.
-SITE_CALL_BUDGET = 20.0
+SITE_CALL_BUDGET = 30.0
 _SITE_BUDGET = threading.local()
 
 

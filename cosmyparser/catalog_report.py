@@ -26,13 +26,15 @@ from openpyxl.utils import get_column_letter
 
 from cosmy_parse import (
     SITES,
+    HUNG_SITE_REASON,
+    PRIORITY_SITES,
     clear_brand_presence_cache,
+    release_host_pressure,
     ensure_brand_in_query,
     extract_brand,
     extract_volumes,
     format_volume,
     market_summary,
-    RETRY_SEARCH_DEADLINE,
     search_all,
     set_search_feed_model,
     site_carries_brand,
@@ -136,6 +138,10 @@ def _merge_partial_stored(
     return merged
 
 SKU_WORKERS = 4
+# Бренд іде пачками. Наступні 20 не стартують, поки поточні не зібрані,
+# і між пачками магазини знову доступні — інакше хвіст бренду лишається без цін.
+BATCH_SIZE = 20
+BATCH_PARALLEL = 2
 # Ціна конкурента поза цим діапазоном відносно нашої — майже завжди інший товар/фасовка.
 # 2× (типовий промах Krasota/набори) має бути odd_price, не «збіг».
 # Реальний розкид роздріб/салон; ×2+ майже завжди інша фасовка або битий збіг (Krasota «Пошук»).
@@ -148,9 +154,8 @@ SUSPICIOUS_GAP_PCT = 30.0
 # Менше стількох надійних магазинів — позиція «умовна», не «дешевше за всіх».
 MIN_SHOPS_FOR_STRONG_POS = 2
 RETRY_SHOP_STATUSES = frozenset({"unavailable", "error"})
-# Жорстко вимкнено: друге коло по «н/д» магазинах роздувало прогін на тисячі позицій.
-ENABLE_SHOP_RETRY = False
-# Магазин, який мовчить на більшій частині бренду, не перепитуємо по кожному товару.
+# Магазин, який реально впав на більшій частині пачки, перепитуємо лише кілька разів.
+# Пропуск «завис» сюди не входить: той товар ще не питали.
 _WIDESPREAD_FAIL_RATIO = 0.45
 _WIDESPREAD_PROBE_LIMIT = 2
 
@@ -355,46 +360,120 @@ def _shops_to_payload(shops: dict, skip: set) -> dict:
     return {"results": results, "misses": misses}
 
 
-def _retry_thin_coverage(rows: list) -> None:
-    """Повтор лише магазинів, які в цьому бренді вже дали збіг, але на частині SKU не встигли."""
-    proven: Counter = Counter()
-    for row in rows:
-        if not row:
-            continue
-        for site, info in (row.get("shops") or {}).items():
-            if info.get("status") == "match":
-                proven[site] += 1
-    worthy = {site for site, count in proven.items() if count >= 1}
-    if not worthy:
+def _skipped_without_request(info: dict) -> bool:
+    reason = str(info.get("reason") or "")
+    return reason == HUNG_SITE_REASON or "пропущено в цьому прогоні" in reason
+
+
+def _site_rank(name: str) -> tuple:
+    try:
+        return (0, PRIORITY_SITES.index(name))
+    except ValueError:
+        return (1, name)
+
+
+def _shop_answered(info: dict) -> bool:
+    if not info or info.get("status") == "no_brand":
+        return False
+    if _skipped_without_request(info):
+        return False
+    return not _shop_needs_retry(info)
+
+
+def _retry_row(row: dict, sites: list, samples: tuple) -> None:
+    if not row or not sites:
         return
-    for row in rows:
-        if not row or int(row.get("found") or 0) >= _RETRY_UNTIL_MATCHES:
+    set_search_feed_model(row.get("model"))
+    try:
+        patch = search_all(
+            row.get("query") or "",
+            our_price=row.get("our_price"),
+            samples=samples,
+            site_names=tuple(sites),
+            max_workers=2,
+        )
+    except CatalogRunCancelled:
+        raise
+    except Exception:
+        return
+    finally:
+        set_search_feed_model(None)
+    base = _shops_to_payload(row.get("shops") or {}, set(sites))
+    base["query"] = row.get("query")
+    base["our_price"] = row.get("our_price")
+    rebuilt = build_row(row, merge_search_payload(base, patch))
+    rebuilt["partial"] = False
+    row.clear()
+    row.update(rebuilt)
+
+
+def _repair_batch(batch_rows: list, samples_by_brand: dict, on_row=None) -> None:
+    """Після пачки тихо перепитати магазини, які на сусідніх товарах уже відповіли.
+
+    Пропуск «завис / пропущено» — це не відповідь. Такі магазини питаємо ще раз,
+    інакше решта пачки лишається без ціни, хоча сайт живий.
+    """
+    present = [row for row in batch_rows if row and row.get("shops")]
+    if not present:
+        return
+    alive = {
+        site
+        for row in present
+        for site, info in (row.get("shops") or {}).items()
+        if _shop_answered(info)
+    }
+    thin = [row for row in present if int(row.get("found") or 0) < _RETRY_UNTIL_MATCHES]
+
+    real_queue: list[tuple] = []
+    skipped_by_row: dict[int, list] = {}
+    for row in thin:
+        skipped = []
+        for site, info in (row.get("shops") or {}).items():
+            if _skipped_without_request(info):
+                if site in PRIORITY_SITES:
+                    skipped.append(site)
+                continue
+            if not _shop_needs_retry(info):
+                continue
+            if site in alive:
+                real_queue.append((id(row), row, site))
+        if skipped:
+            skipped.sort(key=_site_rank)
+            skipped_by_row[id(row)] = skipped[:_RETRY_PER_ROW]
+
+    real_queue = trim_retry_queue(real_queue, len(present))
+    sites_for: dict[int, list] = {}
+    order: list = []
+    for _, row, site in real_queue:
+        key = id(row)
+        if key not in sites_for:
+            sites_for[key] = []
+            order.append(row)
+        bucket = sites_for[key]
+        if site not in bucket and len(bucket) < _RETRY_PER_ROW:
+            bucket.append(site)
+    for row in thin:
+        extra = skipped_by_row.get(id(row)) or []
+        if not extra:
             continue
-        sites = [
-            site
-            for site, info in (row.get("shops") or {}).items()
-            if site in worthy and info.get("status") in RETRY_SHOP_STATUSES
-        ][:_RETRY_PER_ROW]
-        if not sites:
-            continue
-        set_search_feed_model(row.get("model"))
-        try:
-            patch = search_all(
-                row.get("query") or "",
-                our_price=row.get("our_price"),
-                site_names=tuple(sites),
-                deadline=RETRY_SEARCH_DEADLINE,
-            )
-        except Exception:
-            continue
-        finally:
-            set_search_feed_model(None)
-        base = _shops_to_payload(row.get("shops") or {}, set(sites))
-        base["query"] = row.get("query")
-        base["our_price"] = row.get("our_price")
-        rebuilt = build_row(row, merge_search_payload(base, patch))
-        row.clear()
-        row.update(rebuilt)
+        key = id(row)
+        bucket = sites_for.setdefault(key, [])
+        if row not in order:
+            order.append(row)
+        for site in extra:
+            if site not in bucket and len(bucket) < _RETRY_PER_ROW:
+                bucket.append(site)
+
+    planned = [(row, sites_for[id(row)]) for row in order if sites_for.get(id(row))]
+    if not planned:
+        return
+    release_host_pressure()
+    for row, sites in planned:
+        sites.sort(key=_site_rank)
+        brand = extract_brand(row.get("query") or "")
+        _retry_row(row, sites[:_RETRY_PER_ROW], samples_by_brand.get(brand, ()))
+        if on_row:
+            on_row(row)
 
 
 def build_row(product: dict, payload: dict) -> dict:
@@ -613,44 +692,71 @@ def run_catalog(
             set_search_feed_model(None)
 
     run_cancelled = False
+    parallel = max(1, min(int(workers or 1), BATCH_PARALLEL))
     try:
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futs = [pool.submit(work, idx, product) for idx, product in enumerate(catalog)]
-            for fut in as_completed(futs):
-                try:
-                    idx, row = fut.result()
-                except CatalogRunCancelled:
-                    run_cancelled = True
-                    for pending in futs:
-                        pending.cancel()
-                    _write_partial(final=False)
-                    break
-                except Exception:
-                    continue
-                rows[idx] = row
-                done += 1
-                if done == 1 or done % 5 == 0 or done == total:
-                    _write_partial(final=False)
-                try:
-                    _emit_progress(
-                        progress,
-                        {
-                            "state": "running",
-                            "phase": "products",
-                            "current": done,
-                            "total": total,
-                            "product": row.get("name"),
-                            "started_at": started,
-                            "started_epoch": started_epoch,
-                            "row": row,
-                        },
-                    )
-                except CatalogRunCancelled:
-                    run_cancelled = True
-                    for pending in futs:
-                        pending.cancel()
-                    _write_partial(final=False)
-                    break
+        for batch_start in range(0, total, BATCH_SIZE):
+            if run_cancelled:
+                break
+            if batch_start:
+                release_host_pressure()
+            batch = list(enumerate(catalog[batch_start:batch_start + BATCH_SIZE], batch_start))
+            with ThreadPoolExecutor(max_workers=parallel) as pool:
+                futs = [pool.submit(work, idx, product) for idx, product in batch]
+                for fut in as_completed(futs):
+                    try:
+                        idx, row = fut.result()
+                    except CatalogRunCancelled:
+                        run_cancelled = True
+                        for pending in futs:
+                            pending.cancel()
+                        _write_partial(final=False)
+                        break
+                    except Exception:
+                        continue
+                    rows[idx] = row
+                    done += 1
+                    if done == 1 or done % 5 == 0 or done == total:
+                        _write_partial(final=False)
+                    try:
+                        _emit_progress(
+                            progress,
+                            {
+                                "state": "running",
+                                "phase": "products",
+                                "current": done,
+                                "total": total,
+                                "product": row.get("name"),
+                                "started_at": started,
+                                "started_epoch": started_epoch,
+                                "row": row,
+                            },
+                        )
+                    except CatalogRunCancelled:
+                        run_cancelled = True
+                        for pending in futs:
+                            pending.cancel()
+                        _write_partial(final=False)
+                        break
+            if run_cancelled:
+                break
+            _repair_batch(
+                [rows[idx] for idx, _product in batch],
+                samples_by_brand,
+                on_row=lambda row: _emit_progress(
+                    progress,
+                    {
+                        "state": "running",
+                        "phase": "products",
+                        "current": done,
+                        "total": total,
+                        "product": row.get("name"),
+                        "started_at": started,
+                        "started_epoch": started_epoch,
+                        "row": row,
+                    },
+                ),
+            )
+            _write_partial(final=False)
     except CatalogRunCancelled:
         run_cancelled = True
 
@@ -674,8 +780,6 @@ def run_catalog(
             )
         return report
 
-    # Друге коло лише по магазинах, які в цьому бренді вже знайшли хоча б один товар.
-    _retry_thin_coverage(rows)
     report = _write_partial(final=True)
     report["total"] = total
     report["partial"] = False
