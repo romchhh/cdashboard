@@ -48,6 +48,32 @@ def test_same_brand_error_visible(tmp_path, monkeypatch):
     assert "Фоновий процес" in (status.get("error") or "")
 
 
+def test_zero_progress_for_too_long_is_stuck(tmp_path, monkeypatch):
+    _paths(tmp_path, monkeypatch)
+    ps.store.save_job(
+        {
+            "state": "running",
+            "phase": "products",
+            "brand": "American Crew",
+            "lane": "local",
+            "current": 0,
+            "total": 66,
+            "visible": 0,
+            "product": "American Crew Classic 24-Hour Deodorant Body Wash",
+            "started_epoch": time.time() - 878 * 60,
+            "updated_epoch": time.time(),
+            "pid": 1,
+        },
+        lane="local",
+    )
+    monkeypatch.setattr(ps, "_pid_alive", lambda _pid: True)
+    monkeypatch.setattr(ps, "_parser_process_alive", lambda _pid: True)
+    resolved = ps._resolve_job_payload(ps.store.load_job("local"), persist=True)
+    assert resolved["state"] == "error"
+    assert "завис" in (resolved.get("error") or "")
+    assert ps.store.load_job("local")["state"] == "error"
+
+
 def test_dead_running_job_persisted(tmp_path, monkeypatch):
     _paths(tmp_path, monkeypatch)
     ps.store.save_job(

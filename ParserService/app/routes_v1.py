@@ -167,9 +167,10 @@ async def job_status(job_id: str, since_rows: int = 0, since_sites: int = 0):
         return out
 
     rows = list(job.get("rows") or [])
+    log = list(job.get("row_log") or rows)
     out["live_count"] = len(rows)
-    out["rows"] = rows[max(0, int(since_rows)) :]
-    out["rows_total"] = len(rows)
+    out["rows"] = log[max(0, int(since_rows)) :]
+    out["rows_total"] = len(log)
     if job.get("state") == "done":
         out["report"] = job.get("report")
     return out

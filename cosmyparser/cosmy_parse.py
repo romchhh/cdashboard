@@ -1299,6 +1299,35 @@ def reset_host_state() -> None:
         _HOST_NOTE.clear()
         _HOST_WARMED.clear()
         _HOST_COOKIES.clear()
+    reset_hung_sites()
+
+
+def _bounded_io(fn, sem):
+    """HTTP під семафором хоста. Завислий DNS або сокет не тримає потік товару вічно.
+
+    Якщо виклик не повернувся, дозвіл семафора лишається за фоновим потоком і
+    звільниться, коли той нарешті вийде. Наступні запити до цього хоста не чекають его.
+    """
+    if not sem.acquire(timeout=TIMEOUT + 5):
+        return "busy"
+    done = threading.Event()
+    box: dict = {}
+
+    def run() -> None:
+        try:
+            box["value"] = fn()
+        except BaseException as exc:  # noqa: BLE001 — віддаємо виняток у потік товару
+            box["error"] = exc
+        finally:
+            done.set()
+            sem.release()
+
+    threading.Thread(target=run, daemon=True).start()
+    if not done.wait(TIMEOUT + 2):
+        return "hung"
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
 
 
 def _merge_host_cookies(host: str, response) -> None:
@@ -1331,8 +1360,12 @@ def _warmup_host(host: str, headers: dict, debug: bool = False) -> None:
             return
         _HOST_WARMED.add(host)
     try:
-        with _host_sem(host):
-            response = requests.get(origin, headers=headers, timeout=TIMEOUT)
+        response = _bounded_io(
+            lambda: requests.get(origin, headers=headers, timeout=TIMEOUT),
+            _host_sem(host),
+        )
+        if response in ("busy", "hung") or response is None:
+            return
         _merge_host_cookies(host, response)
         if debug:
             print(f"    [debug] warmup {origin} → {response.status_code}")
@@ -1370,8 +1403,10 @@ def fetch_text(url: str, debug: bool = False, extra_headers: Optional[dict] = No
         if cookie:
             req_headers["Cookie"] = cookie
         try:
-            with sem:
-                r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
+            r = _bounded_io(lambda: requests.get(url, headers=req_headers, timeout=TIMEOUT), sem)
+            if r in ("busy", "hung"):
+                _host_result(host, False)
+                break
             _merge_host_cookies(host, r)
             challenge = JS_COOKIE_CHALLENGE_RE.search(r.text[:3000]) if len(r.content) < 4000 else None
             if challenge and attempt < 2:
@@ -1461,8 +1496,13 @@ def fetch_post_text(
         if cookie:
             req_headers["Cookie"] = cookie
         try:
-            with sem:
-                r = requests.post(url, data=data, headers=req_headers, timeout=TIMEOUT)
+            r = _bounded_io(
+                lambda: requests.post(url, data=data, headers=req_headers, timeout=TIMEOUT),
+                sem,
+            )
+            if r in ("busy", "hung"):
+                _host_result(host, False)
+                break
             _merge_host_cookies(host, r)
             if debug:
                 print(f"    [debug] POST {url} → статус {r.status_code}, {len(r.content)} байт")
@@ -4553,6 +4593,27 @@ def market_summary(results: list, our_price: Optional[float] = None) -> dict:
 # Звичайний пошук його не використовує: магазин або відповідає у свій HTTP-таймаут,
 # або чекає своєї черги. Обривати хвіст черги як «не відповів» не можна.
 SEARCH_DEADLINE = 85.0
+# Один магазин, чий пошук уже виконується і не повернувся. Черга, яка ще не стартувала, не чіпається.
+SITE_HARD_TIMEOUT = 180.0
+HUNG_SITE_REASON = "магазин завис під час запиту"
+
+_HUNG_SITES: set[str] = set()
+_HUNG_LOCK = threading.Lock()
+
+
+def reset_hung_sites() -> None:
+    with _HUNG_LOCK:
+        _HUNG_SITES.clear()
+
+
+def _site_is_hung(name: str) -> bool:
+    with _HUNG_LOCK:
+        return name in _HUNG_SITES
+
+
+def _note_hung_site(name: str) -> None:
+    with _HUNG_LOCK:
+        _HUNG_SITES.add(name)
 # Залишено для ручного відключення магазину, який стабільно падає з винятком.
 SLOW_SITE_STRIKES = 6
 SITE_COOLDOWN = 45.0
@@ -4659,7 +4720,13 @@ def search_all(
     for site in SITES:
         if only is not None and site.name not in only:
             continue
-        if _site_is_tripped(site.name):
+        if _site_is_hung(site.name):
+            emit({
+                "site": site.name,
+                "status": "unavailable",
+                "reason": HUNG_SITE_REASON,
+            })
+        elif _site_is_tripped(site.name):
             emit({
                 "site": site.name,
                 "status": "unavailable",
@@ -4683,16 +4750,52 @@ def search_all(
     }
     pending = set(futs)
     end = time.monotonic() + limit if limit else None
+    running_since: dict = {}
+    abandoned = False
+    idle_since: float | None = None
+    wedged = False
     try:
         while pending:
-            timeout = None
-            if end is not None:
-                timeout = end - time.monotonic()
-                if timeout <= 0:
-                    break
-            done, pending = wait(pending, timeout=timeout, return_when=FIRST_COMPLETED)
-            if not done:
+            now = time.monotonic()
+            if end is not None and now >= end:
                 break
+            slice_timeout = min(2.0, SITE_HARD_TIMEOUT)
+            if end is not None:
+                slice_timeout = min(slice_timeout, max(0.0, end - now))
+            done, pending = wait(pending, timeout=slice_timeout, return_when=FIRST_COMPLETED)
+            now = time.monotonic()
+            hung_now = []
+            for fut in list(pending):
+                if not fut.running():
+                    continue
+                started = running_since.get(fut)
+                if started is None:
+                    running_since[fut] = now
+                    continue
+                if now - started >= SITE_HARD_TIMEOUT:
+                    hung_now.append(fut)
+            for fut in hung_now:
+                pending.discard(fut)
+                abandoned = True
+                site = futs[fut]
+                _note_hung_site(site.name)
+                fut.cancel()
+                emit({
+                    "site": site.name,
+                    "status": "unavailable",
+                    "reason": HUNG_SITE_REASON,
+                })
+            # Потоки, які вже покинули, так і не звільнились — решта черги ніколи не стартує.
+            if pending and abandoned and not done and not any(fut.running() for fut in pending):
+                if idle_since is None:
+                    idle_since = now
+                elif now - idle_since >= 5:
+                    wedged = True
+                    break
+            else:
+                idle_since = None
+            if not done:
+                continue
             for fut in done:
                 if cancelled is not None:
                     break
@@ -4710,7 +4813,12 @@ def search_all(
     finally:
         for fut in list(pending):
             site = futs[fut]
-            reason = f"не відповів за {limit:.0f} с" if limit else "не відповів"
+            if wedged:
+                reason = HUNG_SITE_REASON
+            elif limit:
+                reason = f"не відповів за {limit:.0f} с"
+            else:
+                reason = "не відповів"
             emit({
                 "site": site.name,
                 "status": "unavailable",

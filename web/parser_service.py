@@ -163,6 +163,21 @@ def _dead_job_error(data: dict) -> dict:
     }
 
 
+# Прогін без жодного готового товару і без живих рядків довше цього часу — завис, не «шукає».
+STUCK_ZERO_SEC = 20 * 60
+
+
+def _stuck_at_zero(data: dict) -> bool:
+    if data.get("state") != "running":
+        return False
+    if int(data.get("current") or 0) > 0:
+        return False
+    if int(data.get("visible") or data.get("live_count") or 0) > 0:
+        return False
+    started = float(data.get("started_epoch") or 0)
+    return bool(started) and time.time() - started > STUCK_ZERO_SEC
+
+
 def _resolve_job_payload(data: dict, *, persist: bool = False) -> dict:
     """Для state=running: помилка лише коли pid реально мертвий довше grace period.
 
@@ -171,6 +186,28 @@ def _resolve_job_payload(data: dict, *, persist: bool = False) -> dict:
     """
     if data.get("state") != "running":
         return data
+    if _stuck_at_zero(data):
+        remote_id = (data.get("remote_job_id") or "").strip()
+        lane = data.get("lane") or "remote"
+        if remote_id:
+            try:
+                from web.parser_worker_client import cancel_catalog_job
+
+                cancel_catalog_job(remote_id, base_url=_lane_base_url(lane) or None)
+            except Exception:
+                logger.exception("Failed to cancel stuck parser job %s", remote_id)
+        resolved = {
+            **data,
+            "state": "error",
+            "phase": "error",
+            "error": "Прогін завис на першому товарі. Запустіть бренд ще раз.",
+            "updated_epoch": time.time(),
+        }
+        try:
+            store.save_job({k: v for k, v in resolved.items() if k != "row"}, lane=lane)
+        except Exception:
+            logger.exception("Failed to persist stuck parser job")
+        return resolved
     remote_id = (data.get("remote_job_id") or "").strip()
     pid = data.get("pid")
     age = time.time() - float(data.get("updated_epoch") or 0)

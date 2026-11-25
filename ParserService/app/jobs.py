@@ -221,6 +221,8 @@ def _append_row(job_id: str, row: dict) -> None:
                 rows.append(row)
         else:
             rows.append(row)
+        # Повний журнал, щоб poll побачив оновлення того самого товару, а не лише нові id.
+        job.setdefault("row_log", []).append(row)
         job["updated_epoch"] = time.time()
         job["live_count"] = len(rows)
         if len(rows) == 1 or len(rows) % 5 == 0:
@@ -470,7 +472,7 @@ def _run_catalog(job_id: str, products: list[dict], settings: dict, brand: str |
             if brand:
                 patch["brand"] = brand
             _update(job_id, **{k: v for k, v in patch.items() if v is not None})
-            if isinstance(row, dict) and not row.get("partial"):
+            if isinstance(row, dict):
                 _append_row(job_id, _slim_row(row))
             if current and current - last_clear_at >= every:
                 last_clear_at = current

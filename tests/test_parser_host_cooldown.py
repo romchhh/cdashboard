@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -276,6 +277,54 @@ def test_parallel_products_keep_asking_a_paused_host(monkeypatch):
     asked = [url for method, site, url, _data in calls if site == host]
     assert len(asked) == len(PRODUCTS)
     assert host not in cp._HOST_DOWN_UNTIL
+
+
+def test_hung_http_does_not_hold_the_product_thread(monkeypatch):
+    _reset()
+    monkeypatch.setattr(cp, "TIMEOUT", 0.2)
+
+    def get(url, headers=None, timeout=None):
+        threading.Event().wait(5)
+        return _Response(200, "late")
+
+    monkeypatch.setattr(cp.requests, "get", get)
+    started = time.monotonic()
+    assert cp.fetch_text("https://stuck.example/search?q=1") is None
+    assert time.monotonic() - started < 5
+
+
+def test_running_shop_that_hangs_does_not_block_the_others(monkeypatch):
+    _reset()
+    cp.reset_hung_sites()
+    monkeypatch.setattr(cp, "SITE_HARD_TIMEOUT", 0.4)
+    calls = []
+
+    def search_one_site(site, query, debug=False, our_price=None, samples=()):
+        calls.append(site.name)
+        if site.name == "Slow":
+            time.sleep(1.5)
+        return {"site": site.name, "status": "ok", "price": 100, "title": query, "url": "https://x/p"}
+
+    monkeypatch.setattr(cp, "search_one_site", search_one_site)
+    monkeypatch.setattr(cp, "SITES", [
+        cp.SiteConfig(name="Fast", base_url="https://fast.example"),
+        cp.SiteConfig(name="Slow", base_url="https://slow.example"),
+        cp.SiteConfig(name="Queued", base_url="https://queued.example"),
+    ])
+    payload = cp.search_all("American Crew Gel", our_price=100, max_workers=2)
+    by_site = {row["site"]: row for row in payload["results"] + payload["misses"]}
+    assert by_site["Fast"]["status"] == "ok"
+    assert by_site["Queued"]["status"] == "ok"
+    assert by_site["Slow"]["status"] == "unavailable"
+    assert by_site["Slow"]["reason"] == cp.HUNG_SITE_REASON
+    assert "не відповів за" not in by_site["Slow"]["reason"]
+
+    calls.clear()
+    again = cp.search_all("American Crew Gel", our_price=100, max_workers=2)
+    again_sites = {row["site"]: row for row in again["results"] + again["misses"]}
+    assert "Slow" not in calls
+    assert again_sites["Slow"]["reason"] == cp.HUNG_SITE_REASON
+    assert again_sites["Fast"]["status"] == "ok"
 
 
 def test_catalog_tail_still_reaches_every_shop(monkeypatch):
