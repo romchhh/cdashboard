@@ -42,7 +42,7 @@ REQUIRE_API_KEY = os.getenv("PARSER_REQUIRE_API_KEY", "1").strip().lower() not i
 
 # --- Ліміти проти OOM (Linux "Killed") / nginx 502. Міняти тут, не в .env. ---
 # Catalog: N товарів паралельно; кожен товар → до MAX_SITE_WORKERS магазинів.
-MAX_SKU_WORKERS = 8
+MAX_SKU_WORKERS = 4
 MAX_SITE_WORKERS = 8
 MAX_RUNNING_JOBS = 1
 # Чистити HTTP/listing кеш кожні N готових товарів.

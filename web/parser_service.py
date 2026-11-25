@@ -69,12 +69,12 @@ _LIVE_FLUSH_INTERVAL = 1.25
 _JOB_LOG_MAX_BYTES = 2_000_000
 
 def _parse_sku_workers(settings: dict | None) -> int:
-    """Не менше 8 товарів паралельно, навіть якщо в налаштуваннях лишилось старе 4."""
+    """Чотири товари паралельно. Вісім одразу забивають одні й ті самі магазини, і жоден товар не закривається."""
     try:
-        raw = int((settings or {}).get("sku_workers") or 8)
+        raw = int((settings or {}).get("sku_workers") or 4)
     except (TypeError, ValueError):
-        raw = 8
-    return max(8, min(raw, 12))
+        raw = 4
+    return max(2, min(raw, 4))
 
 
 _DEFAULT_SETTINGS = {

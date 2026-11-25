@@ -1388,6 +1388,8 @@ def fetch_text(url: str, debug: bool = False, extra_headers: Optional[dict] = No
         hit = _HTTP_CACHE.get(key)
         if hit is not None and time.time() - hit[0] < HTTP_CACHE_TTL:
             return hit[1]
+    if _site_budget_exceeded():
+        return None
 
     host = urlparse(url).netloc
     attempts = _host_attempt_budget(host)
@@ -1397,6 +1399,8 @@ def fetch_text(url: str, debug: bool = False, extra_headers: Optional[dict] = No
     cacheable = False
     sem = _host_sem(host)
     for attempt in range(attempts):
+        if _site_budget_exceeded():
+            break
         with _HTTP_LOCK:
             cookie = _HOST_COOKIES.get(host)
         req_headers = dict(headers)
@@ -1480,6 +1484,8 @@ def fetch_post_text(
         hit = _HTTP_CACHE.get(key)
         if hit is not None and time.time() - hit[0] < HTTP_CACHE_TTL:
             return hit[1]
+    if _site_budget_exceeded():
+        return None
 
     host = urlparse(url).netloc
     attempts = _host_attempt_budget(host)
@@ -1490,6 +1496,8 @@ def fetch_post_text(
     cacheable = False
     sem = _host_sem(host)
     for attempt in range(attempts):
+        if _site_budget_exceeded():
+            break
         with _HTTP_LOCK:
             cookie = _HOST_COOKIES.get(host)
         req_headers = dict(headers)
@@ -2704,6 +2712,7 @@ def brand_listing(site: SiteConfig, brand: str, debug: bool = False) -> list | N
 
 _PRESENCE_CACHE: dict = {}
 _PRESENCE_LOCKS: dict = {}
+_PRESENCE_INFLIGHT: dict = {}
 
 
 NO_RESULTS_RE = re.compile(
@@ -2722,6 +2731,7 @@ def clear_listing_cache() -> None:
 def clear_presence_cache() -> None:
     with _LISTING_GUARD:
         _PRESENCE_CACHE.clear()
+        _PRESENCE_INFLIGHT.clear()
 
 
 def clear_scrape_runtime_caches() -> None:
@@ -2761,9 +2771,21 @@ def site_carries_brand(site: SiteConfig, query: str, samples: tuple = (), debug:
     key = (site.name, brand)
     with _LISTING_GUARD:
         lock = _PRESENCE_LOCKS.setdefault(key, threading.Lock())
-    with lock:
-        if key in _PRESENCE_CACHE:
-            return _PRESENCE_CACHE[key]
+        inflight = _PRESENCE_INFLIGHT.get(key)
+        if inflight is None and key not in _PRESENCE_CACHE:
+            inflight = threading.Event()
+            _PRESENCE_INFLIGHT[key] = inflight
+            owner = True
+        else:
+            owner = False
+    if not owner:
+        if inflight is not None:
+            inflight.wait(timeout=SITE_CALL_BUDGET)
+        with lock:
+            if key in _PRESENCE_CACHE:
+                return _PRESENCE_CACHE[key]
+        return None
+    try:
         result: Optional[bool] = None
         if site.kind == "brand_catalog" and brand_listing(site, brand, debug=debug):
             result = True
@@ -2776,6 +2798,8 @@ def site_carries_brand(site: SiteConfig, query: str, samples: tuple = (), debug:
             saw_confirmed_empty = False
             saw_unrelated_hits = False
             for probe in probes:
+                if _site_budget_exceeded():
+                    break
                 items = raw_search(site, probe, debug=debug, exhaustive=False)
                 if items is None:
                     continue
@@ -2809,8 +2833,13 @@ def site_carries_brand(site: SiteConfig, query: str, samples: tuple = (), debug:
                     # Чужі картки на коротке імʼя бренду не означають, що точного SKU немає:
                     # пошук «Abril» ловить APRILSKIN, а повна назва ще може знайтися.
                     result = None
-        _PRESENCE_CACHE[key] = result
+        with lock:
+            _PRESENCE_CACHE[key] = result
         return result
+    finally:
+        with _LISTING_GUARD:
+            _PRESENCE_INFLIGHT.pop(key, None)
+        inflight.set()
 
 
 def parse_microdata_products(site: SiteConfig, soup) -> list:
@@ -4331,6 +4360,21 @@ def search_one_site(
     our_price: Optional[float] = None,
     samples: tuple = (),
 ) -> dict:
+    prev = getattr(_SITE_BUDGET, "deadline", None)
+    _SITE_BUDGET.deadline = time.monotonic() + SITE_CALL_BUDGET
+    try:
+        return _search_one_site_body(site, query, debug, our_price, samples)
+    finally:
+        _SITE_BUDGET.deadline = prev
+
+
+def _search_one_site_body(
+    site: SiteConfig,
+    query: str,
+    debug: bool = False,
+    our_price: Optional[float] = None,
+    samples: tuple = (),
+) -> dict:
     carries = site_carries_brand(site, query, samples=samples, debug=debug)
     if carries is False:
         return {
@@ -4594,7 +4638,16 @@ def market_summary(results: list, our_price: Optional[float] = None) -> dict:
 # або чекає своєї черги. Обривати хвіст черги як «не відповів» не можна.
 SEARCH_DEADLINE = 85.0
 # Один магазин, чий пошук уже виконується і не повернувся. Черга, яка ще не стартувала, не чіпається.
-SITE_HARD_TIMEOUT = 180.0
+SITE_HARD_TIMEOUT = 45.0
+# Скільки один магазин може шукати один товар. Далі нові запити не шлемо,
+# потік звільняється, і черга магазинів іде далі.
+SITE_CALL_BUDGET = 20.0
+_SITE_BUDGET = threading.local()
+
+
+def _site_budget_exceeded() -> bool:
+    deadline = getattr(_SITE_BUDGET, "deadline", None)
+    return deadline is not None and time.monotonic() >= deadline
 HUNG_SITE_REASON = "магазин завис під час запиту"
 
 _HUNG_SITES: set[str] = set()

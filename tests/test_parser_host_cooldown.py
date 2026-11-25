@@ -293,6 +293,32 @@ def test_hung_http_does_not_hold_the_product_thread(monkeypatch):
     assert time.monotonic() - started < 5
 
 
+def test_one_shop_returns_within_its_budget(monkeypatch):
+    _reset()
+    monkeypatch.setattr(cp, "SITE_CALL_BUDGET", 0.4)
+    monkeypatch.setattr(cp, "TIMEOUT", 0.2)
+
+    def get(url, headers=None, timeout=None):
+        threading.Event().wait(5)
+        return _Response(200, "<html></html>")
+
+    monkeypatch.setattr(cp.requests, "get", get)
+    site = cp.SiteConfig(
+        name="SlowShop",
+        base_url="https://slowshop.example",
+        kind="cards",
+        listing_only=True,
+        search_url_patterns=["https://slowshop.example/search?q={q}"],
+        card_selector="div.card",
+        card_link="a",
+        card_price=".price",
+    )
+    started = time.monotonic()
+    item = cp.search_one_site(site, "Academie 12h Radiance Serum")
+    assert time.monotonic() - started < 3
+    assert item["status"] in ("unavailable", "not_found", "no_brand")
+
+
 def test_running_shop_that_hangs_does_not_block_the_others(monkeypatch):
     _reset()
     cp.reset_hung_sites()
